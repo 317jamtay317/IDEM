@@ -64,7 +64,10 @@ If a `using RecordKeeping.Infrastructure...` appears anywhere in Domain or Appli
 
 `UbiquitousLanguage.md` is the only allowed vocabulary for domain types, properties, parameters, test names, and user-visible strings.
 
-- **Tenant**, not Company / Account / Organization / Customer.
+- **Org**, not Company / Account / Customer / Organization / Tenant (in the customer-entity sense). `Org` is the canonical class name, table name, API path, and prose term; "Organization" may appear in user-facing UI copy where the full word reads better.
+- **Tenant** has a separate, specific meaning — a nullable Entra ID directory GUID on an Org (`Org.TenantId`), used only for SSO federation. Never use "Tenant" to refer to the customer entity.
+- **SiteAdmin** — a platform operator (one word, PascalCase in code). Not a customer; an employee of the platform. SiteAdmins have no `OrgId` (see I-D13).
+- **Org User** — a User who belongs to exactly one Org via `OrgId`. The day-to-day customer users.
 - **Facility**, not Plant / Site / Location (the entity is `Facility`; "plant" is fine in customer-facing copy where the term is `Asphalt Plant`).
 - **Record**, **Report**, **Report Template**, **Regulator**, **MDEQ**, **IDEM** — spelled exactly as written.
 - **Rieth-Riley** — hyphenated, R-I-E-T-H, everywhere.
@@ -79,7 +82,7 @@ If a needed term is not in `UbiquitousLanguage.md`, add it there first (with `�
 
 Every invariant in [Invariants.md](docs/Invariants.md) has a stable ID `I-D##`. When you enforce one, tag it:
 
-- **Domain code**: comment near the check — `// I-D01: Records cannot exist without a TenantId.`
+- **Domain code**: comment near the check — `// I-D01: Records cannot exist without an OrgId.`
 - **FluentValidation**: `.WithErrorCode("I-D03")`.
 - **Tests**: trait or category — `[Trait("Invariant", "I-D01")]` (or the xUnit v3 equivalent in use). Every invariant must have **at least one** test that proves it holds, plus negative tests where applicable.
 
@@ -101,17 +104,18 @@ Per the user's global rule and Architecture.md:
 
 - **Every** `public` and `protected` type and member has an XML doc comment (`/// <summary>...</summary>`). No exceptions.
 - `internal` and `private` are exempt — but a one-line `//` comment on non-obvious internals is welcome.
-- Doc comments describe *intent and contract*, not the implementation. "Returns the Tenant for the given id, or `Errors.Tenant.NotFound` if no such Tenant exists" — not "calls the repository."
+- Doc comments describe *intent and contract*, not the implementation. "Returns the Org for the given id, or `Errors.Org.NotFound` if no such Org exists" — not "calls the repository."
 
 ---
 
-## 8. Tenancy is enforced at every layer
+## 8. Org isolation is enforced at every layer
 
-**I-D03** says no query, report, export, or background job may return another Tenant's data. This is a security invariant, not a feature.
+**I-D03** says no query, report, export, or background job may return another Org's data. This is a security invariant, not a feature.
 
-- All Tenant-scoped reads filter by `TenantId` at the query level (preferably via a global EF query filter that cannot be forgotten).
-- Every read endpoint has a negative test: "request as Tenant A, assert no Tenant B data is returned." This is mandatory, not optional.
-- A violation of tenant isolation is a security incident — treat any PR review finding here as a blocker.
+- All Org-scoped reads filter by `OrgId` at the query level (preferably via a global EF query filter that cannot be forgotten).
+- Every read endpoint has a negative test: "request as Org A, assert no Org B data is returned." This is mandatory, not optional.
+- A violation of Org isolation is a security incident — treat any PR review finding here as a blocker.
+- **SiteAdmin exemption**: SiteAdmin users have legitimate cross-Org access for support and billing operations, but every cross-Org access by a SiteAdmin must be audit-logged with actor, target Org, and operation (see I-D13).
 
 ---
 
