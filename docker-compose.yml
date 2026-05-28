@@ -1,0 +1,49 @@
+# Local development stack for RecordKeeping.
+#
+# Usage:
+#   docker compose up --build        # build the API image and start everything
+#   docker compose up sql-server     # DB only (run the API on host with `dotnet run`)
+#   docker compose down              # stop; add -v to drop the SQL data volume
+#
+# Set SA_PASSWORD in a local .env (or env-var) to override the default. The default
+# satisfies SQL Server's complexity rules for fresh dev environments only — never
+# use it in a deployed environment.
+
+services:
+  sql-server:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: recordkeeping-sql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SA_PASSWORD:-Devp@ssword!123}"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql-data:/var/opt/mssql
+    healthcheck:
+      # mssql-tools18 ships with the 2022 image; -C trusts the self-signed cert.
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  api:
+    build:
+      context: .
+      dockerfile: src/RecordKeeping.Api/Dockerfile
+    container_name: recordkeeping-api
+    depends_on:
+      sql-server:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+      # Standard ASP.NET ConnectionStrings:RecordKeeping configuration key.
+      ConnectionStrings__RecordKeeping: "Server=sql-server,1433;Database=RecordKeeping;User Id=sa;Password=${SA_PASSWORD:-Devp@ssword!123};TrustServerCertificate=True;Encrypt=True"
+    ports:
+      - "8080:8080"
+
+volumes:
+  sql-data:
