@@ -1,0 +1,40 @@
+# Keep the build context lean — these never need to enter any image.
+
+# .NET build artifacts
+**/bin
+**/obj
+**/TestResults
+**/*.user
+**/*.suo
+**/.vs
+**/.vscode
+**/.idea
+
+# Node / Vite
+**/node_modules
+**/dist
+**/.vite
+**/coverage
+**/npm-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+
+# API-staged client output (rebuilt inside the image)
+src/RecordKeeping.Api/wwwroot
+
+# Git / OS / editor
+.git
+.gitignore
+.gitattributes
+**/.DS_Store
+**/Thumbs.db
+**/desktop.ini
+
+# Docs not needed for the runtime image
+*.md
+docs/
+
+# Local dev secrets
+*.env
+*.env.local
+secrets.json
