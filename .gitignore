@@ -1,0 +1,70 @@
+# ----- .NET -----
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+*.swp
+*.swo
+*~
+*.DotSettings.user
+.vs/
+.vscode/
+.idea/
+*.tmp_proj
+*.tmp
+*.log
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Build / coverage outputs
+TestResults/
+coverage.*
+*.coverage
+*.coveragexml
+*.opencover.xml
+*.cobertura.xml
+[Cc]overlet/
+
+# Rider / ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings
+
+# User-specific secrets — do not commit
+secrets.json
+*.pfx
+*.snk
+
+# ----- Node / Vite (src/client) -----
+node_modules/
+src/client/dist/
+src/client/.vite/
+src/client/coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnp.*
+
+# ----- API client build artifacts -----
+# wwwroot is produced by the BuildClient MSBuild target; keep it out of git.
+src/RecordKeeping.Api/wwwroot/
+
+# ----- OS noise -----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----- Docker -----
+*.env.local
+
+# ----- EF Core -----
+# Migrations themselves are committed; only ignore the bundle artifact.
+*.efbundle
