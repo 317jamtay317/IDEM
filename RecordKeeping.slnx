@@ -1,10 +1,12 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/RecordKeeping.Api/RecordKeeping.Api.csproj" />
     <Project Path="src/RecordKeeping.Application/RecordKeeping.Application.csproj" />
     <Project Path="src/RecordKeeping.Domain/RecordKeeping.Domain.csproj" />
     <Project Path="src/RecordKeeping.Infrastructure/RecordKeeping.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/RecordKeeping.Api.IntegrationTests/RecordKeeping.Api.IntegrationTests.csproj" />
     <Project Path="tests/RecordKeeping.Application.Tests/RecordKeeping.Application.Tests.csproj" />
     <Project Path="tests/RecordKeeping.Domain.Tests/RecordKeeping.Domain.Tests.csproj" />
     <Project Path="tests/RecordKeeping.Infrastructure.Tests/RecordKeeping.Infrastructure.Tests.csproj" />

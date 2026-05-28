@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.6" />
+    <PackageReference Include="WolverineFx.Http" Version="6.1.0" />
+    <PackageReference Include="WolverineFx.Http.FluentValidation" Version="6.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RecordKeeping.Application\RecordKeeping.Application.csproj" />
+    <ProjectReference Include="..\RecordKeeping.Infrastructure\RecordKeeping.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <!--
+    Client build pipeline: builds src/client (Vite + React) and stages the output
+    into wwwroot so the API can serve the SPA from a single deployable unit.
+
+    Pass /p:SkipClientBuild=true to skip (e.g. when running the Vite dev server
+    alongside `dotnet run` for hot-reload during front-end work).
+  -->
+  <PropertyGroup>
+    <ClientProjectDir>$(MSBuildProjectDirectory)\..\client</ClientProjectDir>
+    <ClientDistDir>$(ClientProjectDir)\dist</ClientDistDir>
+    <ClientStagingDir>$(MSBuildProjectDirectory)\wwwroot</ClientStagingDir>
+    <SkipClientBuild Condition="'$(SkipClientBuild)' == ''">false</SkipClientBuild>
+  </PropertyGroup>
+
+  <Target Name="BuildClient" BeforeTargets="Build" Condition="'$(SkipClientBuild)' != 'true'">
+    <Message Importance="high" Text="[Client] npm install (only if node_modules missing) in $(ClientProjectDir)" Condition="!Exists('$(ClientProjectDir)\node_modules')" />
+    <Exec Command="npm install" WorkingDirectory="$(ClientProjectDir)" Condition="!Exists('$(ClientProjectDir)\node_modules')" />
+
+    <Message Importance="high" Text="[Client] npm run build in $(ClientProjectDir)" />
+    <Exec Command="npm run build" WorkingDirectory="$(ClientProjectDir)" />
+
+    <Message Importance="high" Text="[Client] Staging $(ClientDistDir) -> $(ClientStagingDir)" />
+    <ItemGroup>
+      <_ClientArtifacts Include="$(ClientDistDir)\**\*.*" />
+    </ItemGroup>
+    <RemoveDir Directories="$(ClientStagingDir)" Condition="Exists('$(ClientStagingDir)')" />
+    <Copy SourceFiles="@(_ClientArtifacts)"
+          DestinationFiles="@(_ClientArtifacts->'$(ClientStagingDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+
+</Project>

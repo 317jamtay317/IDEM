@@ -1,0 +1,6 @@
+@RecordKeeping.Api_HostAddress = http://localhost:5182
+
+# Add API request samples here as endpoints are added.
+# See docs/Architecture.md for the Wolverine/HTTP conventions.
+
+###
