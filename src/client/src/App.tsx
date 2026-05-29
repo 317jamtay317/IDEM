@@ -41,51 +41,75 @@ function App() {
 
   if (auth.isLoading) {
     return (
-      <main>
-        <h1>RecordKeeping</h1>
-        <p>Loading…</p>
-      </main>
+      <div className="page">
+        <div className="card">
+          <p className="muted">Loading…</p>
+        </div>
+      </div>
     )
   }
 
   if (auth.error) {
     return (
-      <main>
-        <h1>RecordKeeping</h1>
-        <p>Auth error: {auth.error.message}</p>
-      </main>
+      <div className="page">
+        <div className="card">
+          <p className="brand">RecordKeeping</p>
+          <h1 className="title">Authentication error</h1>
+          <div className="alert-error">{auth.error.message}</div>
+        </div>
+      </div>
     )
   }
 
   if (!auth.isAuthenticated) {
     return (
-      <main>
-        <h1>RecordKeeping</h1>
-        <p>Sign in to continue.</p>
-        <button type="button" onClick={() => auth.signinRedirect()}>
-          Sign in
-        </button>
-      </main>
+      <div className="page">
+        <div className="card">
+          <p className="brand">RecordKeeping</p>
+          <h1 className="title">Welcome back</h1>
+          <p className="subtitle">Sign in to manage compliance records.</p>
+          <button
+            type="button"
+            className="button button-primary"
+            onClick={() => auth.signinRedirect()}
+          >
+            Sign in
+          </button>
+        </div>
+      </div>
     )
   }
 
   return (
-    <main>
-      <h1>RecordKeeping</h1>
-      {meError && <p>Error fetching /api/me: {meError}</p>}
-      {me && (
-        <>
-          <p>
-            Signed in as <strong>{me.email}</strong>
-            {me.isSiteAdmin && <span> &middot; SiteAdmin</span>}
-          </p>
-          <button type="button" onClick={() => auth.signoutRedirect()}>
-            Sign out
-          </button>
-        </>
-      )}
-      {!me && !meError && <p>Loading user info…</p>}
-    </main>
+    <div className="page">
+      <div className="card">
+        <p className="brand">RecordKeeping</p>
+        <h1 className="title">Signed in</h1>
+        <p className="subtitle">You're authenticated against the RecordKeeping API.</p>
+
+        {meError && <div className="alert-error">Error fetching /api/me: {meError}</div>}
+
+        {me && (
+          <>
+            <div className="user-row">
+              <div className="user-meta">
+                <span className="user-email">{me.email}</span>
+                {me.isSiteAdmin && <span className="badge">SiteAdmin</span>}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => auth.signoutRedirect()}
+            >
+              Sign out
+            </button>
+          </>
+        )}
+
+        {!me && !meError && <p className="muted">Loading user info…</p>}
+      </div>
+    </div>
   )
 }
 

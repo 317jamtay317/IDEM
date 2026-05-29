@@ -25,6 +25,10 @@ public sealed class LoginModel(SignInManager<ApplicationUser> signInManager) : P
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
 
+    /// <summary>When true, the issued Identity cookie persists across browser sessions; otherwise it is session-only.</summary>
+    [BindProperty]
+    public bool RememberMe { get; set; }
+
     /// <summary>Renders the login form.</summary>
     public IActionResult OnGet() => Page();
 
@@ -37,7 +41,7 @@ public sealed class LoginModel(SignInManager<ApplicationUser> signInManager) : P
         }
 
         var result = await signInManager.PasswordSignInAsync(
-            Email, Password, isPersistent: false, lockoutOnFailure: false);
+            Email, Password, isPersistent: RememberMe, lockoutOnFailure: false);
 
         if (!result.Succeeded)
         {
