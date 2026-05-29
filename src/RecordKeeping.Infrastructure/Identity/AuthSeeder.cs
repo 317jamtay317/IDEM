@@ -20,11 +20,33 @@ public static class AuthSeeder
     /// <summary>The SPA OIDC client identifier registered with OpenIddict.</summary>
     public const string SpaClientId = "spa";
 
-    /// <summary>The SPA OIDC client's redirect URI.</summary>
+    /// <summary>The SPA OIDC client's canonical redirect URI (used by integration tests).</summary>
     public const string SpaRedirectUri = "https://localhost/callback";
 
-    /// <summary>The SPA OIDC client's post-logout redirect URI.</summary>
+    /// <summary>The SPA OIDC client's canonical post-logout redirect URI.</summary>
     public const string SpaPostLogoutRedirectUri = "https://localhost/";
+
+    /// <summary>
+    /// Additional dev/local URIs registered alongside <see cref="SpaRedirectUri"/>
+    /// so the SPA's <c>window.location.origin + "/callback"</c> resolves under
+    /// every reasonable local-run permutation (docker-compose, dotnet run http/https,
+    /// Vite dev server) without re-seeding.
+    /// </summary>
+    private static readonly Uri[] AdditionalSpaRedirectUris =
+    {
+        new("https://localhost:7099/callback"), // dotnet run, https profile
+        new("http://localhost:5182/callback"),  // dotnet run, http profile
+        new("http://localhost:8080/callback"),  // docker-compose
+        new("http://localhost:5173/callback"),  // Vite dev server
+    };
+
+    private static readonly Uri[] AdditionalSpaPostLogoutRedirectUris =
+    {
+        new("https://localhost:7099/"),
+        new("http://localhost:5182/"),
+        new("http://localhost:8080/"),
+        new("http://localhost:5173/"),
+    };
 
     /// <summary>
     /// Seeds the SPA OIDC client and the bootstrap SiteAdmin if they don't exist.
@@ -45,7 +67,7 @@ public static class AuthSeeder
             return;
         }
 
-        await manager.CreateAsync(new OpenIddictApplicationDescriptor
+        var descriptor = new OpenIddictApplicationDescriptor
         {
             ClientId = SpaClientId,
             ClientType = ClientTypes.Public,
@@ -70,7 +92,18 @@ public static class AuthSeeder
             {
                 Requirements.Features.ProofKeyForCodeExchange,
             },
-        });
+        };
+
+        foreach (var uri in AdditionalSpaRedirectUris)
+        {
+            descriptor.RedirectUris.Add(uri);
+        }
+        foreach (var uri in AdditionalSpaPostLogoutRedirectUris)
+        {
+            descriptor.PostLogoutRedirectUris.Add(uri);
+        }
+
+        await manager.CreateAsync(descriptor);
     }
 
     private static async Task SeedSiteAdminAsync(IServiceProvider services)
