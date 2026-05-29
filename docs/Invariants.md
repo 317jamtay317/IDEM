@@ -16,28 +16,35 @@ IDs are **append-only**. If an invariant is retired, mark it as such and keep th
 
 ---
 
-## Tenancy & Isolation
+## Org Isolation
 
-### I-D01 — Every Record belongs to exactly one Tenant ✅
-A Record may not exist without a `TenantId`. A Record's `TenantId` may not change after creation. Cross-Tenant transfer of Records is not a supported operation.
+### I-D01 — Every Record belongs to exactly one Org ✅
+A Record may not exist without an `OrgId`. A Record's `OrgId` may not change after creation. Cross-Org transfer of Records is not a supported operation.
 
-### I-D02 — Every User belongs to exactly one Tenant 🟡
-For v1, a User cannot span multiple Tenants. A person who operates two distinct companies needs two accounts (with the same email allowed across Tenants? — see I-D04).
+### I-D02 — Every Org User belongs to exactly one Org 🟡
+For v1, an Org User cannot span multiple Orgs. A person who operates two distinct companies needs two accounts (with the same email allowed across Orgs? — see I-D04).
 
-❓ — Confirm this assumption holds for the asphalt market. If an operator commonly works for multiple companies, multi-Tenant Users become a v1 requirement, not a v2.
+This invariant does **not** apply to SiteAdmins (see I-D13), who are platform operators with no Org affiliation.
 
-### I-D03 — Tenant data is never visible across Tenants ✅
-No query, report, export, API call, background job, or admin operation may return data belonging to a Tenant other than the caller's. Enforced at the application layer at minimum; preferred to also enforce at the database layer (row-level security or query-level filter).
+❓ — Confirm this assumption holds for the asphalt market. If an operator commonly works for multiple companies, multi-Org Users become a v1 requirement, not a v2.
 
-> Violations of I-D03 are security incidents, not bugs. Tests must cover the negative case (request data as Tenant A, assert no Tenant B data is returned) for every read endpoint.
+### I-D03 — Org data is never visible across Orgs ✅
+No query, report, export, API call, background job, or admin operation may return data belonging to an Org other than the caller's. Enforced at the application layer at minimum; preferred to also enforce at the database layer (row-level security or query-level filter).
+
+> Violations of I-D03 are security incidents, not bugs. Tests must cover the negative case (request data as Org A, assert no Org B data is returned) for every read endpoint.
+>
+> **SiteAdmin exemption**: SiteAdmins legitimately access data across Orgs for support and billing. Every cross-Org access by a SiteAdmin must be audit-logged with actor, target Org, and operation (see I-D13).
 
 ### I-D04 — Email uniqueness scope 🟡
-🟡 — Tentative: a User's email is unique **within a Tenant**, but the same email may appear under different Tenants.
+Email uniqueness depends on the User type:
+- An Org User's email is unique **within their Org**. The same email may appear in different Orgs (interpreted as different accounts for the same person at different employers).
+- A SiteAdmin's email is unique across all SiteAdmins.
+- A SiteAdmin and an Org User may share an email; they are separate accounts.
 
-❓ — Confirm with domain owner. The alternative (email globally unique) simplifies SSO/identity later but rules out the "same person, two companies" case.
+❓ — Confirm with domain owner. The alternative (email globally unique across everything) simplifies SSO/identity later but rules out the "same person, two companies" case.
 
-### I-D05 — A Tenant has at least one active Admin User 🟡
-At all times, the count of active Users with the Admin role within a Tenant is ≥ 1. Used to prevent administrative lock-out.
+### I-D05 — An Org has at least one active Admin User 🟡
+At all times, the count of active Users with the Admin role within an Org is ≥ 1. Used to prevent administrative lock-out.
 
 ❓ — Depends on the concrete Role list being confirmed (see UbiquitousLanguage `Role`).
 
@@ -45,13 +52,13 @@ At all times, the count of active Users with the Admin role within a Tenant is �
 
 ## Facilities
 
-### I-D06 — Every Facility belongs to exactly one Tenant ✅
-Facilities follow the same isolation guarantee as Records (I-D01): `TenantId` is required at creation, immutable, and never crosses Tenants.
+### I-D06 — Every Facility belongs to exactly one Org ✅
+Facilities follow the same isolation guarantee as Records (I-D01): `OrgId` is required at creation, immutable, and never crosses Orgs.
 
-A Tenant has **many** Facilities — confirmed by the v1 design target (Rieth-Riley) operating ~15–20 plants. Cross-Tenant transfer of a Facility is not a v1-supported operation; if a plant changes ownership in the real world, it is handled out-of-band by recreating the Facility under the new Tenant.
+An Org has **many** Facilities — confirmed by the v1 design target (Rieth-Riley) operating ~15–20 plants. Cross-Org transfer of a Facility is not a v1-supported operation; if a plant changes ownership in the real world, it is handled out-of-band by recreating the Facility under the new Org.
 
 ### I-D07 — Every Record is associated with a Facility ✅
-A Record captures activity *at a specific Facility*, so it must reference one. Required because Tenants have many Facilities — without this, Records cannot be routed to the correct Report or attributed correctly on a regulator filing.
+A Record captures activity *at a specific Facility*, so it must reference one. Required because Orgs have many Facilities — without this, Records cannot be routed to the correct Report or attributed correctly on a regulator filing.
 
 ---
 
@@ -73,17 +80,36 @@ Reports produced for MDEQ and IDEM by the new system must match the layout of th
 - Structural diff (same fields in the same regions)?
 - Manual side-by-side sign-off?
 
-### I-D10 — Reports cannot read across Tenants ✅
-Restatement of I-D03 specifically for the reporting path: a Report run by a User of Tenant A only sees Records of Tenant A as input, regardless of the Report Template's source query.
+### I-D10 — Reports cannot read across Orgs ✅
+Restatement of I-D03 specifically for the reporting path: a Report run by a User of Org A only sees Records of Org A as input, regardless of the Report Template's source query.
 
 ---
 
 ## Regulators (v1 scope)
 
 ### I-D11 — Supported regulators are MDEQ and IDEM only ✅
-For v1, the only Regulators a Tenant may select or submit to are MDEQ (Michigan) and IDEM (Indiana). Adding another Regulator is a future-version change, not a configuration toggle.
+For v1, the only Regulators an Org may select or submit to are MDEQ (Michigan) and IDEM (Indiana). Adding another Regulator is a future-version change, not a configuration toggle.
 
 > Code should still make Regulator a first-class concept (entity or strong-typed value) rather than hard-coding two booleans, so that adding a third Regulator is a contained change.
+
+---
+
+## Identity & Authentication
+
+### I-D12 — Org.TenantId is set only when Entra ID is configured 🟡
+`Org.TenantId` (the Entra ID directory GUID) is nullable. It is set only when the Org has configured Entra ID federation for SSO; null for Orgs that authenticate locally. The field is populated during SSO onboarding and may be cleared if the Org disables federation.
+
+> See UbiquitousLanguage `Tenant` — "Tenant" here is the Microsoft Entra ID vocabulary, not the customer entity.
+
+### I-D13 — A User is either an Org User or a SiteAdmin, never both 🟡
+Every User row satisfies exactly one of:
+- `IsSiteAdmin = true` AND `OrgId IS NULL` (a SiteAdmin)
+- `IsSiteAdmin = false` AND `OrgId IS NOT NULL` (an Org User)
+
+A person who operates in both capacities (rare — e.g., a platform employee who also legitimately uses the product for their side business) requires two separate accounts.
+
+### I-D14 — Passwords are stored only as hashes ✅
+User passwords are never persisted in plaintext or in a reversibly-encrypted form. Hashing uses ASP.NET Core Identity's default (PBKDF2 with HMAC-SHA-512, configurable iteration count). Plaintext passwords appear only in transit during authentication and are never written to logs.
 
 ---
 
@@ -98,7 +124,7 @@ Asphalt-specific invariants (production logging cadence, opacity reading frequen
 > - An exceedance of a permit limit must be flagged within a defined window.
 > - MAERS submission requires production totals for the calendar year, broken out by source.
 >
-> When these are confirmed, they become I-D12, I-D13, … and gain ✅ status.
+> When these are confirmed, they become I-D15, I-D16, … and gain ✅ status.
 
 ---
 

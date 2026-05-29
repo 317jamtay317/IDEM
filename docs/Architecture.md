@@ -18,6 +18,8 @@ Stack and architectural patterns for **RecordKeeping** SaaS. Living document —
 | Messaging    | **Wolverine** (with transactional outbox)       |
 | Frontend     | **React**                                       |
 | Hosting      | **Azure Container Apps**                        |
+| Auth server  | **ASP.NET Core Identity + OpenIddict**          |
+| SPA OIDC     | **react-oidc-context** (wraps `oidc-client-ts`) |
 
 ---
 
@@ -62,26 +64,40 @@ Copy as **templates, not as code** (per handoff decision — no wholesale fork o
 
 ---
 
-## Auth ❓
-Not yet decided. Handoff leaning: plain **ASP.NET Core Identity** (cookies + JWT for the SPA) rather than OpenIddict — RecordKeeping is a single-product SaaS, not an identity provider for other apps. Revisit only if RecordKeeping ever needs to be an OIDC server.
+## Auth ✅
+
+**ASP.NET Core Identity + OpenIddict**, embedded in `RecordKeeping.Api` (no separate auth service). OAuth 2.1 **Authorization Code + PKCE** flow for the React SPA. Refresh tokens delivered as `HttpOnly; Secure; SameSite=Strict` cookies; access tokens held in SPA memory only.
+
+**Identity tables** live in a dedicated `auth` schema in the SQL Server database, separating them visually from domain tables. Passwords are stored using Identity's default PBKDF2 with HMAC-SHA-512 (see [I-D14](./Invariants.md)).
+
+**SPA OIDC client**: `react-oidc-context` wraps `oidc-client-ts` and provides the React hooks and route guards used by `src/client`. Silent refresh runs in an iframe.
+
+**Entra ID federation** is a per-Org feature: an Org with `Org.TenantId` (the Entra directory GUID) set redirects to its Entra ID directory for login; OpenIddict consumes Entra ID via the standard `AddOpenIdConnect()` middleware, then issues local RecordKeeping tokens. Orgs without `Org.TenantId` use local username/password (see [I-D12](./Invariants.md)).
+
+**MFA**: TOTP-based via Identity's built-in authenticator support. Deferred from the v1 auth slice; required before the first paying customer.
+
+> **Decision history.** The original handoff lean was *plain ASP.NET Core Identity (cookies)* on the grounds that RecordKeeping is a single-product SaaS and not an OIDC server for third parties. Overridden in favor of OpenIddict to keep the SPA on a real OAuth flow — forward-compatible with future mobile clients, partner integrations, and federated SSO without later flow rewrites.
 
 ---
 
-## Multi-tenancy ❓
-Strategy not yet decided. Three options on the table:
+## Multi-Org ❓
 
-1. **Shared schema + `TenantId` column** — standard SaaS pattern, simplest to operate. Default unless we have a reason to deviate.
-2. Schema-per-tenant
-3. Database-per-tenant
+Org isolation strategy not yet decided. Three options on the table:
 
-Pick one before writing the first migration.
+1. **Shared schema + `OrgId` column** — standard SaaS pattern, simplest to operate. Default unless we have a reason to deviate. Enforced via global EF query filters and the [I-D03](./Invariants.md) negative-test rule.
+2. Schema-per-Org
+3. Database-per-Org
+
+Pick one before writing the first migration. Whichever strategy lands must satisfy [I-D03](./Invariants.md): no cross-Org data leakage at any layer.
 
 ---
 
 ## Legacy Migration 🟡
+
 Legacy WPF app uses **SQL Server**, so migration is SQL→SQL — schema lift vs. fresh schema with ETL is still open. Decision rests on how clean the legacy schema is and whether DDD aggregates map cleanly onto it.
 
 ---
 
 ## In-house Reporting ✅
-No third-party commercial reporting vendor (per handoff decision). Report Engine and Report Templates are built in-house. OSS primitives at the lowest level (PdfSharp/MigraDoc, SkiaSharp/ScottPlot, ClosedXML, react-grid-layout/react-rnd) are in scope; commercial designers requiring per-tenant/per-seat licensing are not.
+
+No third-party commercial reporting vendor (per handoff decision). Report Engine and Report Templates are built in-house. OSS primitives at the lowest level (PdfSharp/MigraDoc, SkiaSharp/ScottPlot, ClosedXML, react-grid-layout/react-rnd) are in scope; commercial report designers requiring per-Org or per-seat licensing are not.
