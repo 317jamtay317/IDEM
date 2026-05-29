@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.6" />
+    <PackageReference Include="OpenIddict.AspNetCore" Version="7.5.0" />
     <PackageReference Include="WolverineFx.Http" Version="6.1.0" />
     <PackageReference Include="WolverineFx.Http.FluentValidation" Version="6.1.0" />
   </ItemGroup>
@@ -38,13 +39,12 @@
     <Message Importance="high" Text="[Client] npm run build in $(ClientProjectDir)" />
     <Exec Command="npm run build" WorkingDirectory="$(ClientProjectDir)" />
 
-    <Message Importance="high" Text="[Client] Staging $(ClientDistDir) -> $(ClientStagingDir)" />
+    <Message Importance="high" Text="[Client] Staging $(ClientDistDir) -&gt; $(ClientStagingDir)" />
     <ItemGroup>
       <_ClientArtifacts Include="$(ClientDistDir)\**\*.*" />
     </ItemGroup>
     <RemoveDir Directories="$(ClientStagingDir)" Condition="Exists('$(ClientStagingDir)')" />
-    <Copy SourceFiles="@(_ClientArtifacts)"
-          DestinationFiles="@(_ClientArtifacts->'$(ClientStagingDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="@(_ClientArtifacts)" DestinationFiles="@(_ClientArtifacts->'$(ClientStagingDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
   </Target>
 
 </Project>
