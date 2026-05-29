@@ -191,6 +191,42 @@ app.MapMethods("/connect/authorize", new[] { "GET", "POST" }, async (HttpContext
         authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
 });
 
+// OpenIddict token endpoint. With EnableTokenEndpointPassthrough, OpenIddict
+// has already validated the auth code / refresh token and stored the original
+// auth principal on the AspNetCore authentication scheme - we just re-issue.
+app.MapMethods("/connect/token", new[] { "POST" }, async (HttpContext context) =>
+{
+    var request = context.GetOpenIddictServerRequest()
+        ?? throw new InvalidOperationException("OpenIddict request not present.");
+
+    if (!request.IsAuthorizationCodeGrantType() && !request.IsRefreshTokenGrantType())
+    {
+        throw new InvalidOperationException("Unsupported grant type.");
+    }
+
+    var auth = await context.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+
+    if (!auth.Succeeded || auth.Principal is null)
+    {
+        return Results.Forbid(
+            authenticationSchemes: new[] { OpenIddictServerAspNetCoreDefaults.AuthenticationScheme },
+            properties: new AuthenticationProperties(new Dictionary<string, string?>
+            {
+                [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidGrant,
+                [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] =
+                    "The token is no longer valid.",
+            }));
+    }
+
+    // Re-apply claim destinations so they appear on the freshly-minted tokens.
+    auth.Principal.SetDestinations(static _ => new[] { Destinations.AccessToken, Destinations.IdentityToken });
+
+    return Results.SignIn(
+        auth.Principal,
+        properties: null,
+        authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+});
+
 // /api/me - returns the authenticated User's claims. Protected; 401 if no token.
 app.MapGet("/api/me", (HttpContext ctx) =>
 {

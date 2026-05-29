@@ -9,24 +9,22 @@ public class AuthorizationEndpointTests(RecordKeepingApiFactory factory)
     [Fact]
     public async Task Authorize_WithUnauthenticatedRequest_RedirectsToLoginPage()
     {
-        var client = factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
-        {
-            AllowAutoRedirect = false,
-        });
+        var client = AuthFlow.CreateClient(factory);
 
-        var url =
-            "/connect/authorize" +
-            "?client_id=spa" +
-            "&redirect_uri=" + Uri.EscapeDataString("https://localhost/callback") +
-            "&response_type=code" +
-            "&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM" +
-            "&code_challenge_method=S256" +
-            "&scope=openid";
-
-        var response = await client.GetAsync(url);
+        var response = await client.GetAsync(AuthFlow.AuthorizationUrl());
 
         response.StatusCode.ShouldBe(HttpStatusCode.Redirect);
         response.Headers.Location.ShouldNotBeNull();
         response.Headers.Location!.AbsolutePath.ShouldBe("/Account/Login");
+    }
+
+    [Fact]
+    public async Task Login_WithValidCredentials_RedirectsToCallbackWithCode()
+    {
+        var client = AuthFlow.CreateClient(factory);
+
+        var code = await AuthFlow.LoginAndGetAuthorizationCodeAsync(client);
+
+        code.ShouldNotBeNullOrWhiteSpace();
     }
 }
