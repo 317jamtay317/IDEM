@@ -3,7 +3,8 @@ using Shouldly;
 
 namespace RecordKeeping.Api.IntegrationTests.Auth;
 
-public class MeEndpointTests(RecordKeepingApiFactory factory) : IClassFixture<RecordKeepingApiFactory>
+[Collection(nameof(IntegrationTestCollection))]
+public class MeEndpointTests(RecordKeepingApiFactory factory)
 {
     [Fact]
     public async Task Me_WithoutToken_Returns401()

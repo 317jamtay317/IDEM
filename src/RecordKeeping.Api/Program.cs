@@ -1,9 +1,14 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore; // for OpenIddictServerAspNetCoreHelpers extension methods
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using OpenIddict.Abstractions;
+using OpenIddict.Server.AspNetCore;
 using OpenIddict.Validation.AspNetCore;
 using RecordKeeping.Infrastructure.Identity;
+using static OpenIddict.Abstractions.OpenIddictConstants;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,8 +19,11 @@ var connectionString = builder.Configuration.GetConnectionString("RecordKeeping"
 
 // --- Services ----------------------------------------------------------------
 
-// OpenAPI metadata — endpoint documentation per Architecture.md.
+// OpenAPI metadata - endpoint documentation per Architecture.md.
 builder.Services.AddOpenApi();
+
+// Razor Pages for the server-rendered login page (auth-code redirect target).
+builder.Services.AddRazorPages();
 
 // EF Core + Identity + OpenIddict storage (auth schema, see Architecture.md §Auth).
 builder.Services.AddDbContext<AuthDbContext>(options =>
@@ -41,6 +49,14 @@ builder.Services
     .AddEntityFrameworkStores<AuthDbContext>()
     .AddDefaultTokenProviders();
 
+// Cookie scheme used by the Razor login page. Login challenges redirect here.
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.LoginPath = "/Account/Login";
+    options.LogoutPath = "/Account/Logout";
+    options.AccessDeniedPath = "/Account/Login";
+});
+
 // OpenIddict server + validation. Authorization Code + PKCE only.
 builder.Services.AddOpenIddict()
     .AddCore(options =>
@@ -59,28 +75,33 @@ builder.Services.AddOpenIddict()
             .RequireProofKeyForCodeExchange()
             .AllowRefreshTokenFlow();
 
-        options.RegisterScopes(
-            OpenIddictConstants.Scopes.Email,
-            OpenIddictConstants.Scopes.Profile,
-            OpenIddictConstants.Scopes.OfflineAccess);
+        options.RegisterScopes(Scopes.Email, Scopes.Profile, Scopes.OfflineAccess);
 
         // Dev/test ephemeral keys. Production replaces with persistent certs.
         options.AddEphemeralEncryptionKey()
             .AddEphemeralSigningKey();
 
-        options.UseAspNetCore()
+        var aspNet = options.UseAspNetCore()
             .EnableAuthorizationEndpointPassthrough()
             .EnableTokenEndpointPassthrough()
             .EnableEndSessionEndpointPassthrough()
             .EnableUserInfoEndpointPassthrough()
             .EnableStatusCodePagesIntegration();
 
+        // OpenIddict rejects non-HTTPS requests by default. The test server is
+        // HTTP-only and Azure Container Apps terminates TLS at the load balancer.
+        // TODO before prod: enable UseForwardedHeaders + re-enable this check so
+        // we still reject anything not arriving over TLS at the edge.
+        if (builder.Environment.IsDevelopment() || builder.Environment.EnvironmentName == "Testing")
+        {
+            aspNet.DisableTransportSecurityRequirement();
+        }
+
         options.SetAccessTokenLifetime(TimeSpan.FromMinutes(15));
         options.SetRefreshTokenLifetime(TimeSpan.FromDays(7));
     })
     .AddValidation(options =>
     {
-        // Validate tokens issued by this same server (no external issuer).
         options.UseLocalServer();
         options.UseAspNetCore();
     });
@@ -99,12 +120,14 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
-// Initialize the auth schema on startup. EnsureCreated is acceptable pre-launch;
-// migrate to EF migrations once the schema stabilizes.
+// Initialize the auth schema and seed the SPA client + bootstrap SiteAdmin.
+// EnsureCreated is acceptable pre-launch; migrate to EF migrations when the
+// schema stabilizes.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
     await db.Database.EnsureCreatedAsync();
+    await AuthSeeder.SeedAsync(scope.ServiceProvider);
 }
 
 if (app.Environment.IsDevelopment())
@@ -121,13 +144,60 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// /api/me — returns the authenticated User's claims. Protected; 401 if no token.
+app.MapRazorPages();
+
+// OpenIddict authorization endpoint. With EnableAuthorizationEndpointPassthrough,
+// OpenIddict validates the request and forwards execution here; we handle the
+// authn check + sign-in.
+app.MapMethods("/connect/authorize", new[] { "GET", "POST" }, async (HttpContext context) =>
+{
+    var request = context.GetOpenIddictServerRequest()
+        ?? throw new InvalidOperationException("OpenIddict request not present.");
+
+    var auth = await context.AuthenticateAsync(IdentityConstants.ApplicationScheme);
+
+    if (!auth.Succeeded || auth.Principal?.Identity?.IsAuthenticated != true)
+    {
+        // Not signed in - challenge the cookie scheme which redirects to LoginPath.
+        return Results.Challenge(
+            properties: new AuthenticationProperties
+            {
+                RedirectUri = context.Request.Path + context.Request.QueryString,
+            },
+            authenticationSchemes: new[] { IdentityConstants.ApplicationScheme });
+    }
+
+    // Signed in - issue an OpenIddict auth code.
+    var userManager = context.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
+    var user = await userManager.GetUserAsync(auth.Principal)
+        ?? throw new InvalidOperationException("Signed-in principal has no matching user.");
+
+    var identity = new ClaimsIdentity(
+        authenticationType: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+        nameType: Claims.Name,
+        roleType: Claims.Role);
+
+    identity.SetClaim(Claims.Subject, user.Id.ToString());
+    identity.SetClaim(Claims.Email, user.Email ?? string.Empty);
+    identity.SetClaim(Claims.Name, user.DisplayName);
+    identity.SetClaim("is_site_admin", user.IsSiteAdmin ? "true" : "false");
+
+    identity.SetScopes(request.GetScopes());
+    identity.SetDestinations(static _ => new[] { Destinations.AccessToken, Destinations.IdentityToken });
+
+    return Results.SignIn(
+        new ClaimsPrincipal(identity),
+        properties: null,
+        authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+});
+
+// /api/me - returns the authenticated User's claims. Protected; 401 if no token.
 app.MapGet("/api/me", (HttpContext ctx) =>
 {
     return Results.Ok(new
     {
         name = ctx.User.Identity?.Name,
-        email = ctx.User.FindFirst(OpenIddictConstants.Claims.Email)?.Value,
+        email = ctx.User.FindFirst(Claims.Email)?.Value,
         isSiteAdmin = ctx.User.FindFirst("is_site_admin")?.Value == "true",
     });
 }).RequireAuthorization("ApiUser");

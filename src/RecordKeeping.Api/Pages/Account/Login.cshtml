@@ -1,0 +1,38 @@
+@page "/Account/Login"
+@model RecordKeeping.Api.Pages.Account.LoginModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Sign in - RecordKeeping</title>
+</head>
+<body>
+    <h1>Sign in</h1>
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div role="alert">
+            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+            {
+                <p>@error.ErrorMessage</p>
+            }
+        </div>
+    }
+
+    <form method="post">
+        <label>
+            Email
+            <input type="email" name="Email" value="@Model.Email" required autofocus />
+        </label>
+        <label>
+            Password
+            <input type="password" name="Password" required />
+        </label>
+        <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+        <button type="submit">Sign in</button>
+    </form>
+</body>
+</html>
