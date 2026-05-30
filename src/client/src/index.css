@@ -26,6 +26,7 @@
   --color-badge-bg: var(--color-info-bg);
   --color-badge-text: var(--color-info-text);
 
+  --radius-sm: 0.5rem;   /* radius/sm = 8 */
   --radius: 0.75rem;     /* radius/md = 12 */
   --radius-lg: 1rem;     /* radius/lg = 16 */
   --radius-pill: 999px;  /* radius/full */
