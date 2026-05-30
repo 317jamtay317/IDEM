@@ -111,6 +111,16 @@ A person who operates in both capacities (rare — e.g., a platform employee who
 ### I-D14 — Passwords are stored only as hashes ✅
 User passwords are never persisted in plaintext or in a reversibly-encrypted form. Hashing uses ASP.NET Core Identity's default (PBKDF2 with HMAC-SHA-512, configurable iteration count). Plaintext passwords appear only in transit during authentication and are never written to logs.
 
+### I-D15 — Refresh tokens are rotated on use ✅
+Each time a refresh token is redeemed at the token endpoint, a new refresh token is issued and the previous one is invalidated. A refresh token is never reusable. This limits the blast radius of a leaked refresh token and is required for public clients (SPA and MCP agents) per OAuth 2.1.
+
+> Proven by `TokenEndpointTests.Token_WithRefreshToken_RotatesAndReturnsNewAccessToken`.
+
+### I-D16 — MCP access requires the `mcp` scope and remains Org-isolated 🟡
+Every MCP tool call must carry an access token that includes the **`mcp` scope**; the `/mcp` endpoint rejects tokens without it (`403`). The scope is **necessary but not sufficient**: an Agent acts only for the User whose token it holds, so once Org-scoped MCP tools exist they remain bound by **I-D03** (an Agent sees only that User's Org's data), and any SiteAdmin cross-Org access via MCP is audit-logged per **I-D13**.
+
+> Enforced today by the `McpUser` authorization policy (Api `Program.cs`). The scope gate is covered by `McpUnauthenticatedTests` (negative: no scope → 403) and `McpHelloWorldFlowTests` (positive: with scope → tool call succeeds). 🟡 until the first Org-scoped MCP tool lands and the I-D03 negative test is added for the MCP path.
+
 ---
 
 ## Domain — Asphalt Operations
@@ -124,7 +134,7 @@ Asphalt-specific invariants (production logging cadence, opacity reading frequen
 > - An exceedance of a permit limit must be flagged within a defined window.
 > - MAERS submission requires production totals for the calendar year, broken out by source.
 >
-> When these are confirmed, they become I-D15, I-D16, … and gain ✅ status.
+> When these are confirmed, they become I-D17, I-D18, … and gain ✅ status.
 
 ---
 

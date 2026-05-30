@@ -68,3 +68,9 @@ desktop.ini
 # ----- EF Core -----
 # Migrations themselves are committed; only ignore the bundle artifact.
 *.efbundle
+
+# ----- Dev TLS certificates -----
+# Local HTTPS dev certs (contain a private key). Generate with:
+#   dotnet dev-certs https -ep certs/recordkeeping.pfx -p <password>
+certs/
+*.pfx
