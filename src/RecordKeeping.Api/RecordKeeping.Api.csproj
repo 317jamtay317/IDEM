@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\RecordKeeping.Application\RecordKeeping.Application.csproj" />
     <ProjectReference Include="..\RecordKeeping.Infrastructure\RecordKeeping.Infrastructure.csproj" />
+    <ProjectReference Include="..\RecordKeeping.Mcp\RecordKeeping.Mcp.csproj" />
   </ItemGroup>
 
   <!--

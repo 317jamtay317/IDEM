@@ -4,11 +4,13 @@
     <Project Path="src/RecordKeeping.Application/RecordKeeping.Application.csproj" />
     <Project Path="src/RecordKeeping.Domain/RecordKeeping.Domain.csproj" />
     <Project Path="src/RecordKeeping.Infrastructure/RecordKeeping.Infrastructure.csproj" />
+    <Project Path="src/RecordKeeping.Mcp/RecordKeeping.Mcp.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/RecordKeeping.Api.IntegrationTests/RecordKeeping.Api.IntegrationTests.csproj" />
     <Project Path="tests/RecordKeeping.Application.Tests/RecordKeeping.Application.Tests.csproj" />
     <Project Path="tests/RecordKeeping.Domain.Tests/RecordKeeping.Domain.Tests.csproj" />
     <Project Path="tests/RecordKeeping.Infrastructure.Tests/RecordKeeping.Infrastructure.Tests.csproj" />
+    <Project Path="tests/RecordKeeping.Mcp.Tests/RecordKeeping.Mcp.Tests.csproj" />
   </Folder>
 </Solution>

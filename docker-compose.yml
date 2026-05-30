@@ -1,13 +1,29 @@
-# Local development stack for RecordKeeping.
+# Local development stack for RecordKeeping (HTTPS).
+#
+# Services:
+#   sql-server  - SQL Server database.
+#   api         - RecordKeeping.Api (SPA + OAuth/OpenIddict authorization server).  https://localhost:8443
+#   mcp         - The MCP server for AI agents (Claude, ChatGPT, Copilot).          https://localhost:8444/mcp
+#
+# TLS: Kestrel terminates HTTPS using an ASP.NET dev certificate mounted from ./certs.
+# Generate it once (the password must match CERT_PASSWORD below):
+#   dotnet dev-certs https -ep certs/recordkeeping.pfx -p DevCert!123
+#   dotnet dev-certs https --trust      # optional: trust it so browsers/curl don't warn
+# The cert is self-signed, so tools need -k (curl) or to trust the dev root. AI agents
+# require HTTPS for any non-localhost MCP URL, which is why these services are HTTPS.
 #
 # Usage:
-#   docker compose up --build        # build the API image and start everything
-#   docker compose up sql-server     # DB only (run the API on host with `dotnet run`)
+#   docker compose up --build        # build the image and start everything
+#   docker compose up sql-server     # DB only (run a host process with `dotnet run`)
 #   docker compose down              # stop; add -v to drop the SQL data volume
 #
-# Set SA_PASSWORD in a local .env (or env-var) to override the default. The default
-# satisfies SQL Server's complexity rules for fresh dev environments only — never
-# use it in a deployed environment.
+# Set SA_PASSWORD / CERT_PASSWORD in a local .env to override the dev defaults. The
+# defaults are for fresh local environments only — never use them in a deployment.
+
+x-app-tls: &app-tls
+  ASPNETCORE_URLS: "https://+:8443"
+  ASPNETCORE_Kestrel__Certificates__Default__Path: "/https/recordkeeping.pfx"
+  ASPNETCORE_Kestrel__Certificates__Default__Password: "${CERT_PASSWORD:-DevCert!123}"
 
 services:
   sql-server:
@@ -18,7 +34,11 @@ services:
       MSSQL_SA_PASSWORD: "${SA_PASSWORD:-Devp@ssword!123}"
       MSSQL_PID: "Developer"
     ports:
-      - "1433:1433"
+      # Host port is configurable to avoid clashing with a SQL Server already
+      # installed on the host (which binds 1433). The API talks to SQL over the
+      # internal Docker network (sql-server:1433), so this mapping is only for
+      # host-based tools; default 14333 sidesteps the common local-SQL conflict.
+      - "${SQL_HOST_PORT:-14333}:1433"
     volumes:
       - sql-data:/var/opt/mssql
     healthcheck:
@@ -33,17 +53,64 @@ services:
     build:
       context: .
       dockerfile: src/RecordKeeping.Api/Dockerfile
+    # Tagged so the mcp service can reuse the exact same image without rebuilding.
+    image: recordkeeping-app:latest
     container_name: recordkeeping-api
     depends_on:
       sql-server:
         condition: service_healthy
     environment:
+      <<: *app-tls
       ASPNETCORE_ENVIRONMENT: "Development"
-      ASPNETCORE_URLS: "http://+:8080"
       # Standard ASP.NET ConnectionStrings:RecordKeeping configuration key.
       ConnectionStrings__RecordKeeping: "Server=sql-server,1433;Database=RecordKeeping;User Id=sa;Password=${SA_PASSWORD:-Devp@ssword!123};TrustServerCertificate=True;Encrypt=True"
+    volumes:
+      - ./certs:/https:ro
     ports:
-      - "8080:8080"
+      - "8443:8443"
+    healthcheck:
+      test: ["CMD", "curl", "-fsSk", "https://localhost:8443/.well-known/oauth-authorization-server"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # The MCP server for AI agents. RecordKeeping is a single app that hosts the MCP
+  # endpoint together with its OAuth authorization server, so this service runs the
+  # same image as `api` — exposed over HTTPS on its own port as the MCP entry point.
+  #
+  # Agents (Claude, ChatGPT, Copilot) connect to one URL and everything else is
+  # auto-discovered (the OAuth URLs derive from the request host/scheme, so they
+  # resolve to https on this service at :8444):
+  #   MCP endpoint:    https://localhost:8444/mcp
+  #   OAuth discovery: https://localhost:8444/.well-known/oauth-protected-resource/mcp
+  #                    https://localhost:8444/.well-known/oauth-authorization-server
+  #   Self-register:   https://localhost:8444/connect/register   (RFC 7591 DCR)
+  #
+  # Starts after `api` is healthy so the database schema + seed data exist before this
+  # container boots (the seeder is idempotent, so this just avoids a first-boot race).
+  mcp:
+    image: recordkeeping-app:latest
+    container_name: recordkeeping-mcp
+    depends_on:
+      sql-server:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      <<: *app-tls
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ConnectionStrings__RecordKeeping: "Server=sql-server,1433;Database=RecordKeeping;User Id=sa;Password=${SA_PASSWORD:-Devp@ssword!123};TrustServerCertificate=True;Encrypt=True"
+    volumes:
+      - ./certs:/https:ro
+    ports:
+      - "8444:8443"
+    healthcheck:
+      test: ["CMD", "curl", "-fsSk", "https://localhost:8443/.well-known/oauth-protected-resource/mcp"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
 volumes:
   sql-data:

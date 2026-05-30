@@ -23,6 +23,9 @@ internal static class AuthFlow
     public static string CodeChallenge { get; } = Base64UrlEncode(
         SHA256.HashData(Encoding.UTF8.GetBytes(CodeVerifier)));
 
+    /// <summary>The default scope set requested by the SPA flow.</summary>
+    public const string DefaultScope = "openid profile email offline_access";
+
     /// <summary>Creates a no-auto-redirect client suitable for stepping through 302s.</summary>
     public static HttpClient CreateClient(WebApplicationFactory<Program> factory) =>
         factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -31,33 +34,57 @@ internal static class AuthFlow
         });
 
     /// <summary>Builds a well-formed /connect/authorize URL for the seeded SPA client.</summary>
-    public static string AuthorizationUrl(string? state = null)
+    public static string AuthorizationUrl(string? state = null) =>
+        AuthorizationUrl(AuthSeeder.SpaClientId, AuthSeeder.SpaRedirectUri, DefaultScope, state);
+
+    /// <summary>Builds a well-formed /connect/authorize URL for an arbitrary client.</summary>
+    public static string AuthorizationUrl(
+        string clientId, string redirectUri, string scope, string? state = null, string? resource = null)
     {
         var query = HttpUtility.ParseQueryString(string.Empty);
-        query["client_id"] = AuthSeeder.SpaClientId;
-        query["redirect_uri"] = AuthSeeder.SpaRedirectUri;
+        query["client_id"] = clientId;
+        query["redirect_uri"] = redirectUri;
         query["response_type"] = "code";
         query["code_challenge"] = CodeChallenge;
         query["code_challenge_method"] = "S256";
-        query["scope"] = "openid profile email offline_access";
+        query["scope"] = scope;
         if (state is not null)
         {
             query["state"] = state;
+        }
+        // RFC 8707 resource indicator — MCP clients always send this (the MCP server URL).
+        if (resource is not null)
+        {
+            query["resource"] = resource;
         }
         return "/connect/authorize?" + query;
     }
 
     /// <summary>
-    /// Drives the full login + authorize flow and returns the issued auth code.
+    /// Drives the full login + authorize flow for the seeded SPA client and returns the issued auth code.
+    /// </summary>
+    public static Task<string> LoginAndGetAuthorizationCodeAsync(
+        HttpClient client,
+        string email = AuthSeeder.BootstrapSiteAdminEmail,
+        string password = AuthSeeder.BootstrapSiteAdminPassword) =>
+        LoginAndGetAuthorizationCodeAsync(
+            client, AuthSeeder.SpaClientId, AuthSeeder.SpaRedirectUri, DefaultScope, email, password);
+
+    /// <summary>
+    /// Drives the full login + authorize flow for an arbitrary client and returns the issued auth code.
     /// Mutates the client's cookie jar with the Identity session cookie.
     /// </summary>
     public static async Task<string> LoginAndGetAuthorizationCodeAsync(
         HttpClient client,
+        string clientId,
+        string redirectUri,
+        string scope,
         string email = AuthSeeder.BootstrapSiteAdminEmail,
-        string password = AuthSeeder.BootstrapSiteAdminPassword)
+        string password = AuthSeeder.BootstrapSiteAdminPassword,
+        string? resource = null)
     {
         // Step 1: /connect/authorize -> 302 to /Account/Login?ReturnUrl=...
-        var step1 = await client.GetAsync(AuthorizationUrl());
+        var step1 = await client.GetAsync(AuthorizationUrl(clientId, redirectUri, scope, resource: resource));
         EnsureRedirect(step1, "/connect/authorize step");
         var loginUrl = step1.Headers.Location!.OriginalString;
         var returnUrl = HttpUtility.ParseQueryString(step1.Headers.Location!.Query)["ReturnUrl"]
@@ -99,17 +126,30 @@ internal static class AuthFlow
             $"No 'code' parameter in callback URL: {callback}");
     }
 
-    /// <summary>POSTs to /connect/token to exchange an authorization code for tokens.</summary>
+    /// <summary>POSTs to /connect/token to exchange an authorization code for tokens (SPA client).</summary>
     public static Task<HttpResponseMessage> ExchangeCodeForTokensAsync(
         HttpClient client, string code) =>
-        client.PostAsync("/connect/token", new FormUrlEncodedContent(new[]
+        ExchangeCodeForTokensAsync(client, code, AuthSeeder.SpaClientId, AuthSeeder.SpaRedirectUri);
+
+    /// <summary>POSTs to /connect/token to exchange an authorization code for tokens (arbitrary client).</summary>
+    public static Task<HttpResponseMessage> ExchangeCodeForTokensAsync(
+        HttpClient client, string code, string clientId, string redirectUri, string? resource = null)
+    {
+        var form = new List<KeyValuePair<string, string>>
         {
-            new KeyValuePair<string, string>("grant_type", "authorization_code"),
-            new KeyValuePair<string, string>("code", code),
-            new KeyValuePair<string, string>("redirect_uri", AuthSeeder.SpaRedirectUri),
-            new KeyValuePair<string, string>("client_id", AuthSeeder.SpaClientId),
-            new KeyValuePair<string, string>("code_verifier", CodeVerifier),
-        }));
+            new("grant_type", "authorization_code"),
+            new("code", code),
+            new("redirect_uri", redirectUri),
+            new("client_id", clientId),
+            new("code_verifier", CodeVerifier),
+        };
+        // RFC 8707 — the resource sent at the token endpoint must match the authorize request.
+        if (resource is not null)
+        {
+            form.Add(new("resource", resource));
+        }
+        return client.PostAsync("/connect/token", new FormUrlEncodedContent(form));
+    }
 
     /// <summary>POSTs to /connect/token to exchange a refresh token for new tokens.</summary>
     public static Task<HttpResponseMessage> RefreshTokensAsync(

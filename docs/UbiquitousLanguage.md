@@ -144,6 +144,25 @@ A Report instance that has been (or will be) transmitted to a Regulator, distinc
 
 ---
 
+## Integrations & AI Agents
+
+### MCP (Model Context Protocol) ✅
+The open protocol RecordKeeping exposes so external **AI Agents** can call into the product. The MCP server is embedded in `RecordKeeping.Api` and speaks the Streamable HTTP transport. See [Architecture.md](./Architecture.md) §MCP.
+
+### Agent ✅
+An external AI assistant that connects over MCP on behalf of a User — specifically **Claude**, **ChatGPT**, and **Copilot** for v1. An Agent is *not* a User and has no standing identity of its own: it acts only with an access token obtained when a User logs in. Org isolation (I-D03) applies to an Agent exactly as it does to the User it acts for.
+
+### MCP Tool ✅
+A single callable capability the MCP server advertises to an Agent (the MCP equivalent of an API endpoint). Tool names are `snake_case` (e.g., `hello_world`). The v1 slice ships only `hello_world`; domain tools are added per-aggregate as the domain is built.
+
+### Dynamic Client Registration (DCR) ✅
+The RFC 7591 flow by which an Agent obtains an OAuth `client_id` automatically on first connection, with no manual configuration. This is what makes Agent onboarding friction-free: a User pastes the MCP URL and logs in; the Agent self-registers. RecordKeeping hardens every dynamically-registered client (public, PKCE-required, auth-code/refresh only, HTTPS/loopback redirects).
+
+### `mcp` scope ✅
+The OAuth scope an access token must carry to call MCP Tools. Necessary but not sufficient — Org isolation still applies on top of it (see I-D16).
+
+---
+
 ## Out of scope (for this vocabulary)
 
 - **BillingAgent (BA)** — a sibling product owned by the same author. Not integrated with RecordKeeping in v1. Any future BA↔RK bridge will be a sync job, not a shared model. BA terms (`Subscription`, `Invoice`, `Customer` in the BA sense, etc.) are **not** part of the RecordKeeping ubiquitous language.

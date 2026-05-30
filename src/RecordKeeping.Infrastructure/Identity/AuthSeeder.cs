@@ -20,6 +20,12 @@ public static class AuthSeeder
     /// <summary>The SPA OIDC client identifier registered with OpenIddict.</summary>
     public const string SpaClientId = "spa";
 
+    /// <summary>
+    /// The OAuth scope that grants access to the MCP tool surface. AI agents request this
+    /// scope; the MCP endpoint requires it (see Api <c>McpUser</c> policy and I-D16).
+    /// </summary>
+    public const string McpScopeName = "mcp";
+
     /// <summary>The SPA OIDC client's canonical redirect URI (used by integration tests).</summary>
     public const string SpaRedirectUri = "https://localhost/callback";
 
@@ -34,14 +40,18 @@ public static class AuthSeeder
     /// </summary>
     private static readonly Uri[] AdditionalSpaRedirectUris =
     {
+        new("https://localhost:8443/callback"), // docker-compose, api (https)
+        new("https://localhost:8444/callback"), // docker-compose, mcp (https)
         new("https://localhost:7099/callback"), // dotnet run, https profile
         new("http://localhost:5182/callback"),  // dotnet run, http profile
-        new("http://localhost:8080/callback"),  // docker-compose
+        new("http://localhost:8080/callback"),  // docker-compose (legacy http)
         new("http://localhost:5173/callback"),  // Vite dev server
     };
 
     private static readonly Uri[] AdditionalSpaPostLogoutRedirectUris =
     {
+        new("https://localhost:8443/"),
+        new("https://localhost:8444/"),
         new("https://localhost:7099/"),
         new("http://localhost:5182/"),
         new("http://localhost:8080/"),
@@ -54,19 +64,52 @@ public static class AuthSeeder
     /// <param name="services">A scoped service provider.</param>
     public static async Task SeedAsync(IServiceProvider services)
     {
+        await SeedMcpScopeAsync(services);
         await SeedSpaClientAsync(services);
         await SeedSiteAdminAsync(services);
+    }
+
+    private static async Task SeedMcpScopeAsync(IServiceProvider services)
+    {
+        var manager = services.GetRequiredService<IOpenIddictScopeManager>();
+
+        if (await manager.FindByNameAsync(McpScopeName) is not null)
+        {
+            return;
+        }
+
+        // Declared as a first-class scope so it appears in discovery (scopes_supported) and can
+        // be granted to dynamically-registered MCP clients. No resource is associated: the MCP
+        // endpoint authorizes on the scope claim, and the resource/audience is host-dynamic.
+        await manager.CreateAsync(new OpenIddictScopeDescriptor
+        {
+            Name = McpScopeName,
+            DisplayName = "MCP access",
+            Description = "Grants an AI agent access to the RecordKeeping MCP tool surface.",
+        });
     }
 
     private static async Task SeedSpaClientAsync(IServiceProvider services)
     {
         var manager = services.GetRequiredService<IOpenIddictApplicationManager>();
+        var descriptor = BuildSpaClientDescriptor();
 
-        if (await manager.FindByClientIdAsync(SpaClientId) is not null)
+        var existing = await manager.FindByClientIdAsync(SpaClientId);
+        if (existing is null)
         {
+            await manager.CreateAsync(descriptor);
             return;
         }
 
+        // Reconcile the existing client with the desired configuration. This keeps the
+        // registered redirect URIs in sync when dev ports/schemes change (e.g. moving the
+        // docker-compose stack to HTTPS), so logins don't fail with ID2043 (invalid
+        // redirect_uri) and no database wipe is required. Idempotent when already correct.
+        await manager.UpdateAsync(existing, descriptor);
+    }
+
+    private static OpenIddictApplicationDescriptor BuildSpaClientDescriptor()
+    {
         var descriptor = new OpenIddictApplicationDescriptor
         {
             ClientId = SpaClientId,
@@ -103,7 +146,7 @@ public static class AuthSeeder
             descriptor.PostLogoutRedirectUris.Add(uri);
         }
 
-        await manager.CreateAsync(descriptor);
+        return descriptor;
     }
 
     private static async Task SeedSiteAdminAsync(IServiceProvider services)
