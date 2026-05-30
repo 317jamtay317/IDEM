@@ -18,7 +18,11 @@ services:
       MSSQL_SA_PASSWORD: "${SA_PASSWORD:-Devp@ssword!123}"
       MSSQL_PID: "Developer"
     ports:
-      - "1433:1433"
+      # Host port is configurable to avoid clashing with a SQL Server already
+      # installed on the host (which binds 1433). The API talks to SQL over the
+      # internal Docker network (sql-server:1433), so this mapping is only for
+      # host-based tools; default 14333 sidesteps the common local-SQL conflict.
+      - "${SQL_HOST_PORT:-14333}:1433"
     volumes:
       - sql-data:/var/opt/mssql
     healthcheck:
