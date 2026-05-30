@@ -80,6 +80,28 @@ Copy as **templates, not as code** (per handoff decision — no wholesale fork o
 
 ---
 
+## MCP (Model Context Protocol) ✅
+
+RecordKeeping exposes an **MCP server** so external AI agents — **Claude**, **ChatGPT**, and **GitHub Copilot** — can call into the product. It lives in the `RecordKeeping.Mcp` project and is **embedded in `RecordKeeping.Api`** (mounted at `/mcp` over the **Streamable HTTP** transport, stateless mode). Built on the official `ModelContextProtocol.AspNetCore` SDK.
+
+**Effortless auth is the headline requirement.** It maps onto the MCP authorization spec, which is OAuth 2.1 with three discovery layers — so an agent needs only the one URL `https://<host>/mcp`:
+
+1. **Protected Resource Metadata** (RFC 9728) at `/.well-known/oauth-protected-resource/mcp`, and a `WWW-Authenticate: Bearer resource_metadata="…"` header on every 401. This points the agent at the authorization server.
+2. **Authorization Server Metadata** (RFC 8414) — served by OpenIddict at both `/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server` (agents probe the latter).
+3. **Dynamic Client Registration** (RFC 7591) at `/connect/register` — the agent self-registers a `client_id`, then runs Authorization Code + PKCE. No per-agent configuration, no shared secrets.
+
+**Embedded topology (resource server == authorization server).** The MCP endpoint is an OAuth resource server that trusts tokens this same app issues. Co-hosting removes cross-service token-audience juggling and a second deployable. The MCP code stays in its own project (peer to `Api`) and ships its own `RecordKeeping.Mcp.slnx` view.
+
+**Authorization wiring.** A dedicated `McpAuth` authentication scheme publishes the resource metadata and emits the discovery challenge, but **forwards token validation to the OpenIddict validation scheme** — so global auth defaults (and the SPA flow) are untouched. The `/mcp` endpoint is guarded by the **`McpUser`** policy: authenticated **and** the access token carries the **`mcp` scope**.
+
+**Dynamic Client Registration is implemented in-house** (`DynamicClientRegistration` in Infrastructure) because OpenIddict has no registration endpoint. Open registration is the price of frictionless onboarding, so every dynamically-registered client is **hardened**: public (no secret), **PKCE required**, limited to **authorization-code + refresh-token**, with redirect URIs restricted to **HTTPS or loopback**.
+
+**Resource validation is disabled** on the OpenIddict server. MCP clients (RFC 8707) always send a `resource` parameter equal to the MCP URL, which is host-dynamic and not pre-registered; without this, OpenIddict would reject those token requests with `invalid_target`. Because the resource server and authorization server are the same app, audience binding isn't load-bearing for security here — the **`mcp` scope** is the authorization gate. Tightening to explicit audience/resource binding is a future option.
+
+> **Deferred before first external agent in production:** persistent signing/encryption keys (currently ephemeral), the existing TLS-edge `UseForwardedHeaders` hardening, and a consent screen (registration currently uses implicit consent to match the SPA). Tracked alongside the existing pre-prod auth TODOs.
+
+---
+
 ## Multi-Org ❓
 
 Org isolation strategy not yet decided. Three options on the table:

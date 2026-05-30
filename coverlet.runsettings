@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <!-- Coverage settings: dotnet test ProjectOrSolution settings coverlet.runsettings -->
+  <!-- Excludes generated and build output code so the metric reflects hand written code. -->
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <ExcludeByFile>**/obj/**/*.cs,**/*.generated.cs,**/*.g.cs,**/*.g.i.cs</ExcludeByFile>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

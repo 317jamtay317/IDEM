@@ -2,12 +2,17 @@ using System.Security.Claims;
 using Microsoft.AspNetCore; // for OpenIddictServerAspNetCoreHelpers extension methods
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using ModelContextProtocol.AspNetCore.Authentication;
 using OpenIddict.Abstractions;
+using OpenIddict.Server;
 using OpenIddict.Server.AspNetCore;
 using OpenIddict.Validation.AspNetCore;
+using RecordKeeping.Api;
 using RecordKeeping.Infrastructure.Identity;
+using RecordKeeping.Mcp;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -75,7 +80,37 @@ builder.Services.AddOpenIddict()
             .RequireProofKeyForCodeExchange()
             .AllowRefreshTokenFlow();
 
-        options.RegisterScopes(Scopes.Email, Scopes.Profile, Scopes.OfflineAccess);
+        options.RegisterScopes(Scopes.Email, Scopes.Profile, Scopes.OfflineAccess, AuthSeeder.McpScopeName);
+
+        // Serve RFC 8414 metadata at the oauth-authorization-server path too (MCP clients probe it),
+        // alongside the default OIDC discovery document.
+        options.SetConfigurationEndpointUris("/.well-known/openid-configuration", "/.well-known/oauth-authorization-server");
+
+        // MCP clients (RFC 8707) always send a `resource` parameter equal to the MCP server URL,
+        // which is host-dynamic and not pre-registered. Two OpenIddict checks must be relaxed for
+        // this, or the OAuth flow fails:
+        //   - DisableResourceValidation: don't reject an unknown resource (ID2190 invalid_target).
+        //   - IgnoreResourcePermissions: don't require the (dynamically-registered) client to hold
+        //     a per-resource permission for it (ID2192). Clients can't pre-register a permission
+        //     for a host they discover at connect time.
+        // The MCP endpoint authorizes on the `mcp` scope instead; RS == AS makes that sufficient.
+        // See docs/Architecture.md §MCP.
+        options.DisableResourceValidation();
+        options.IgnoreResourcePermissions();
+
+        // Advertise the Dynamic Client Registration endpoint in discovery so agents self-register.
+        options.AddEventHandler<OpenIddictServerEvents.HandleConfigurationRequestContext>(handler =>
+            handler.UseInlineHandler(context =>
+            {
+                var httpRequest = context.Transaction.GetHttpRequest();
+                if (httpRequest is not null)
+                {
+                    context.Metadata["registration_endpoint"] =
+                        $"{httpRequest.Scheme}://{httpRequest.Host}{DynamicClientRegistration.EndpointPath}";
+                }
+
+                return default;
+            }));
 
         // Dev/test ephemeral keys. Production replaces with persistent certs.
         options.AddEphemeralEncryptionKey()
@@ -106,6 +141,16 @@ builder.Services.AddOpenIddict()
         options.UseAspNetCore();
     });
 
+// MCP server (embedded): exposes tools to AI agents over Streamable HTTP. Acts as an OAuth
+// resource server trusting tokens this same app issues. See docs/Architecture.md §MCP.
+builder.Services.AddScoped<DynamicClientRegistration>();
+builder.Services.AddRecordKeepingMcp();
+
+// The MCP authentication scheme publishes Protected Resource Metadata and the discovery
+// challenge; it forwards actual token validation to the OpenIddict validation scheme.
+builder.Services.AddAuthentication()
+    .AddRecordKeepingMcpAuthentication(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
+
 // API endpoints use the OpenIddict validation scheme (challenges with 401),
 // not Identity's cookie scheme (which would 302-redirect to a login page).
 builder.Services.AddAuthorization(options =>
@@ -114,6 +159,15 @@ builder.Services.AddAuthorization(options =>
             OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
         .RequireAuthenticatedUser()
         .Build());
+
+    // MCP tool calls require an authenticated caller whose token carries the `mcp` scope.
+    // The challenge is issued by the MCP scheme (adds the resource_metadata pointer); token
+    // validation is forwarded to OpenIddict. See I-D16.
+    options.AddPolicy(McpEndpointExtensions.McpAuthorizationPolicy,
+        new AuthorizationPolicyBuilder(McpAuthenticationDefaults.AuthenticationScheme)
+            .RequireAuthenticatedUser()
+            .RequireAssertion(context => context.User.HasScope(McpEndpointExtensions.McpScope))
+            .Build());
 });
 
 // --- Build & Pipeline --------------------------------------------------------
@@ -134,6 +188,22 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+
+// Honor X-Forwarded-* so OAuth/MCP discovery advertises the public host + scheme when the
+// app runs behind a TLS-terminating proxy or tunnel (Azure Container Apps, cloudflared, ngrok).
+// Without this, discovery would advertise the internal origin (e.g. localhost) and remote
+// agents could not complete the OAuth flow. Must run before anything that reads scheme/host.
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor
+        | ForwardedHeaders.XForwardedProto
+        | ForwardedHeaders.XForwardedHost,
+};
+// The proxy/tunnel source IP isn't known or stable in these environments, so don't filter by
+// it. A production ingress with a fixed egress range should instead populate KnownProxies.
+forwardedHeadersOptions.KnownNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
 
 app.UseHttpsRedirection();
 
@@ -237,6 +307,12 @@ app.MapGet("/api/me", (HttpContext ctx) =>
         isSiteAdmin = ctx.User.FindFirst("is_site_admin")?.Value == "true",
     });
 }).RequireAuthorization("ApiUser");
+
+// Dynamic Client Registration (RFC 7591) — agents self-register here on first connect.
+app.MapDynamicClientRegistration();
+
+// MCP Streamable HTTP endpoint, protected by the McpUser policy.
+app.MapRecordKeepingMcp();
 
 // SPA fallback: any non-API, non-static-file request serves index.html so the
 // React client-side router can handle it.
