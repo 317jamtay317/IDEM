@@ -6,6 +6,7 @@ import {
   type ProductionEntry,
 } from '../data'
 import { TopBar } from '../components/TopBar'
+import { SearchableSelect } from '../components/SearchableSelect'
 import { ChevronDownIcon, CloseIcon, PlusIcon } from '../components/icons'
 
 let nextId = 100
@@ -86,18 +87,13 @@ export function LogRecordScreen() {
             {entries.map((entry) => (
               <div key={entry.id} className="entry-row">
                 <div className="entry-main">
-                  <div className="select">
-                    <select
-                      value={entry.field}
-                      onChange={(e) => updateField(entry.id, e.target.value)}
-                      aria-label="Field"
-                    >
-                      {fieldOptions.map((opt) => (
-                        <option key={opt}>{opt}</option>
-                      ))}
-                    </select>
-                    <ChevronDownIcon className="select-chevron" />
-                  </div>
+                  <SearchableSelect
+                    options={fieldOptions}
+                    value={entry.field}
+                    onChange={(field) => updateField(entry.id, field)}
+                    label="Field"
+                    searchPlaceholder="Search fields…"
+                  />
                   <input
                     type="number"
                     inputMode="numeric"

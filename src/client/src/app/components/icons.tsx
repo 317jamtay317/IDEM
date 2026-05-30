@@ -90,3 +90,22 @@ export function CloseIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   )
 }
+
+/** Magnifying-glass glyph, used on search inputs. */
+export function SearchIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.35-4.35" />
+    </svg>
+  )
+}
+
+/** Check-mark glyph, used to mark the selected option in a menu. */
+export function CheckIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="m5 12 5 5L20 7" />
+    </svg>
+  )
+}
