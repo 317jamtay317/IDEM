@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { hashFromScreen, screenFromHash, useHashScreen, type Screen } from './useHashScreen'
 
-const ALL_SCREENS: Screen[] = ['home', 'records', 'reports', 'more', 'log']
+const ALL_SCREENS: Screen[] = ['home', 'records', 'reports', 'orgs', 'more', 'log']
 
 afterEach(() => {
   // Each test owns the location hash; reset it so state never leaks between tests.
@@ -22,6 +22,7 @@ describe('screenFromHash', () => {
   it.each([
     ['#/records', 'records'],
     ['#/reports', 'reports'],
+    ['#/orgs', 'orgs'],
     ['#/more', 'more'],
     ['#/log', 'log'],
   ])('maps %s to the %s screen', (hash, expected) => {
@@ -41,6 +42,7 @@ describe('hashFromScreen', () => {
   it.each([
     ['records', '#/records'],
     ['reports', '#/reports'],
+    ['orgs', '#/orgs'],
     ['more', '#/more'],
     ['log', '#/log'],
   ] as const)('maps the %s screen to %s', (screen, expected) => {

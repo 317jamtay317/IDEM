@@ -134,6 +134,22 @@ export interface Stat {
   caption: string
 }
 
+/**
+ * An Org as returned by the `GET /orgs` API — the platform-wide Org list shown on
+ * the Organizations screen. This is real API data (unlike the prototype constants
+ * below), so the shape mirrors the server's `OrgResponse`.
+ */
+export interface OrgSummary {
+  /** Stable identifier (GUID). */
+  id: string
+  /** Org display name, e.g. "Rieth-Riley". */
+  name: string
+  /** Entra ID directory GUID when SSO is configured, else null (I-D12). */
+  tenantId: string | null
+  /** Facilities owned by the Org (I-D06). */
+  facilities: { id: string; name: string }[]
+}
+
 /** The signed-in Org whose data the prototype displays. */
 export const org = { name: 'Rieth-Riley', initials: 'RR' } as const
 

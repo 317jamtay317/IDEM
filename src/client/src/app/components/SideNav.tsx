@@ -1,10 +1,12 @@
 import { facilities, org } from '../data'
-import { NAV_ENTRIES, type NavTab } from './nav'
+import { visibleNavEntries, type NavTab } from './nav'
 
 /** Props for {@link SideNav}. */
 export interface SideNavProps {
   /** The currently active tab, highlighted in the rail. */
   active: NavTab
+  /** Whether the signed-in user is a SiteAdmin; controls SiteAdmin-only destinations. */
+  isSiteAdmin: boolean
   /** Called with the chosen tab when the user clicks a destination. */
   onNavigate: (tab: NavTab) => void
 }
@@ -14,7 +16,7 @@ export interface SideNavProps {
  * destinations as full-width rows, and the selected Facility pinned to the
  * bottom. Hidden below desktop width, where {@link BottomNav} takes over.
  */
-export function SideNav({ active, onNavigate }: SideNavProps) {
+export function SideNav({ active, isSiteAdmin, onNavigate }: SideNavProps) {
   const facility = facilities[0]
 
   return (
@@ -27,7 +29,7 @@ export function SideNav({ active, onNavigate }: SideNavProps) {
       </div>
 
       <nav className="sidenav-links">
-        {NAV_ENTRIES.map(({ tab, label, Icon }) => (
+        {visibleNavEntries(isSiteAdmin).map(({ tab, label, Icon }) => (
           <button
             key={tab}
             type="button"
