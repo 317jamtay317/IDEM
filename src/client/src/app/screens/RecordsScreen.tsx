@@ -1,10 +1,29 @@
 import { useState } from 'react'
 import { facilities, recordFilters, records, type RecordItem } from '../data'
+import { GridControl, type GridColumn } from '../components/GridControl'
 import { StatusPill } from '../components/StatusPill'
 import { TopBar } from '../components/TopBar'
 import { useBreakpoint } from '../useBreakpoint'
 
 type Filter = (typeof recordFilters)[number]
+
+/**
+ * Columns for the desktop Records grid. Each cell is templated to preserve the
+ * original table's emphasis (`cell-strong`/`muted`) and to render the Status
+ * column as a {@link StatusPill}.
+ */
+const recordColumns: GridColumn<RecordItem>[] = [
+  { key: 'type', header: 'Type', render: (r) => <span className="cell-strong">{r.type}</span> },
+  { key: 'facility', header: 'Facility', render: (r) => <span className="muted">{r.facility}</span> },
+  {
+    key: 'operator',
+    header: 'Operator',
+    render: (r) => <span className="muted">{r.operator ?? '—'}</span>,
+  },
+  { key: 'value', header: 'Value', render: (r) => <span className="cell-strong">{r.value}</span> },
+  { key: 'date', header: 'Date', render: (r) => <span className="muted">{r.date}</span> },
+  { key: 'status', header: 'Status', render: (r) => <StatusPill status={r.status} /> },
+]
 
 /** Join a Record's facility, operator and (optionally) date into a context line. */
 function contextLine(record: RecordItem, withDate: boolean): string {
@@ -94,36 +113,17 @@ function RecordCard({ item, withDate = false }: { item: RecordItem; withDate?: b
   )
 }
 
-/** Records rendered as a data table (desktop). */
+/** Records rendered as a data table (desktop), via the reusable GridControl. */
 function RecordTable({ items }: { items: RecordItem[] }) {
   return (
     <div className="card table-card">
-      <table className="record-table">
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Facility</th>
-            <th>Operator</th>
-            <th>Value</th>
-            <th>Date</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.id}>
-              <td className="cell-strong">{item.type}</td>
-              <td className="muted">{item.facility}</td>
-              <td className="muted">{item.operator ?? '—'}</td>
-              <td className="cell-strong">{item.value}</td>
-              <td className="muted">{item.date}</td>
-              <td>
-                <StatusPill status={item.status} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <GridControl
+        columns={recordColumns}
+        rows={items}
+        rowKey={(item) => item.id}
+        ariaLabel="Records"
+        emptyText="No records found."
+      />
     </div>
   )
 }
