@@ -80,6 +80,7 @@ public class OrgEndpointsTests(RecordKeepingApiFactory factory)
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var orgs = await response.Content.ReadFromJsonAsync<List<OrgResponse>>();
+        orgs.ShouldNotBeNull();
         orgs.ShouldContain(o => o.Id == created.Id);
     }
 
