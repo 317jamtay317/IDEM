@@ -1,17 +1,14 @@
-import { useState } from 'react'
 import { BottomNav } from './components/BottomNav'
 import { SideNav } from './components/SideNav'
 import { TopBar } from './components/TopBar'
 import type { NavTab } from './components/nav'
+import { useHashScreen } from './useHashScreen'
 import { DashboardScreen } from './screens/DashboardScreen'
 import { RecordsScreen } from './screens/RecordsScreen'
 import { ReportsScreen } from './screens/ReportsScreen'
 import { LogRecordScreen } from './screens/LogRecordScreen'
 import { org } from './data'
 import './app.css'
-
-/** Every screen the shell can render. "log" is reachable from the dashboard. */
-type Screen = NavTab | 'log'
 
 /** Props for {@link AppShell}. */
 export interface AppShellProps {
@@ -29,16 +26,16 @@ export interface AppShellProps {
  * mobile/tablet and a sidebar on desktop.
  */
 export function AppShell({ email, isSiteAdmin, onSignOut }: AppShellProps) {
-  const [screen, setScreen] = useState<Screen>('home')
+  const [screen, navigate] = useHashScreen()
   const activeTab: NavTab = screen === 'log' ? 'home' : screen
 
   return (
     <div className="app-shell">
-      <SideNav active={activeTab} onNavigate={setScreen} />
+      <SideNav active={activeTab} onNavigate={navigate} />
 
       <div className="app-content">
         <main className="app-main">
-          {screen === 'home' && <DashboardScreen onLogRecord={() => setScreen('log')} />}
+          {screen === 'home' && <DashboardScreen onLogRecord={() => navigate('log')} />}
           {screen === 'log' && <LogRecordScreen />}
           {screen === 'records' && <RecordsScreen />}
           {screen === 'reports' && <ReportsScreen />}
@@ -47,7 +44,7 @@ export function AppShell({ email, isSiteAdmin, onSignOut }: AppShellProps) {
           )}
         </main>
 
-        <BottomNav active={activeTab} onNavigate={setScreen} />
+        <BottomNav active={activeTab} onNavigate={navigate} />
       </div>
     </div>
   )

@@ -25,10 +25,12 @@ export const oidcConfig: UserManagerSettings = {
 };
 
 /**
- * After a successful callback, strip the `?code=` and `&state=` from the URL.
- * Passed as a separate prop on <AuthProvider/> since react-oidc-context owns it,
- * not the underlying UserManagerSettings.
+ * After a successful callback, return to the site root, dropping the `/callback`
+ * path along with its `?code=` and `&state=` query. Without this the app would
+ * stay on `/callback`, and every in-app hash route would hang off it
+ * (e.g. `/callback#/reports`). Passed as a separate prop on <AuthProvider/>
+ * since react-oidc-context owns it, not the underlying UserManagerSettings.
  */
 export const onSigninCallback = (): void => {
-  window.history.replaceState({}, document.title, window.location.pathname);
+  window.history.replaceState({}, document.title, '/');
 };
