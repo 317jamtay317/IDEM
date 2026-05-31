@@ -59,6 +59,27 @@ export interface FacilitySummary {
   status: Extract<Status, 'on-track' | 'due-soon' | 'overdue'>
 }
 
+/**
+ * One day's production tonnage for a Facility, shown as a row in the Records
+ * drill-down grid. Tonnage Fields are zero on days the plant did not run.
+ */
+export interface ProductionDay {
+  /** Stable identifier, e.g. "goshen-d0". */
+  id: string
+  /** Short date label for the day, e.g. "May 31". */
+  date: string
+  /** Hot Mix tons produced. */
+  hotMix: number
+  /** Cold Mix tons produced. */
+  coldMix: number
+  /** Hours the plant ran that day; 0 when it did not run. */
+  plantRanHours: number
+  /** Steel Slag aggregate tons. */
+  steelSlag: number
+  /** Blast Furnace slag aggregate tons. */
+  blastFurnace: number
+}
+
 /** A periodic filing shown on the IDEM Reports screen. */
 export interface ReportItem {
   /** Stable identifier. */
@@ -171,6 +192,51 @@ export const fieldOptions = [
   'Liquid AC',
   'Fuel burned',
 ]
+
+/**
+ * The last ten days (newest first) covered by the Records production drill-down.
+ * Static labels keep the prototype deterministic (no wall-clock dependency).
+ */
+const LAST_TEN_DAYS = [
+  'May 31',
+  'May 30',
+  'May 29',
+  'May 28',
+  'May 27',
+  'May 26',
+  'May 25',
+  'May 24',
+  'May 23',
+  'May 22',
+] as const
+
+/**
+ * Build ten days of deterministic production figures for a Facility. The plant
+ * is idle on one recurring day per cycle (tonnage falls to zero) so the
+ * Plant Ran column shows a mix of Yes/No. `seed` varies the figures per Facility.
+ */
+function buildProductionDays(facilityId: string, seed: number): ProductionDay[] {
+  return LAST_TEN_DAYS.map((date, i) => {
+    const ran = (i + seed) % 5 !== 4
+    const on = ran ? 1 : 0
+    return {
+      id: `${facilityId}-d${i}`,
+      date,
+      hotMix: on * (900 + ((i + seed) % 4) * 130),
+      coldMix: on * (200 + ((i + seed) % 3) * 60),
+      plantRanHours: ran ? 8 + ((i + seed) % 5) * 0.5 : 0,
+      steelSlag: on * (140 + ((i + seed) % 5) * 20),
+      blastFurnace: on * (110 + ((i + seed) % 4) * 25),
+    }
+  })
+}
+
+/** Last-ten-days production rows per Facility id, for the Records drill-down. */
+export const productionByFacility: Record<string, ProductionDay[]> = {
+  goshen: buildProductionDays('goshen', 0),
+  'fort-wayne': buildProductionDays('fort-wayne', 2),
+  indianapolis: buildProductionDays('indianapolis', 3),
+}
 
 /** Per-Facility compliance rollups listed on the Records screen. */
 export const facilitySummaries: FacilitySummary[] = [

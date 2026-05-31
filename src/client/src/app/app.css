@@ -1043,12 +1043,53 @@
   color: var(--color-warning-text);
 }
 
+/* Facility name in the desktop Records grid: a link-styled button that drills in. */
+.facility-link {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.facility-link:hover {
+  text-decoration: underline;
+}
+
+.facility-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Back button on the production drill-down. */
+.records-back {
+  align-self: flex-start;
+}
+
 /* --- Records: facility summary cards (mobile/tablet) --------------------- */
 
+/* The whole card is a button (drills into the plant); reset button chrome. */
 .facility-summary-card {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.facility-summary-card:hover {
+  border-color: var(--color-text-muted);
+}
+
+.facility-summary-card:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .facility-summary-heading {

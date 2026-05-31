@@ -1,4 +1,10 @@
-import { facilitySummaries, type FacilitySummary } from '../data'
+import { useState } from 'react'
+import {
+  facilitySummaries,
+  productionByFacility,
+  type FacilitySummary,
+  type ProductionDay,
+} from '../data'
 import { GridControl, type GridColumn } from '../components/GridControl'
 import { StatusPill } from '../components/StatusPill'
 import { TopBar } from '../components/TopBar'
@@ -14,52 +20,102 @@ function dueToneClass(status: FacilitySummary['status']): string | undefined {
   return undefined
 }
 
+/** Format a tonnage with thousands separators, pinned to en-US for determinism. */
+function formatTons(tons: number): string {
+  return tons.toLocaleString('en-US')
+}
+
+/** Format the Plant Ran value, in hours, e.g. "8.5 h"; "0 h" on an idle day. */
+function formatHours(hours: number): string {
+  return `${hours} h`
+}
+
 /**
- * Columns for the desktop Records grid — a per-Facility compliance rollup. Cells
- * are templated to match the design's emphasis: the Facility name and Monthly
- * due read strong (Monthly due additionally coloured by urgency), the other
- * dates muted, and Status as a {@link StatusPill}.
+ * Columns for the desktop Records grid — a per-Facility compliance rollup. The
+ * Facility name is a button that drills into that plant's production; the other
+ * cells match the design's emphasis, with Monthly due coloured by urgency and
+ * Status rendered as a {@link StatusPill}.
  */
-const facilityColumns: GridColumn<FacilitySummary>[] = [
-  { key: 'name', header: 'Facility', render: (f) => <span className="cell-strong">{f.name}</span> },
-  { key: 'lastRan', header: 'Last ran', render: (f) => <span className="muted">{f.lastRan}</span> },
+function facilityColumns(
+  onSelect: (facility: FacilitySummary) => void,
+): GridColumn<FacilitySummary>[] {
+  return [
+    {
+      key: 'name',
+      header: 'Facility',
+      render: (f) => (
+        <button type="button" className="facility-link" onClick={() => onSelect(f)}>
+          {f.name}
+        </button>
+      ),
+    },
+    { key: 'lastRan', header: 'Last ran', render: (f) => <span className="muted">{f.lastRan}</span> },
+    {
+      key: 'lastRecord',
+      header: 'Last record',
+      render: (f) => <span className="muted">{f.lastRecord}</span>,
+    },
+    {
+      key: 'monthlyDue',
+      header: 'Monthly due',
+      render: (f) => (
+        <span className={['cell-strong', dueToneClass(f.status)].filter(Boolean).join(' ')}>
+          {f.monthlyDue}
+        </span>
+      ),
+    },
+    {
+      key: 'quarterlyDue',
+      header: 'Quarterly due',
+      render: (f) => <span className="muted">{f.quarterlyDue}</span>,
+    },
+    { key: 'status', header: 'Status', render: (f) => <StatusPill status={f.status} /> },
+  ]
+}
+
+/**
+ * Columns for the production drill-down grid, in the order requested: Date,
+ * Hot Mix, Cold Mix, Plant Ran (hours), Steel Slag, Blast Furnace. All numeric
+ * columns are right-aligned; idle (0-hour) Plant Ran values read muted.
+ */
+const productionColumns: GridColumn<ProductionDay>[] = [
+  { key: 'date', header: 'Date', render: (d) => <span className="cell-strong">{d.date}</span> },
+  { key: 'hotMix', header: 'Hot Mix', align: 'right', render: (d) => formatTons(d.hotMix) },
+  { key: 'coldMix', header: 'Cold Mix', align: 'right', render: (d) => formatTons(d.coldMix) },
   {
-    key: 'lastRecord',
-    header: 'Last record',
-    render: (f) => <span className="muted">{f.lastRecord}</span>,
-  },
-  {
-    key: 'monthlyDue',
-    header: 'Monthly due',
-    render: (f) => (
-      <span className={['cell-strong', dueToneClass(f.status)].filter(Boolean).join(' ')}>
-        {f.monthlyDue}
-      </span>
+    key: 'plantRanHours',
+    header: 'Plant Ran',
+    align: 'right',
+    render: (d) => (
+      <span className={d.plantRanHours > 0 ? undefined : 'muted'}>{formatHours(d.plantRanHours)}</span>
     ),
   },
+  { key: 'steelSlag', header: 'Steel Slag', align: 'right', render: (d) => formatTons(d.steelSlag) },
   {
-    key: 'quarterlyDue',
-    header: 'Quarterly due',
-    render: (f) => <span className="muted">{f.quarterlyDue}</span>,
+    key: 'blastFurnace',
+    header: 'Blast Furnace',
+    align: 'right',
+    render: (d) => formatTons(d.blastFurnace),
   },
-  { key: 'status', header: 'Status', render: (f) => <StatusPill status={f.status} /> },
 ]
 
 /**
- * Records screen. Shows each active Facility's compliance rollup — last run,
- * last record, and the next monthly/quarterly filing dates with an overall
- * status. Desktop renders a data table (via {@link GridControl}); mobile and
- * tablet render stacked Facility cards.
+ * Records screen. Lists each active Facility's compliance rollup; selecting a
+ * Facility drills into a paged grid of that plant's last ten days of production.
+ * Desktop renders the list as a data table (via {@link GridControl}); mobile and
+ * tablet render stacked Facility cards. The drill-down is a grid at every tier.
  */
 export function RecordsScreen() {
   const { isDesktop } = useBreakpoint()
+  const [selected, setSelected] = useState<FacilitySummary | null>(null)
+
+  if (selected) {
+    return <ProductionDrillDown facility={selected} onBack={() => setSelected(null)} />
+  }
 
   return (
     <>
-      <TopBar
-        title="Records"
-        subtitle={`Active facilities · ${facilitySummaries.length} plants`}
-      />
+      <TopBar title="Records" subtitle={`Active facilities · ${facilitySummaries.length} plants`} />
 
       <div className="screen">
         <span className="group-label">Active facilities</span>
@@ -67,7 +123,7 @@ export function RecordsScreen() {
         {isDesktop ? (
           <div className="card table-card">
             <GridControl
-              columns={facilityColumns}
+              columns={facilityColumns((f) => setSelected(f))}
               rows={facilitySummaries}
               rowKey={(facility) => facility.id}
               ariaLabel="Records"
@@ -77,7 +133,7 @@ export function RecordsScreen() {
         ) : (
           <div className="card-list">
             {facilitySummaries.map((facility) => (
-              <FacilityCard key={facility.id} facility={facility} />
+              <FacilityCard key={facility.id} facility={facility} onSelect={(f) => setSelected(f)} />
             ))}
           </div>
         )}
@@ -86,10 +142,53 @@ export function RecordsScreen() {
   )
 }
 
-/** A single Facility compliance rollup rendered as a card (mobile and tablet). */
-function FacilityCard({ facility }: { facility: FacilitySummary }) {
+/** The last-ten-days production grid for one Facility, paged five rows at a time. */
+function ProductionDrillDown({
+  facility,
+  onBack,
+}: {
+  facility: FacilitySummary
+  onBack: () => void
+}) {
+  const days = productionByFacility[facility.id] ?? []
   return (
-    <div className="card facility-summary-card">
+    <>
+      <TopBar title={facility.name} subtitle={`Production · last 10 days · ${facility.region}`} />
+
+      <div className="screen">
+        <button type="button" className="button button-secondary records-back" onClick={onBack}>
+          ← Back to facilities
+        </button>
+
+        <div className="card table-card">
+          <GridControl
+            columns={productionColumns}
+            rows={days}
+            rowKey={(day) => day.id}
+            ariaLabel={`${facility.name} production`}
+            paging={{ mode: 'client', pageSize: 5 }}
+            emptyText="No production in the last 10 days."
+          />
+        </div>
+      </div>
+    </>
+  )
+}
+
+/** A single Facility compliance rollup rendered as a tappable card (mobile and tablet). */
+function FacilityCard({
+  facility,
+  onSelect,
+}: {
+  facility: FacilitySummary
+  onSelect: (facility: FacilitySummary) => void
+}) {
+  return (
+    <button
+      type="button"
+      className="card facility-summary-card"
+      onClick={() => onSelect(facility)}
+    >
       <div className="record-head">
         <div className="facility-summary-heading">
           <span className="card-title">{facility.name}</span>
@@ -108,7 +207,7 @@ function FacilityCard({ facility }: { facility: FacilitySummary }) {
         />
         <SummaryField label="Quarterly due" value={facility.quarterlyDue} />
       </div>
-    </div>
+    </button>
   )
 }
 
