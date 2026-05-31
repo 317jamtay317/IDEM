@@ -1034,6 +1034,56 @@
   color: var(--color-text);
 }
 
+/* Urgency text colours (e.g. the Records "Monthly due" date). */
+.text-danger {
+  color: var(--color-danger-text);
+}
+
+.text-warning {
+  color: var(--color-warning-text);
+}
+
+/* --- Records: facility summary cards (mobile/tablet) --------------------- */
+
+.facility-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.facility-summary-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+/* Field grid: two columns on mobile, all four in a row from tablet up. */
+.facility-summary-fields {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem 1rem;
+}
+
+@media (min-width: 768px) {
+  .facility-summary-fields {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.facility-summary-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.summary-field-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
 /* --- Reports: responsive card grid --------------------------------------- */
 
 .report-grid {

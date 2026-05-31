@@ -1,129 +1,131 @@
-import { useState } from 'react'
-import { facilities, recordFilters, records, type RecordItem } from '../data'
+import { facilitySummaries, type FacilitySummary } from '../data'
 import { GridControl, type GridColumn } from '../components/GridControl'
 import { StatusPill } from '../components/StatusPill'
 import { TopBar } from '../components/TopBar'
 import { useBreakpoint } from '../useBreakpoint'
 
-type Filter = (typeof recordFilters)[number]
+/**
+ * Text-colour modifier for a Facility's monthly-due date, by urgency: red when
+ * overdue, amber when due soon, and the default colour when on track.
+ */
+function dueToneClass(status: FacilitySummary['status']): string | undefined {
+  if (status === 'overdue') return 'text-danger'
+  if (status === 'due-soon') return 'text-warning'
+  return undefined
+}
 
 /**
- * Columns for the desktop Records grid. Each cell is templated to preserve the
- * original table's emphasis (`cell-strong`/`muted`) and to render the Status
- * column as a {@link StatusPill}.
+ * Columns for the desktop Records grid — a per-Facility compliance rollup. Cells
+ * are templated to match the design's emphasis: the Facility name and Monthly
+ * due read strong (Monthly due additionally coloured by urgency), the other
+ * dates muted, and Status as a {@link StatusPill}.
  */
-const recordColumns: GridColumn<RecordItem>[] = [
-  { key: 'type', header: 'Type', render: (r) => <span className="cell-strong">{r.type}</span> },
-  { key: 'facility', header: 'Facility', render: (r) => <span className="muted">{r.facility}</span> },
+const facilityColumns: GridColumn<FacilitySummary>[] = [
+  { key: 'name', header: 'Facility', render: (f) => <span className="cell-strong">{f.name}</span> },
+  { key: 'lastRan', header: 'Last ran', render: (f) => <span className="muted">{f.lastRan}</span> },
   {
-    key: 'operator',
-    header: 'Operator',
-    render: (r) => <span className="muted">{r.operator ?? '—'}</span>,
+    key: 'lastRecord',
+    header: 'Last record',
+    render: (f) => <span className="muted">{f.lastRecord}</span>,
   },
-  { key: 'value', header: 'Value', render: (r) => <span className="cell-strong">{r.value}</span> },
-  { key: 'date', header: 'Date', render: (r) => <span className="muted">{r.date}</span> },
-  { key: 'status', header: 'Status', render: (r) => <StatusPill status={r.status} /> },
+  {
+    key: 'monthlyDue',
+    header: 'Monthly due',
+    render: (f) => (
+      <span className={['cell-strong', dueToneClass(f.status)].filter(Boolean).join(' ')}>
+        {f.monthlyDue}
+      </span>
+    ),
+  },
+  {
+    key: 'quarterlyDue',
+    header: 'Quarterly due',
+    render: (f) => <span className="muted">{f.quarterlyDue}</span>,
+  },
+  { key: 'status', header: 'Status', render: (f) => <StatusPill status={f.status} /> },
 ]
 
-/** Join a Record's facility, operator and (optionally) date into a context line. */
-function contextLine(record: RecordItem, withDate: boolean): string {
-  return [record.facility, record.operator, withDate ? record.date : null]
-    .filter(Boolean)
-    .join(' · ')
-}
-
-/** Group records by their day bucket, preserving source order. */
-function groupByDay(items: RecordItem[]): [string, RecordItem[]][] {
-  const groups = new Map<string, RecordItem[]>()
-  for (const item of items) {
-    const bucket = groups.get(item.dayGroup) ?? []
-    bucket.push(item)
-    groups.set(item.dayGroup, bucket)
-  }
-  return [...groups.entries()]
-}
-
 /**
- * Records screen. Category chips filter the list at every breakpoint. Mobile
- * shows day-grouped cards, tablet a two-column card grid, and desktop a data
- * table.
+ * Records screen. Shows each active Facility's compliance rollup — last run,
+ * last record, and the next monthly/quarterly filing dates with an overall
+ * status. Desktop renders a data table (via {@link GridControl}); mobile and
+ * tablet render stacked Facility cards.
  */
 export function RecordsScreen() {
-  const { isTabletUp, isDesktop } = useBreakpoint()
-  const [filter, setFilter] = useState<Filter>('All')
-
-  const visible = filter === 'All' ? records : records.filter((r) => r.category === filter)
+  const { isDesktop } = useBreakpoint()
 
   return (
     <>
-      <TopBar title="Records" subtitle={`All compliance records · ${facilities[0].name}`} />
+      <TopBar
+        title="Records"
+        subtitle={`Active facilities · ${facilitySummaries.length} plants`}
+      />
 
       <div className="screen">
-        <div className="chip-row" role="tablist" aria-label="Filter records">
-          {recordFilters.map((f) => (
-            <button
-              key={f}
-              type="button"
-              role="tab"
-              aria-selected={filter === f}
-              className={`chip${filter === f ? ' chip-active' : ''}`}
-              onClick={() => setFilter(f)}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
+        <span className="group-label">Active facilities</span>
 
         {isDesktop ? (
-          <RecordTable items={visible} />
-        ) : isTabletUp ? (
-          <div className="record-grid">
-            {visible.map((item) => (
-              <RecordCard key={item.id} item={item} withDate />
-            ))}
+          <div className="card table-card">
+            <GridControl
+              columns={facilityColumns}
+              rows={facilitySummaries}
+              rowKey={(facility) => facility.id}
+              ariaLabel="Records"
+              emptyText="No active facilities."
+            />
           </div>
         ) : (
-          groupByDay(visible).map(([day, items]) => (
-            <section key={day} className="record-group">
-              <h2 className="group-label">{day}</h2>
-              <div className="card-list">
-                {items.map((item) => (
-                  <RecordCard key={item.id} item={item} />
-                ))}
-              </div>
-            </section>
-          ))
+          <div className="card-list">
+            {facilitySummaries.map((facility) => (
+              <FacilityCard key={facility.id} facility={facility} />
+            ))}
+          </div>
         )}
       </div>
     </>
   )
 }
 
-/** A Record rendered as a card (mobile and tablet). */
-function RecordCard({ item, withDate = false }: { item: RecordItem; withDate?: boolean }) {
+/** A single Facility compliance rollup rendered as a card (mobile and tablet). */
+function FacilityCard({ facility }: { facility: FacilitySummary }) {
   return (
-    <div className="card record-card">
+    <div className="card facility-summary-card">
       <div className="record-head">
-        <span className="card-title">{item.type}</span>
-        <StatusPill status={item.status} />
+        <div className="facility-summary-heading">
+          <span className="card-title">{facility.name}</span>
+          <span className="muted">{facility.region}</span>
+        </div>
+        <StatusPill status={facility.status} />
       </div>
-      <span className="muted">{contextLine(item, withDate)}</span>
-      <span className="record-detail">{item.value}</span>
+
+      <div className="facility-summary-fields">
+        <SummaryField label="Last ran" value={facility.lastRan} />
+        <SummaryField label="Last record" value={facility.lastRecord} />
+        <SummaryField
+          label="Monthly due"
+          value={facility.monthlyDue}
+          toneClass={dueToneClass(facility.status)}
+        />
+        <SummaryField label="Quarterly due" value={facility.quarterlyDue} />
+      </div>
     </div>
   )
 }
 
-/** Records rendered as a data table (desktop), via the reusable GridControl. */
-function RecordTable({ items }: { items: RecordItem[] }) {
+/** A labelled value inside a {@link FacilityCard}, e.g. "LAST RAN / May 29". */
+function SummaryField({
+  label,
+  value,
+  toneClass,
+}: {
+  label: string
+  value: string
+  toneClass?: string
+}) {
   return (
-    <div className="card table-card">
-      <GridControl
-        columns={recordColumns}
-        rows={items}
-        rowKey={(item) => item.id}
-        ariaLabel="Records"
-        emptyText="No records found."
-      />
+    <div className="facility-summary-field">
+      <span className="overline">{label}</span>
+      <span className={['summary-field-value', toneClass].filter(Boolean).join(' ')}>{value}</span>
     </div>
   )
 }

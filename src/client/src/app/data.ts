@@ -9,11 +9,8 @@
 /** A regulatory body a Facility reports to. */
 export type Regulator = 'IDEM' | 'MDEQ'
 
-/** Lifecycle/compliance status shared by Records and Reports, rendered as a pill. */
-export type Status = 'submitted' | 'draft' | 'due-soon' | 'overdue'
-
-/** Record category used by the filter chips. */
-export type RecordCategory = 'Production' | 'Opacity' | 'Baghouse' | 'Stack test'
+/** Lifecycle/compliance status shared by Records, Reports and Facilities, rendered as a pill. */
+export type Status = 'submitted' | 'draft' | 'due-soon' | 'overdue' | 'on-track'
 
 /** An Asphalt Plant (Facility) belonging to the current Org. */
 export interface Facility {
@@ -39,26 +36,27 @@ export interface AttentionItem {
   status: Extract<Status, 'due-soon' | 'overdue'>
 }
 
-/** A single submitted (or missing) Record, shown as a card or a table row. */
-export interface RecordItem {
+/**
+ * A per-Facility compliance rollup shown on the Records screen — one row in the
+ * desktop table, one card on mobile/tablet.
+ */
+export interface FacilitySummary {
   /** Stable identifier. */
   id: string
-  /** Record type/title, e.g. "Daily Production Log". */
-  type: string
-  /** Facility the Record belongs to. */
-  facility: string
-  /** Operator who logged it, or null when not recorded. */
-  operator: string | null
-  /** Headline figures or a "Not recorded" note. */
-  value: string
-  /** Short date label, e.g. "May 29". */
-  date: string
-  /** Day bucket the Record is grouped under on mobile, e.g. "Today · May 29". */
-  dayGroup: string
-  /** Current status of the Record. */
-  status: Status
-  /** Category used by the filter chips. */
-  category: RecordCategory
+  /** Facility display name, e.g. "Goshen Asphalt Plant". */
+  name: string
+  /** Region and regulator line, e.g. "Indiana · IDEM". */
+  region: string
+  /** Date the most recent compliance run completed, e.g. "May 29". */
+  lastRan: string
+  /** Date of the most recent Record entered, e.g. "May 29". */
+  lastRecord: string
+  /** Next monthly filing due date, e.g. "Jun 15, 2026". Emphasised by {@link FacilitySummary.status}. */
+  monthlyDue: string
+  /** Next quarterly filing due date, e.g. "Jul 31, 2026". */
+  quarterlyDue: string
+  /** Overall compliance state, rendered as a pill and used to colour {@link FacilitySummary.monthlyDue}. */
+  status: Extract<Status, 'on-track' | 'due-soon' | 'overdue'>
 }
 
 /** A periodic filing shown on the IDEM Reports screen. */
@@ -174,76 +172,37 @@ export const fieldOptions = [
   'Fuel burned',
 ]
 
-/** Filter chips available on the Records screen. */
-export const recordFilters = ['All', 'Production', 'Opacity', 'Baghouse', 'Stack test'] as const
-
-/** Records listed on the Records screen, newest first. */
-export const records: RecordItem[] = [
+/** Per-Facility compliance rollups listed on the Records screen. */
+export const facilitySummaries: FacilitySummary[] = [
   {
-    id: 'r1',
-    type: 'Daily Production Log',
-    facility: 'Goshen Asphalt Plant',
-    operator: 'J. Tays',
-    value: '1,240 tons · 820 gal fuel',
-    date: 'May 29',
-    dayGroup: 'Today · May 29',
-    status: 'submitted',
-    category: 'Production',
+    id: 'goshen',
+    name: 'Goshen Asphalt Plant',
+    region: 'Indiana · IDEM',
+    lastRan: 'May 29',
+    lastRecord: 'May 29',
+    monthlyDue: 'Jun 15, 2026',
+    quarterlyDue: 'Jul 31, 2026',
+    status: 'on-track',
   },
   {
-    id: 'r2',
-    type: 'Opacity Reading (M9)',
-    facility: 'Goshen Asphalt Plant',
-    operator: 'J. Tays',
-    value: '5% avg · within limit',
-    date: 'May 29',
-    dayGroup: 'Today · May 29',
-    status: 'submitted',
-    category: 'Opacity',
-  },
-  {
-    id: 'r3',
-    type: 'Daily Production Log',
-    facility: 'Fort Wayne Plant',
-    operator: 'M. Reed',
-    value: '980 tons · 640 gal fuel',
-    date: 'May 28',
-    dayGroup: 'Yesterday · May 28',
-    status: 'submitted',
-    category: 'Production',
-  },
-  {
-    id: 'r4',
-    type: 'Baghouse Pressure Log',
-    facility: 'Fort Wayne Plant',
-    operator: null,
-    value: 'Not recorded',
-    date: 'May 28',
-    dayGroup: 'Yesterday · May 28',
+    id: 'fort-wayne',
+    name: 'Fort Wayne Plant',
+    region: 'Indiana · IDEM',
+    lastRan: 'May 28',
+    lastRecord: 'May 24',
+    monthlyDue: 'May 15, 2026',
+    quarterlyDue: 'Jul 31, 2026',
     status: 'overdue',
-    category: 'Baghouse',
   },
   {
-    id: 'r5',
-    type: 'Opacity Reading (M9)',
-    facility: 'Indianapolis Plant',
-    operator: 'A. Cole',
-    value: 'Draft saved',
-    date: 'May 27',
-    dayGroup: 'May 27',
-    status: 'draft',
-    category: 'Opacity',
-  },
-  {
-    id: 'r6',
-    type: 'Daily Production Log',
-    facility: 'Indianapolis Plant',
-    operator: 'A. Cole',
-    value: '1,050 tons · 700 gal fuel',
-    date: 'May 27',
-    dayGroup: 'May 27',
-    status: 'submitted',
-    category: 'Production',
+    id: 'indianapolis',
+    name: 'Indianapolis Plant',
+    region: 'Indiana · IDEM',
+    lastRan: 'May 27',
+    lastRecord: 'May 27',
+    monthlyDue: 'Jun 1, 2026',
+    quarterlyDue: 'Jul 31, 2026',
+    status: 'due-soon',
   },
 ]
 
