@@ -114,6 +114,7 @@ function App() {
     <AppShell
       email={me.email}
       isSiteAdmin={me.isSiteAdmin}
+      accessToken={auth.user?.access_token ?? null}
       onSignOut={() => auth.signoutRedirect()}
     />
   )

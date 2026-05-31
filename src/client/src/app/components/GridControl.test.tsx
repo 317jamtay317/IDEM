@@ -305,4 +305,54 @@ describe('GridControl — inline editing & validation', () => {
 
     expect(screen.getByTestId('custom-editor')).toBeInTheDocument()
   })
+
+  it('adds a blank row and opens it for editing', async () => {
+    const user = userEvent.setup()
+    const onRowSave = vi.fn()
+    const newRow = vi.fn(() => ({ id: 'new', field: 'New', tons: 0, limit: 1000 }))
+    render(
+      <GridControl
+        columns={editColumns}
+        rows={entries}
+        rowKey={rowKey}
+        editing={{ onRowSave, newRow, addLabel: 'Add field' }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Add field' }))
+
+    expect(newRow).toHaveBeenCalled()
+    const input = screen.getByLabelText('Tons')
+    await user.clear(input)
+    await user.type(input, '42')
+    await user.click(screen.getByRole('button', { name: /save/i }))
+
+    expect(onRowSave).toHaveBeenCalledWith(expect.objectContaining({ id: 'new', tons: '42' }))
+  })
+
+  it('discards the added row on cancel', async () => {
+    const user = userEvent.setup()
+    const onRowSave = vi.fn()
+    render(
+      <GridControl
+        columns={editColumns}
+        rows={entries}
+        rowKey={rowKey}
+        editing={{ onRowSave, newRow: () => ({ id: 'new', field: 'New', tons: 0, limit: 1000 }), addLabel: 'Add field' }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Add field' }))
+    await user.click(screen.getByRole('button', { name: /cancel/i }))
+
+    expect(onRowSave).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText('Tons')).not.toBeInTheDocument()
+  })
+
+  it('does not show an add button when newRow is omitted', () => {
+    render(
+      <GridControl columns={editColumns} rows={entries} rowKey={rowKey} editing={{ onRowSave: vi.fn() }} />,
+    )
+    expect(screen.queryByRole('button', { name: /add/i })).not.toBeInTheDocument()
+  })
 })

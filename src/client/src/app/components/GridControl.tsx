@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { PlusIcon } from './icons'
 
 /**
  * Props passed to a custom cell editor ({@link GridColumn.editor}) while a row
@@ -9,6 +10,8 @@ export interface GridCellEditorProps {
   value: unknown
   /** The cell's current draft value. */
   draft: unknown
+  /** The full draft row being edited, for editors whose behaviour depends on sibling fields. */
+  row: unknown
   /** Validation message for this cell, if any. */
   error?: string
   /** Commits a new draft value for the cell. */
@@ -91,6 +94,23 @@ export interface GridEditing<TRow> {
   onRowSave: (row: TRow) => void
   /** Called when an inline edit is cancelled. */
   onRowCancel?: () => void
+  /**
+   * When provided, the grid shows an "add" button that creates a blank row from
+   * this factory and immediately opens it for inline editing. On save the new row
+   * flows through {@link GridEditing.onRowSave} like any edit; on cancel it is
+   * discarded. The factory's row must have a {@link GridControlProps.rowKey} that
+   * does not collide with existing rows.
+   */
+  newRow?: () => TRow
+  /** Label for the add button. Defaults to "Add". */
+  addLabel?: string
+  /** Label for a row's edit button. Defaults to "Edit" for every row. */
+  editLabel?: (row: TRow) => string
+  /**
+   * Extra action controls rendered after the Edit button when a row is not being
+   * edited (e.g. a Delete button). Return `null` to render none for a given row.
+   */
+  rowActions?: (row: TRow) => ReactNode
 }
 
 /**
@@ -170,16 +190,21 @@ export function GridControl<TRow>({
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [draft, setDraft] = useState<Record<string, unknown>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
+  // A not-yet-saved row created via editing.newRow(); prepended while present.
+  const [addedRow, setAddedRow] = useState<TRow | null>(null)
 
   const columnCount = columns.length + (editing ? 1 : 0)
 
+  // The added row participates in rendering/paging until it is saved or cancelled.
+  const allRows = editing && addedRow ? [addedRow, ...rows] : rows
+
   // Resolve the visible rows and pager from the paging configuration.
-  let visibleRows = rows
+  let visibleRows = allRows
   let pager: ReactNode = null
   if (paging?.mode === 'client') {
-    const totalPages = Math.max(1, Math.ceil(rows.length / paging.pageSize))
+    const totalPages = Math.max(1, Math.ceil(allRows.length / paging.pageSize))
     const current = Math.min(clientPage, totalPages)
-    visibleRows = rows.slice((current - 1) * paging.pageSize, current * paging.pageSize)
+    visibleRows = allRows.slice((current - 1) * paging.pageSize, current * paging.pageSize)
     pager = renderPager(
       current,
       totalPages,
@@ -202,6 +227,14 @@ export function GridControl<TRow>({
     setErrors({})
   }
 
+  /** Create a blank row from the factory and open it for inline editing. */
+  function beginAdd() {
+    if (!editing?.newRow) return
+    const row = editing.newRow()
+    setAddedRow(row)
+    beginEdit(row)
+  }
+
   function changeDraft(key: string, value: unknown) {
     setDraft((prev) => ({ ...prev, [key]: value }))
   }
@@ -221,11 +254,13 @@ export function GridControl<TRow>({
     editing?.onRowSave(draft as TRow)
     setEditingKey(null)
     setErrors({})
+    setAddedRow(null)
   }
 
   function cancelEdit() {
     setEditingKey(null)
     setErrors({})
+    setAddedRow(null)
     editing?.onRowCancel?.()
   }
 
@@ -235,7 +270,7 @@ export function GridControl<TRow>({
     const draftValue = draft[column.key]
     const error = errors[column.key]
     const editorNode = column.editor
-      ? column.editor({ value, draft: draftValue, error, onChange: (v) => changeDraft(column.key, v) })
+      ? column.editor({ value, draft: draftValue, row: draft, error, onChange: (v) => changeDraft(column.key, v) })
       : (
           <input
             className="grid-control-editor"
@@ -255,6 +290,20 @@ export function GridControl<TRow>({
 
   return (
     <div className="grid-control">
+      {editing?.newRow && (
+        <div className="grid-control-toolbar">
+          <button
+            type="button"
+            className="grid-control-add"
+            onClick={beginAdd}
+            disabled={editingKey !== null}
+            aria-label={editing.addLabel ?? 'Add'}
+            title={editing.addLabel ?? 'Add'}
+          >
+            <PlusIcon className="button-icon" />
+          </button>
+        </div>
+      )}
       <table className="grid-control-table record-table" aria-label={ariaLabel}>
         <thead>
           <tr>
@@ -308,13 +357,16 @@ export function GridControl<TRow>({
                           </button>
                         </>
                       ) : (
-                        <button
-                          type="button"
-                          className="button button-secondary"
-                          onClick={() => beginEdit(row)}
-                        >
-                          Edit
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="button button-secondary"
+                            onClick={() => beginEdit(row)}
+                          >
+                            {editing.editLabel ? editing.editLabel(row) : 'Edit'}
+                          </button>
+                          {editing.rowActions?.(row)}
+                        </>
                       )}
                     </td>
                   )}

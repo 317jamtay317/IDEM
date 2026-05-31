@@ -44,6 +44,17 @@ export function ReportsIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** Organizations (office buildings) glyph. */
+export function OrgsIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3 21h18" />
+      <path d="M5 21V7l7-4 7 4v14" />
+      <path d="M9 9h0M9 13h0M9 17h0M15 9h0M15 13h0M15 17h0" />
+    </svg>
+  )
+}
+
 /** More (horizontal ellipsis) glyph. */
 export function MoreIcon(props: SVGProps<SVGSVGElement>) {
   return (

@@ -1320,3 +1320,50 @@
     gap: 0.5rem;
   }
 }
+
+/* Inline action buttons grouped within a grid row or card. */
+.row-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Compact button used for per-row actions (Configure SSO, Delete). */
+.button-sm {
+  padding: 6px 12px;
+  font-size: 0.8125rem;
+}
+
+/* Grid toolbar: holds the top-right add affordance above the table. */
+.grid-control-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0.5rem 0.5rem 0.25rem;
+}
+
+/* Borderless "+" affordance that adds a new editable row to the grid. */
+.grid-control-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.grid-control-add:hover {
+  color: var(--color-text);
+}
+
+.grid-control-add:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.grid-control-add svg {
+  width: 22px;
+  height: 22px;
+}

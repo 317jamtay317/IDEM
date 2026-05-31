@@ -1,4 +1,4 @@
-import { NAV_ENTRIES, type NavTab } from './nav'
+import { visibleNavEntries, type NavTab } from './nav'
 
 export type { NavTab }
 
@@ -6,6 +6,8 @@ export type { NavTab }
 export interface BottomNavProps {
   /** The currently active tab, highlighted in the bar. */
   active: NavTab
+  /** Whether the signed-in user is a SiteAdmin; controls SiteAdmin-only destinations. */
+  isSiteAdmin: boolean
   /** Called with the chosen tab when the user taps a destination. */
   onNavigate: (tab: NavTab) => void
 }
@@ -14,10 +16,10 @@ export interface BottomNavProps {
  * Fixed bottom navigation bar (mobile and tablet). Hidden at desktop width,
  * where {@link SideNav} takes over. Each target is a 44px-minimum touch target.
  */
-export function BottomNav({ active, onNavigate }: BottomNavProps) {
+export function BottomNav({ active, isSiteAdmin, onNavigate }: BottomNavProps) {
   return (
     <nav className="bottom-nav" aria-label="Primary">
-      {NAV_ENTRIES.map(({ tab, mobileLabel, Icon }) => (
+      {visibleNavEntries(isSiteAdmin).map(({ tab, mobileLabel, Icon }) => (
         <button
           key={tab}
           type="button"
