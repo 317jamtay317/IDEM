@@ -6,6 +6,7 @@ const STATUS_META: Record<Status, { label: string; tone: string }> = {
   draft: { label: 'Draft', tone: 'pill-info' },
   'due-soon': { label: 'Due soon', tone: 'pill-warning' },
   overdue: { label: 'Overdue', tone: 'pill-danger' },
+  'on-track': { label: 'On track', tone: 'pill-success' },
 }
 
 /** Props for {@link StatusPill}. */

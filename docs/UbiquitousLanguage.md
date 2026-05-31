@@ -92,6 +92,17 @@ The regulated facility type for v1 customers. Produces hot mix asphalt (HMA). Su
 
 ❓ — Confirm the full scope of regulated media: air only, or air + stormwater + SPCC + USTs?
 
+### Production Fields 🟡
+The per-day quantities captured for an Asphalt Plant, shown in the Records production drill-down. Tentative pending domain-owner confirmation of the full Field set and units:
+
+- **Hot Mix** — hot mix asphalt produced (tons).
+- **Cold Mix** — cold mix asphalt produced (tons).
+- **Steel Slag** — steel-slag aggregate consumed/produced (tons). 🟡
+- **Blast Furnace** — blast-furnace slag aggregate (tons). 🟡
+- **Plant Ran** — hours the plant operated that day (0 when idle). 🟡 "Plant" here is customer-facing copy for the Facility's plant, not the `Facility` entity.
+
+❓ — Confirm the canonical Field list and units (tons vs. other), and whether "Plant Ran" is recorded as hours or a yes/no flag.
+
 ### (Record subtypes) ❓
 Concrete Record types cannot be named until the dominant compliance burden is identified with the domain owner. Candidates that may apply (do not adopt until confirmed):
 
