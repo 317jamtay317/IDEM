@@ -11,7 +11,9 @@ using OpenIddict.Server;
 using OpenIddict.Server.AspNetCore;
 using OpenIddict.Validation.AspNetCore;
 using RecordKeeping.Api;
+using RecordKeeping.Api.Endpoints;
 using RecordKeeping.Infrastructure.Identity;
+using RecordKeeping.Infrastructure.Persistence;
 using RecordKeeping.Mcp;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -36,6 +38,9 @@ builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseSqlServer(connectionString);
     options.UseOpenIddict();
 });
+
+// Domain persistence (dbo schema), separate from the auth schema above.
+builder.Services.AddRecordKeepingPersistence(connectionString);
 
 // ASP.NET Core Identity (I-D14: passwords stored as hashes only).
 builder.Services
@@ -182,6 +187,11 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
     await db.Database.EnsureCreatedAsync();
     await AuthSeeder.SeedAsync(scope.ServiceProvider);
+
+    // Domain tables share the database with the auth schema; create them via the
+    // initializer because EnsureCreated no-ops once the database already exists.
+    var domainDb = scope.ServiceProvider.GetRequiredService<RecordKeepingDbContext>();
+    await RecordKeepingDbInitializer.InitializeAsync(domainDb);
 }
 
 if (app.Environment.IsDevelopment())
@@ -317,6 +327,7 @@ app.MapRecordKeepingMcp();
 // SPA fallback: any non-API, non-static-file request serves index.html so the
 // React client-side router can handle it.
 app.MapFallbackToFile("/index.html");
+app.MapEndpoints(typeof(Program).Assembly);
 
 app.Run();
 
