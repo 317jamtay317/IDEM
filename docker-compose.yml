@@ -5,12 +5,16 @@
 #   api         - RecordKeeping.Api (SPA + OAuth/OpenIddict authorization server).  https://localhost:8443
 #   mcp         - The MCP server for AI agents (Claude, ChatGPT, Copilot).          https://localhost:8444/mcp
 #
-# TLS: Kestrel terminates HTTPS using an ASP.NET dev certificate mounted from ./certs.
-# Generate it once (the password must match CERT_PASSWORD below):
-#   dotnet dev-certs https -ep certs/recordkeeping.pfx -p DevCert!123
-#   dotnet dev-certs https --trust      # optional: trust it so browsers/curl don't warn
-# The cert is self-signed, so tools need -k (curl) or to trust the dev root. AI agents
-# require HTTPS for any non-localhost MCP URL, which is why these services are HTTPS.
+# TLS: Kestrel terminates HTTPS using a dev certificate at ./certs/recordkeeping.pfx.
+# The cert-init service below auto-generates this cert on `up` if it is missing, so the
+# stack starts out of the box on a fresh clone with no manual step. That auto-generated
+# cert is self-signed and NOT trusted by your OS, so browsers/curl will warn (use curl -k).
+#
+# For a browser-TRUSTED cert (no warning), generate it once on the host instead — cert-init
+# detects the existing file and leaves it untouched:
+#   dotnet dev-certs https -ep certs/recordkeeping.pfx -p DevCert!123 --trust
+#
+# AI agents require HTTPS for any non-localhost MCP URL, which is why these services are HTTPS.
 #
 # Usage:
 #   docker compose up --build        # build the image and start everything
@@ -26,6 +30,30 @@ x-app-tls: &app-tls
   ASPNETCORE_Kestrel__Certificates__Default__Password: "${CERT_PASSWORD:-DevCert!123}"
 
 services:
+  # Bootstraps the Kestrel HTTPS dev cert into ./certs on `up` so the stack starts
+  # without a manual step. Runs to completion before api/mcp start (they depend on it),
+  # and is a no-op when a cert already exists — including a host-trusted one you made
+  # yourself. Uses the .NET SDK image (already pulled for the api build) for dev-certs.
+  cert-init:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    container_name: recordkeeping-cert-init
+    environment:
+      CERT_PASSWORD: "${CERT_PASSWORD:-DevCert!123}"
+    volumes:
+      - ./certs:/certs
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        if [ -f /certs/recordkeeping.pfx ]; then
+          echo "cert-init: /certs/recordkeeping.pfx already exists - leaving it untouched."
+        else
+          echo "cert-init: no cert found - generating /certs/recordkeeping.pfx"
+          dotnet dev-certs https -ep /certs/recordkeeping.pfx -p "$$CERT_PASSWORD"
+          echo "cert-init: cert generated."
+        fi
+
   sql-server:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: recordkeeping-sql
@@ -57,6 +85,8 @@ services:
     image: recordkeeping-app:latest
     container_name: recordkeeping-api
     depends_on:
+      cert-init:
+        condition: service_completed_successfully
       sql-server:
         condition: service_healthy
     environment:
@@ -93,6 +123,8 @@ services:
     image: recordkeeping-app:latest
     container_name: recordkeeping-mcp
     depends_on:
+      cert-init:
+        condition: service_completed_successfully
       sql-server:
         condition: service_healthy
       api:
