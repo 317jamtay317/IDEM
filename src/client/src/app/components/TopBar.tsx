@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { AccountMenu } from './AccountMenu'
 
 /** Props for {@link TopBar}. */
 export interface TopBarProps {
@@ -36,7 +37,7 @@ export function TopBar({ title, mobileTitle, subtitle, actions }: TopBarProps) {
 
       <div className="topbar-right">
         {actions && <div className="topbar-actions">{actions}</div>}
-        <span className="topbar-avatar" aria-label="Account" role="img" />
+        <AccountMenu triggerLabel="Open account menu" triggerClassName="topbar-avatar" />
       </div>
     </header>
   )

@@ -120,20 +120,35 @@
   height: 20px;
 }
 
+/* The facility block doubles as the account-menu trigger, so it is a button. */
 .sidenav-facility {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  margin-top: auto;
+  width: 100%;
   padding: 0.875rem;
   background: var(--color-surface-muted);
+  border: 1px solid transparent;
   border-radius: var(--radius);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidenav-facility:hover {
+  border-color: var(--color-border);
 }
 
 .sidenav-facility-name {
   font-size: 0.95rem;
   font-weight: 700;
   color: var(--color-text);
+}
+
+/* Pin the sidebar account menu (the facility trigger) to the bottom of the rail. */
+.sidenav .account-menu {
+  margin-top: auto;
 }
 
 /* --- Top bar --------------------------------------------------------------- */
@@ -188,9 +203,57 @@
   width: 40px;
   height: 40px;
   flex-shrink: 0;
+  padding: 0;
   border-radius: var(--radius-pill);
   background: var(--color-surface-muted);
   border: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+/* --- Account menu (facility trigger on desktop, avatar on mobile) ---------- */
+
+.account-menu {
+  position: relative;
+}
+
+.account-menu-popover {
+  position: absolute;
+  z-index: 20;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+}
+
+/* Below the trigger, right-aligned — the top-bar avatar. */
+.account-menu-popover-down {
+  top: calc(100% + 0.5rem);
+  right: 0;
+}
+
+/* Above the trigger, full width — the sidebar facility. */
+.account-menu-popover-up {
+  bottom: calc(100% + 0.5rem);
+  left: 0;
+  right: 0;
+}
+
+.account-menu-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.account-menu-email {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+  word-break: break-all;
 }
 
 @media (min-width: 1024px) {
@@ -213,6 +276,11 @@
   .topbar-subtitle,
   .topbar-actions {
     display: block;
+  }
+
+  /* On desktop the sidebar facility is the account menu, so hide the avatar one. */
+  .topbar .account-menu {
+    display: none;
   }
 }
 

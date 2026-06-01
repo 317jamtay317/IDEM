@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { hashFromScreen, screenFromHash, useHashScreen, type Screen } from './useHashScreen'
 
-const ALL_SCREENS: Screen[] = ['home', 'records', 'reports', 'orgs', 'more', 'log']
+const ALL_SCREENS: Screen[] = ['home', 'records', 'reports', 'orgs', 'log']
 
 afterEach(() => {
   // Each test owns the location hash; reset it so state never leaks between tests.
@@ -23,7 +23,6 @@ describe('screenFromHash', () => {
     ['#/records', 'records'],
     ['#/reports', 'reports'],
     ['#/orgs', 'orgs'],
-    ['#/more', 'more'],
     ['#/log', 'log'],
   ])('maps %s to the %s screen', (hash, expected) => {
     expect(screenFromHash(hash)).toBe(expected)
@@ -31,6 +30,10 @@ describe('screenFromHash', () => {
 
   it('falls back to the home screen for an unknown destination', () => {
     expect(screenFromHash('#/does-not-exist')).toBe('home')
+  })
+
+  it('falls back to home for the retired More destination', () => {
+    expect(screenFromHash('#/more')).toBe('home')
   })
 })
 
@@ -43,7 +46,6 @@ describe('hashFromScreen', () => {
     ['records', '#/records'],
     ['reports', '#/reports'],
     ['orgs', '#/orgs'],
-    ['more', '#/more'],
     ['log', '#/log'],
   ] as const)('maps the %s screen to %s', (screen, expected) => {
     expect(hashFromScreen(screen)).toBe(expected)
