@@ -153,7 +153,16 @@ Test projects mirror their production counterparts 1:1. Integration tests for th
 
 ---
 
-## 11. When in doubt
+## 11. Running the app & the stack
+
+- **"Run it" / "run the stack" means the full Docker stack** — `docker compose up -d --build`, bringing up every service (sql-server, api, mcp). It does **not** mean a host `dotnet run`.
+- Endpoints: app + login + OAuth at **https://localhost:8443**, MCP at **https://localhost:8444/mcp**. The dev cert is self-signed, so browsers warn — proceed past it, or trust it once with `dotnet dev-certs https -ep certs/recordkeeping.pfx -p DevCert!123 --trust`.
+- Stop with `docker compose down` (add `-v` to drop the SQL data volume).
+- A host `dotnet run` against a DB-only container (`docker compose up -d sql-server`) is acceptable only as a quick inner loop **when explicitly asked** — never as the default for "run it".
+
+---
+
+## 12. When in doubt
 
 - Re-read the three companion docs.
 - Ask the user — don't guess on domain naming or invariants. Tentative status (`🟡`) gets confirmed by a human, not by Claude.
