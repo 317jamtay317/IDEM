@@ -1,4 +1,5 @@
 import { facilities, org } from '../data'
+import { AccountMenu } from './AccountMenu'
 import { visibleNavEntries, type NavTab } from './nav'
 
 /** Props for {@link SideNav}. */
@@ -14,7 +15,8 @@ export interface SideNavProps {
 /**
  * Desktop sidebar navigation (≥ 1024px): Org brand mark, the primary
  * destinations as full-width rows, and the selected Facility pinned to the
- * bottom. Hidden below desktop width, where {@link BottomNav} takes over.
+ * bottom — which doubles as the account menu trigger (account details, sign
+ * out). Hidden below desktop width, where {@link BottomNav} takes over.
  */
 export function SideNav({ active, isSiteAdmin, onNavigate }: SideNavProps) {
   const facility = facilities[0]
@@ -43,13 +45,13 @@ export function SideNav({ active, isSiteAdmin, onNavigate }: SideNavProps) {
         ))}
       </nav>
 
-      <div className="sidenav-facility">
+      <AccountMenu triggerLabel="Open account menu" triggerClassName="sidenav-facility" placement="up">
         <span className="overline">Facility</span>
         <span className="sidenav-facility-name">{facility.name}</span>
         <span className="muted">
           {facility.state} · {facility.regulator}
         </span>
-      </div>
+      </AccountMenu>
     </aside>
   )
 }

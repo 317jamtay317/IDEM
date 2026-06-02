@@ -1,21 +1,21 @@
+import { useEffect, useMemo } from 'react'
 import { BottomNav } from './components/BottomNav'
 import { SideNav } from './components/SideNav'
-import { TopBar } from './components/TopBar'
-import type { NavTab } from './components/nav'
-import { useHashScreen } from './useHashScreen'
+import { AccountProvider } from './components/AccountMenu'
+import { visibleNavEntries, type NavTab } from './components/nav'
+import { useHashScreen, type Screen } from './useHashScreen'
 import { DashboardScreen } from './screens/DashboardScreen'
 import { RecordsScreen } from './screens/RecordsScreen'
 import { ReportsScreen } from './screens/ReportsScreen'
 import { OrgsScreen } from './screens/OrgsScreen'
 import { LogRecordScreen } from './screens/LogRecordScreen'
-import { org } from './data'
 import './app.css'
 
 /** Props for {@link AppShell}. */
 export interface AppShellProps {
-  /** Email of the signed-in user, shown on the More screen. */
+  /** Email of the signed-in user, shown in the account menu. */
   email: string | null
-  /** Whether the signed-in user is a SiteAdmin. */
+  /** Whether the signed-in user is a SiteAdmin (I-D13). */
   isSiteAdmin: boolean
   /** Bearer access token, forwarded to screens that call the API (e.g. Organizations). */
   accessToken?: string | null
@@ -23,53 +23,54 @@ export interface AppShellProps {
   onSignOut: () => void
 }
 
+/** The navigation tab that governs a screen — `log` belongs to the dashboard (home). */
+function tabForScreen(screen: Screen): NavTab {
+  return screen === 'log' ? 'home' : screen
+}
+
 /**
  * The authenticated application shell. Owns the active-screen state and renders
  * the current screen plus the responsive navigation: a bottom bar on
- * mobile/tablet and a sidebar on desktop.
+ * mobile/tablet and a sidebar on desktop. Navigation and the reachable screens
+ * are role-scoped (I-D13): a SiteAdmin sees only Organizations and Reports,
+ * while an Org User sees the day-to-day app and never the Organizations screen.
  */
 export function AppShell({ email, isSiteAdmin, accessToken = null, onSignOut }: AppShellProps) {
   const [screen, navigate] = useHashScreen()
-  const activeTab: NavTab = screen === 'log' ? 'home' : screen
+
+  // The destinations this user may reach, and their landing screen (the first).
+  const permitted = useMemo(() => visibleNavEntries(isSiteAdmin), [isSiteAdmin])
+  const homeTab = permitted[0].tab
+  const allowed = permitted.some((entry) => entry.tab === tabForScreen(screen))
+
+  // I-D13: redirect a hash that points outside the user's navigation to their
+  // landing screen, so a forbidden screen can't be reached by editing the URL.
+  useEffect(() => {
+    if (!allowed) navigate(homeTab)
+  }, [allowed, homeTab, navigate])
+
+  // Render the landing screen rather than a forbidden one while the redirect
+  // above settles, so a disallowed screen never flashes.
+  const effectiveScreen: Screen = allowed ? screen : homeTab
+  const activeTab = tabForScreen(effectiveScreen)
 
   return (
-    <div className="app-shell">
-      <SideNav active={activeTab} isSiteAdmin={isSiteAdmin} onNavigate={navigate} />
+    <AccountProvider value={{ email, isSiteAdmin, onSignOut }}>
+      <div className="app-shell">
+        <SideNav active={activeTab} isSiteAdmin={isSiteAdmin} onNavigate={navigate} />
 
-      <div className="app-content">
-        <main className="app-main">
-          {screen === 'home' && <DashboardScreen onLogRecord={() => navigate('log')} />}
-          {screen === 'log' && <LogRecordScreen />}
-          {screen === 'records' && <RecordsScreen />}
-          {screen === 'reports' && <ReportsScreen />}
-          {screen === 'orgs' && <OrgsScreen accessToken={accessToken} />}
-          {screen === 'more' && (
-            <MoreScreen email={email} isSiteAdmin={isSiteAdmin} onSignOut={onSignOut} />
-          )}
-        </main>
+        <div className="app-content">
+          <main className="app-main">
+            {effectiveScreen === 'home' && <DashboardScreen onLogRecord={() => navigate('log')} />}
+            {effectiveScreen === 'log' && <LogRecordScreen />}
+            {effectiveScreen === 'records' && <RecordsScreen />}
+            {effectiveScreen === 'reports' && <ReportsScreen />}
+            {effectiveScreen === 'orgs' && <OrgsScreen accessToken={accessToken} />}
+          </main>
 
-        <BottomNav active={activeTab} isSiteAdmin={isSiteAdmin} onNavigate={navigate} />
-      </div>
-    </div>
-  )
-}
-
-/** Account/settings screen reached from the "More" tab. */
-function MoreScreen({ email, isSiteAdmin, onSignOut }: AppShellProps) {
-  return (
-    <>
-      <TopBar title="More" subtitle="Account & settings" />
-      <div className="screen screen-narrow">
-        <div className="card account-card">
-          <span className="overline">Signed in as</span>
-          <span className="card-title account-email">{email ?? 'Unknown user'}</span>
-          <span className="muted">{org.name}</span>
-          {isSiteAdmin && <span className="badge">SiteAdmin</span>}
+          <BottomNav active={activeTab} isSiteAdmin={isSiteAdmin} onNavigate={navigate} />
         </div>
-        <button type="button" className="button button-secondary button-block" onClick={onSignOut}>
-          Sign out
-        </button>
       </div>
-    </>
+    </AccountProvider>
   )
 }

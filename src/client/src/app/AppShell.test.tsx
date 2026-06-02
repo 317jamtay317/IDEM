@@ -1,7 +1,18 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { AppShell } from './AppShell'
+import { AppShell, type AppShellProps } from './AppShell'
+
+// The Organizations screen is the SiteAdmin's landing screen; stub its API so
+// it settles to an empty list instead of reaching for the network in tests.
+vi.mock('./orgsApi', () => ({
+  orgsApi: {
+    list: vi.fn().mockResolvedValue([]),
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+  },
+}))
 
 /**
  * Stub `window.matchMedia` so `useBreakpoint` resolves to a chosen tier. jsdom
@@ -20,8 +31,14 @@ function stubBreakpoint(matches: boolean) {
   }))
 }
 
-function renderShell() {
-  return render(<AppShell email="ops@rieth-riley.com" isSiteAdmin={false} onSignOut={vi.fn()} />)
+function renderShell(overrides: Partial<AppShellProps> = {}) {
+  const props: AppShellProps = {
+    email: 'ops@rieth-riley.com',
+    isSiteAdmin: false,
+    onSignOut: vi.fn(),
+    ...overrides,
+  }
+  return { ...render(<AppShell {...props} />), props }
 }
 
 afterEach(() => {
@@ -91,17 +108,79 @@ describe('AppShell — hash-driven navigation', () => {
     expect(window.location.hash).toBe('#/log')
     expect(screen.getByText('New production record')).toBeInTheDocument()
   })
+})
 
-  it('opens the More account screen and reflects it in the hash', async () => {
+describe('AppShell — account menu (replaces the More tab)', () => {
+  it('no longer renders a More navigation tab', () => {
+    stubBreakpoint(true)
+    window.location.hash = ''
+
+    renderShell()
+
+    expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument()
+    // The account menu is reachable instead (sidebar facility + top-bar avatar).
+    expect(screen.getAllByRole('button', { name: 'Open account menu' }).length).toBeGreaterThan(0)
+  })
+
+  it('signs out from the sidebar facility account menu', async () => {
+    stubBreakpoint(true)
+    window.location.hash = ''
+    const user = userEvent.setup()
+    const { props } = renderShell()
+
+    // The sidebar facility trigger is the first account menu in the DOM.
+    await user.click(screen.getAllByRole('button', { name: 'Open account menu' })[0])
+    expect(screen.getByText('ops@rieth-riley.com')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Sign out' }))
+    expect(props.onSignOut).toHaveBeenCalledOnce()
+  })
+
+  it('opens the account menu from the top-bar avatar', async () => {
     stubBreakpoint(true)
     window.location.hash = ''
     const user = userEvent.setup()
     renderShell()
 
-    await user.click(screen.getAllByRole('button', { name: 'More' })[0])
+    // The top-bar avatar trigger follows the sidebar facility one.
+    await user.click(screen.getAllByRole('button', { name: 'Open account menu' })[1])
 
-    expect(window.location.hash).toBe('#/more')
     expect(screen.getByText('ops@rieth-riley.com')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+  })
+})
+
+describe('AppShell — SiteAdmin sees only Organizations and Reports (I-D13)', () => {
+  it('shows only Organizations and Reports in the navigation', async () => {
+    stubBreakpoint(true)
+    window.location.hash = ''
+
+    renderShell({ isSiteAdmin: true })
+    await screen.findAllByRole('button', { name: 'Organizations' })
+
+    expect(screen.getAllByRole('button', { name: 'Reports' }).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Dashboard' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Records' })).not.toBeInTheDocument()
+  })
+
+  it('lands on the Organizations screen by default, not the dashboard', async () => {
+    stubBreakpoint(true)
+    window.location.hash = ''
+
+    renderShell({ isSiteAdmin: true })
+
+    expect(await screen.findByRole('heading', { name: 'Organizations' })).toBeInTheDocument()
+    expect(screen.queryByText('Recent records')).not.toBeInTheDocument()
+  })
+
+  it('redirects to Organizations when a hidden screen is requested by hash', async () => {
+    stubBreakpoint(true)
+    window.location.hash = '#/records'
+
+    renderShell({ isSiteAdmin: true })
+
+    expect(await screen.findByRole('heading', { name: 'Organizations' })).toBeInTheDocument()
+    expect(screen.queryByRole('table', { name: 'Records' })).not.toBeInTheDocument()
+    await waitFor(() => expect(window.location.hash).toBe('#/orgs'))
   })
 })
