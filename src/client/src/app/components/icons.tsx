@@ -55,6 +55,17 @@ export function OrgsIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** Facility (industrial plant) glyph. */
+export function FacilityIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3 21h18" />
+      <path d="M5 21V10l5 3.5V10l5 3.5V8l4 2.5V21" />
+      <path d="M8 21v-3M13 21v-3" />
+    </svg>
+  )
+}
+
 /** More (horizontal ellipsis) glyph. */
 export function MoreIcon(props: SVGProps<SVGSVGElement>) {
   return (

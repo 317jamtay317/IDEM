@@ -8,6 +8,7 @@ import { DashboardScreen } from './screens/DashboardScreen'
 import { RecordsScreen } from './screens/RecordsScreen'
 import { ReportsScreen } from './screens/ReportsScreen'
 import { OrgsScreen } from './screens/OrgsScreen'
+import { FacilitiesScreen } from './screens/FacilitiesScreen'
 import { LogRecordScreen } from './screens/LogRecordScreen'
 import './app.css'
 
@@ -66,6 +67,7 @@ export function AppShell({ email, isSiteAdmin, accessToken = null, onSignOut }: 
             {effectiveScreen === 'records' && <RecordsScreen />}
             {effectiveScreen === 'reports' && <ReportsScreen />}
             {effectiveScreen === 'orgs' && <OrgsScreen accessToken={accessToken} />}
+            {effectiveScreen === 'facilities' && <FacilitiesScreen accessToken={accessToken} />}
           </main>
 
           <BottomNav active={activeTab} isSiteAdmin={isSiteAdmin} onNavigate={navigate} />

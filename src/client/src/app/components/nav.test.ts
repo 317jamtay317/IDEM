@@ -11,7 +11,7 @@ describe('visibleNavEntries', () => {
   it('shows an Org User the day-to-day destinations and never Organizations', () => {
     const tabs = visibleNavEntries(false).map((entry) => entry.tab)
 
-    expect(tabs).toEqual(['home', 'records', 'reports'])
+    expect(tabs).toEqual(['home', 'records', 'facilities', 'reports'])
   })
 
   it('shows a SiteAdmin only Organizations and Reports', () => {

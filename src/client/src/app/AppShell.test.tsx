@@ -14,6 +14,17 @@ vi.mock('./orgsApi', () => ({
   },
 }))
 
+// The Facilities screen is an Org User destination; stub its API so it settles
+// to an empty list instead of reaching for the network in tests.
+vi.mock('./myFacilitiesApi', () => ({
+  myFacilitiesApi: {
+    list: vi.fn().mockResolvedValue([]),
+    add: vi.fn(),
+    rename: vi.fn(),
+    remove: vi.fn(),
+  },
+}))
+
 /**
  * Stub `window.matchMedia` so `useBreakpoint` resolves to a chosen tier. jsdom
  * does not implement matchMedia; `matches` is returned for every query.
@@ -182,5 +193,29 @@ describe('AppShell — SiteAdmin sees only Organizations and Reports (I-D13)', (
     expect(await screen.findByRole('heading', { name: 'Organizations' })).toBeInTheDocument()
     expect(screen.queryByRole('table', { name: 'Records' })).not.toBeInTheDocument()
     await waitFor(() => expect(window.location.hash).toBe('#/orgs'))
+  })
+})
+
+describe('AppShell — Org User Facilities (I-D06)', () => {
+  it('shows a Facilities tab and navigates to the Facilities screen', async () => {
+    stubBreakpoint(true)
+    window.location.hash = ''
+    const user = userEvent.setup()
+    renderShell() // Org User by default
+
+    await user.click(screen.getAllByRole('button', { name: 'Facilities' })[0])
+
+    expect(window.location.hash).toBe('#/facilities')
+    expect(await screen.findByRole('heading', { name: 'Facilities' })).toBeInTheDocument()
+  })
+
+  it('does not show Facilities to a SiteAdmin (I-D13)', async () => {
+    stubBreakpoint(true)
+    window.location.hash = ''
+
+    renderShell({ isSiteAdmin: true })
+    await screen.findAllByRole('button', { name: 'Organizations' })
+
+    expect(screen.queryByRole('button', { name: 'Facilities' })).not.toBeInTheDocument()
   })
 })

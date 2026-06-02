@@ -83,6 +83,56 @@ public sealed class Org
     }
 
     /// <summary>
+    /// Renames the <see cref="Facility"/> identified by <paramref name="facilityId"/>.
+    /// </summary>
+    /// <param name="facilityId">The id of the Facility to rename; must belong to this Org.</param>
+    /// <param name="name">
+    /// The new name; required, trimmed, and at most <see cref="MaxNameLength"/> characters.
+    /// </param>
+    /// <returns>
+    /// The renamed Facility; a not-found error when no Facility with that id belongs to this Org;
+    /// or a validation error when the name is invalid. The Facility's <c>OrgId</c> is never
+    /// changed (I-D06).
+    /// </returns>
+    public ErrorOr<Facility> RenameFacility(Guid facilityId, string name)
+    {
+        var facility = _facilities.FirstOrDefault(f => f.Id == facilityId);
+        if (facility is null)
+        {
+            return Error.NotFound("Facility.NotFound", $"No Facility exists with id '{facilityId}'.");
+        }
+
+        var validated = ValidateName(name);
+        if (validated.IsError)
+        {
+            return validated.Errors;
+        }
+
+        facility.Rename(validated.Value);
+        return facility;
+    }
+
+    /// <summary>
+    /// Removes the <see cref="Facility"/> identified by <paramref name="facilityId"/> from this Org.
+    /// </summary>
+    /// <param name="facilityId">The id of the Facility to remove; must belong to this Org.</param>
+    /// <returns>
+    /// <see cref="Result.Deleted"/> on success, or a not-found error when no Facility with that id
+    /// belongs to this Org.
+    /// </returns>
+    public ErrorOr<Deleted> RemoveFacility(Guid facilityId)
+    {
+        var facility = _facilities.FirstOrDefault(f => f.Id == facilityId);
+        if (facility is null)
+        {
+            return Error.NotFound("Facility.NotFound", $"No Facility exists with id '{facilityId}'.");
+        }
+
+        _facilities.Remove(facility);
+        return Result.Deleted;
+    }
+
+    /// <summary>
     /// Configures Entra ID SSO federation for this Org by recording its directory
     /// <paramref name="tenantId"/> (I-D12).
     /// </summary>

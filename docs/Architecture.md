@@ -70,6 +70,8 @@ Copy as **templates, not as code** (per handoff decision — no wholesale fork o
 
 **Identity tables** live in a dedicated `auth` schema in the SQL Server database, separating them visually from domain tables. Passwords are stored using Identity's default PBKDF2 with HMAC-SHA-512 (see [I-D14](./Invariants.md)).
 
+**Access-token claims.** Issued access tokens carry the subject, email, name, and an `is_site_admin` flag. Org Users additionally carry an `org_id` claim (the caller's Org); it is absent for SiteAdmins, who have no Org ([I-D13](./Invariants.md)). Org-scoped self-service endpoints (e.g. `/me/org/facilities`) derive the Org from `org_id` rather than from client input, enforcing Org isolation ([I-D03](./Invariants.md)) by construction.
+
 **SPA OIDC client**: `react-oidc-context` wraps `oidc-client-ts` and provides the React hooks and route guards used by `src/client`. Silent refresh runs in an iframe.
 
 **Entra ID federation** is a per-Org feature: an Org with `Org.TenantId` (the Entra directory GUID) set redirects to its Entra ID directory for login; OpenIddict consumes Entra ID via the standard `AddOpenIdConnect()` middleware, then issues local RecordKeeping tokens. Orgs without `Org.TenantId` use local username/password (see [I-D12](./Invariants.md)).

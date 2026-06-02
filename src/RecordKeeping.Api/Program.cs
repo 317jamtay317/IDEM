@@ -266,6 +266,13 @@ app.MapMethods("/connect/authorize", new[] { "GET", "POST" }, async (HttpContext
     identity.SetClaim(Claims.Name, user.DisplayName);
     identity.SetClaim("is_site_admin", user.IsSiteAdmin ? "true" : "false");
 
+    // Org Users carry their Org id so API endpoints can scope to it (I-D03); a SiteAdmin
+    // has no Org (I-D13), so the claim is simply absent for them.
+    if (user.OrgId is Guid orgId)
+    {
+        identity.SetClaim(ClaimsPrincipalExtensions.OrgIdClaimType, orgId.ToString());
+    }
+
     identity.SetScopes(request.GetScopes());
     identity.SetDestinations(static _ => new[] { Destinations.AccessToken, Destinations.IdentityToken });
 

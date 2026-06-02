@@ -34,6 +34,8 @@ No query, report, export, API call, background job, or admin operation may retur
 > Violations of I-D03 are security incidents, not bugs. Tests must cover the negative case (request data as Org A, assert no Org B data is returned) for every read endpoint.
 >
 > **SiteAdmin exemption**: SiteAdmins legitimately access data across Orgs for support and billing. Every cross-Org access by a SiteAdmin must be audit-logged with actor, target Org, and operation (see I-D13).
+>
+> **Enforced (Org User facilities)**: the Org User self-service Facility endpoints (`/me/org/facilities`) scope every read and write to the caller's `org_id` claim, never to client input. Proven by `MyOrgFacilityEndpointsTests` — an Org A user cannot see, rename, or delete an Org B Facility, and a SiteAdmin (who has no Org) is rejected.
 
 ### I-D04 — Email uniqueness scope 🟡
 Email uniqueness depends on the User type:
