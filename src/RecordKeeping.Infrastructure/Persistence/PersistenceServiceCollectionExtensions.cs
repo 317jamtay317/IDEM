@@ -24,6 +24,7 @@ public static class PersistenceServiceCollectionExtensions
             options.UseSqlServer(connectionString));
 
         services.AddScoped<IOrgRepository, OrgRepository>();
+        services.AddScoped<IFacilityRepository, FacilityRepository>();
 
         return services;
     }

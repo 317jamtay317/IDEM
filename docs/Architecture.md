@@ -44,6 +44,13 @@ Commands change state and emit domain events; queries are read-only and may bypa
 ### Domain-Driven Design
 Ubiquitous language, aggregates as consistency boundaries, repositories per aggregate root, domain events for cross-aggregate effects. See [UbiquitousLanguage.md](./UbiquitousLanguage.md) and [Invariants.md](./Invariants.md).
 
+Tactical building blocks live in `RecordKeeping.Domain/Common`:
+- `ValueObject` — structural (component-based) equality for immutable concepts (e.g. `Email`).
+- `Entity<TId>` — identity-based equality.
+- `AggregateRoot<TId>` — an `Entity<TId>` plus a domain-event channel (`DomainEvents` / `RaiseDomainEvent` / `ClearDomainEvents`), backed by the `IDomainEvent` marker.
+
+The aggregate roots are **Org**, **User**, and **Facility**, each with its own repository (`IOrgRepository`, `IFacilityRepository`). Aggregates reference one another **by id only** (e.g. `Facility.OrgId`, `User.OrgId`) — never by object containment — so each is loaded and persisted independently. Read models that need data from more than one aggregate (e.g. an Org with its Facilities) compose it on the query side rather than widening an aggregate boundary.
+
 ### Test-Driven Development
 - Tests written **before** implementation.
 - All public and protected code documented.

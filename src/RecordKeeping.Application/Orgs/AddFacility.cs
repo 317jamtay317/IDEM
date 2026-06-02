@@ -1,4 +1,5 @@
 using ErrorOr;
+using RecordKeeping.Domain.Facilities;
 
 namespace RecordKeeping.Application.Orgs;
 
@@ -10,9 +11,13 @@ public sealed record AddFacilityCommand(Guid OrgId, string Name);
 /// <summary>Handles <see cref="AddFacilityCommand"/>.</summary>
 public static class AddFacilityHandler
 {
-    /// <summary>Adds a Facility to the Org, letting the aggregate own the invariant (I-D06).</summary>
+    /// <summary>
+    /// Creates a Facility owned by the Org. The Facility aggregate owns the invariant (I-D06);
+    /// the Org is checked for existence first so a Facility is never orphaned.
+    /// </summary>
     /// <param name="command">The add command.</param>
-    /// <param name="repository">The Org repository.</param>
+    /// <param name="orgs">The Org repository, used to confirm the owning Org exists.</param>
+    /// <param name="facilities">The Facility repository.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>
     /// The created Facility as a <see cref="FacilityResponse"/>; <see cref="OrgErrors.NotFound"/>
@@ -20,22 +25,24 @@ public static class AddFacilityHandler
     /// </returns>
     public static async Task<ErrorOr<FacilityResponse>> Handle(
         AddFacilityCommand command,
-        IOrgRepository repository,
+        IOrgRepository orgs,
+        IFacilityRepository facilities,
         CancellationToken cancellationToken)
     {
-        var org = await repository.GetByIdAsync(command.OrgId, cancellationToken);
+        var org = await orgs.GetByIdAsync(command.OrgId, cancellationToken);
         if (org is null)
         {
             return OrgErrors.NotFound(command.OrgId);
         }
 
-        var result = org.AddFacility(command.Name);
+        var result = Facility.Create(command.OrgId, command.Name);
         if (result.IsError)
         {
             return result.Errors;
         }
 
-        await repository.SaveChangesAsync(cancellationToken);
+        await facilities.AddAsync(result.Value, cancellationToken);
+        await facilities.SaveChangesAsync(cancellationToken);
         return FacilityResponse.FromFacility(result.Value);
     }
 }

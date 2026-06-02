@@ -34,4 +34,25 @@ public class EmailTests
         result.IsError.ShouldBeTrue();
         result.FirstError.Type.ShouldBe(ErrorType.Validation);
     }
+
+    [Fact]
+    public void Emails_WithSameValue_AreEqual()
+    {
+        var a = Email.Create("user@example.com").Value;
+        var b = Email.Create("user@example.com").Value;
+
+        a.ShouldBe(b);
+        (a == b).ShouldBeTrue();
+        a.GetHashCode().ShouldBe(b.GetHashCode());
+    }
+
+    [Fact]
+    public void Emails_WithDifferentValue_AreNotEqual()
+    {
+        var a = Email.Create("user@example.com").Value;
+        var b = Email.Create("other@example.com").Value;
+
+        a.ShouldNotBe(b);
+        (a != b).ShouldBeTrue();
+    }
 }

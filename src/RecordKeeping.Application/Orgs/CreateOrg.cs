@@ -29,6 +29,8 @@ public static class CreateOrgHandler
         var org = result.Value;
         await repository.AddAsync(org, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
-        return OrgResponse.FromOrg(org);
+
+        // A newly created Org has no Facilities yet.
+        return OrgResponse.FromOrg(org, []);
     }
 }

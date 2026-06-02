@@ -15,15 +15,11 @@ public sealed class OrgRepository(RecordKeepingDbContext dbContext) : IOrgReposi
 
     /// <inheritdoc />
     public Task<Org?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
-        dbContext.Orgs
-            .Include(o => o.Facilities)
-            .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+        dbContext.Orgs.FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<Org>> GetAllAsync(CancellationToken cancellationToken) =>
-        await dbContext.Orgs
-            .Include(o => o.Facilities)
-            .ToListAsync(cancellationToken);
+        await dbContext.Orgs.ToListAsync(cancellationToken);
 
     /// <inheritdoc />
     public Task RemoveAsync(Org org, CancellationToken cancellationToken)

@@ -1,14 +1,16 @@
 using ErrorOr;
+using RecordKeeping.Domain.Common;
 
 namespace RecordKeeping.Domain.Users;
 
 /// <summary>
-/// Validated email address used as the canonical identifier for a User.
+/// Validated email address used as the canonical identifier for a User. A value object:
+/// two Emails with the same <see cref="Value"/> are equal.
 /// </summary>
 /// <remarks>
 /// Constructed only via <see cref="Create"/>; instances are immutable.
 /// </remarks>
-public sealed class Email
+public sealed class Email : ValueObject
 {
     /// <summary>The validated email string.</summary>
     public string Value { get; }
@@ -36,5 +38,11 @@ public sealed class Email
         }
 
         return new Email(value);
+    }
+
+    /// <inheritdoc />
+    protected override IEnumerable<object?> GetEqualityComponents()
+    {
+        yield return Value;
     }
 }

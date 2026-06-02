@@ -1,4 +1,5 @@
 using ErrorOr;
+using RecordKeeping.Domain.Common;
 
 namespace RecordKeeping.Domain.Users;
 
@@ -7,11 +8,8 @@ namespace RecordKeeping.Domain.Users;
 /// a <b>SiteAdmin</b> (platform operator, no <see cref="OrgId"/>) or an
 /// <b>Org User</b> (belongs to exactly one Org via <see cref="OrgId"/>).
 /// </summary>
-public sealed class User
+public sealed class User : AggregateRoot<Guid>
 {
-    /// <summary>Unique identifier.</summary>
-    public Guid Id { get; }
-
     /// <summary>The User's email address — the canonical identifier for authentication.</summary>
     public Email Email { get; }
 
@@ -24,9 +22,8 @@ public sealed class User
     /// <summary>The Org this User belongs to. Null for SiteAdmins (I-D13).</summary>
     public Guid? OrgId { get; }
 
-    private User(Guid id, Email email, string displayName, bool isSiteAdmin, Guid? orgId)
+    private User(Guid id, Email email, string displayName, bool isSiteAdmin, Guid? orgId) : base(id)
     {
-        Id = id;
         Email = email;
         DisplayName = displayName;
         IsSiteAdmin = isSiteAdmin;

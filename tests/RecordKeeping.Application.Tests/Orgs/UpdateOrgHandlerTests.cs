@@ -10,11 +10,12 @@ public class UpdateOrgHandlerTests
     [Fact]
     public async Task Handle_WhenOrgMissing_ReturnsNotFound()
     {
-        var repository = new FakeOrgRepository();
+        var orgs = new FakeOrgRepository();
+        var facilities = new FakeFacilityRepository();
 
         var result = await UpdateOrgHandler.Handle(
             new UpdateOrgCommand(Guid.NewGuid(), "Rieth-Riley", null),
-            repository, CancellationToken.None);
+            orgs, facilities, CancellationToken.None);
 
         result.IsError.ShouldBeTrue();
         result.FirstError.Type.ShouldBe(ErrorType.NotFound);
@@ -23,49 +24,52 @@ public class UpdateOrgHandlerTests
     [Fact]
     public async Task Handle_WhenNameChanges_ReturnsConflictAndDoesNotPersist()
     {
-        var repository = new FakeOrgRepository();
+        var orgs = new FakeOrgRepository();
+        var facilities = new FakeFacilityRepository();
         var org = Org.Create("Rieth-Riley").Value;
-        repository.Seed(org);
+        orgs.Seed(org);
 
         var result = await UpdateOrgHandler.Handle(
             new UpdateOrgCommand(org.Id, "Renamed Co", null),
-            repository, CancellationToken.None);
+            orgs, facilities, CancellationToken.None);
 
         result.IsError.ShouldBeTrue();
         result.FirstError.Type.ShouldBe(ErrorType.Conflict);
-        repository.SaveChangesCount.ShouldBe(0);
+        orgs.SaveChangesCount.ShouldBe(0);
     }
 
     [Fact]
     [Trait("Invariant", "I-D12")]
     public async Task Handle_WithSameNameAndTenantId_ConfiguresSso()
     {
-        var repository = new FakeOrgRepository();
+        var orgs = new FakeOrgRepository();
+        var facilities = new FakeFacilityRepository();
         var org = Org.Create("Rieth-Riley").Value;
-        repository.Seed(org);
+        orgs.Seed(org);
         var tenantId = Guid.NewGuid();
 
         var result = await UpdateOrgHandler.Handle(
             new UpdateOrgCommand(org.Id, "Rieth-Riley", tenantId),
-            repository, CancellationToken.None);
+            orgs, facilities, CancellationToken.None);
 
         result.IsError.ShouldBeFalse();
         result.Value.TenantId.ShouldBe(tenantId);
-        repository.SaveChangesCount.ShouldBe(1);
+        orgs.SaveChangesCount.ShouldBe(1);
     }
 
     [Fact]
     [Trait("Invariant", "I-D12")]
     public async Task Handle_WithSameNameAndNullTenantId_DisablesSso()
     {
-        var repository = new FakeOrgRepository();
+        var orgs = new FakeOrgRepository();
+        var facilities = new FakeFacilityRepository();
         var org = Org.Create("Rieth-Riley").Value;
         org.ConfigureSso(Guid.NewGuid());
-        repository.Seed(org);
+        orgs.Seed(org);
 
         var result = await UpdateOrgHandler.Handle(
             new UpdateOrgCommand(org.Id, "Rieth-Riley", null),
-            repository, CancellationToken.None);
+            orgs, facilities, CancellationToken.None);
 
         result.IsError.ShouldBeFalse();
         result.Value.TenantId.ShouldBeNull();
@@ -75,13 +79,14 @@ public class UpdateOrgHandlerTests
     [Trait("Invariant", "I-D12")]
     public async Task Handle_WithEmptyTenantId_ReturnsValidationError()
     {
-        var repository = new FakeOrgRepository();
+        var orgs = new FakeOrgRepository();
+        var facilities = new FakeFacilityRepository();
         var org = Org.Create("Rieth-Riley").Value;
-        repository.Seed(org);
+        orgs.Seed(org);
 
         var result = await UpdateOrgHandler.Handle(
             new UpdateOrgCommand(org.Id, "Rieth-Riley", Guid.Empty),
-            repository, CancellationToken.None);
+            orgs, facilities, CancellationToken.None);
 
         result.IsError.ShouldBeTrue();
         result.FirstError.Type.ShouldBe(ErrorType.Validation);

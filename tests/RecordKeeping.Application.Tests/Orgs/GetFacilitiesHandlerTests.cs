@@ -1,6 +1,5 @@
-using ErrorOr;
 using RecordKeeping.Application.Orgs;
-using RecordKeeping.Domain.Orgs;
+using RecordKeeping.Domain.Facilities;
 using Shouldly;
 
 namespace RecordKeeping.Application.Tests.Orgs;
@@ -10,14 +9,15 @@ public class GetFacilitiesHandlerTests
     [Fact]
     public async Task Handle_ReturnsTheOrgsFacilities()
     {
-        var repository = new FakeOrgRepository();
-        var org = Org.Create("Rieth-Riley").Value;
-        var goshen = org.AddFacility("Goshen Plant").Value;
-        var fortWayne = org.AddFacility("Fort Wayne Plant").Value;
-        repository.Seed(org);
+        var facilities = new FakeFacilityRepository();
+        var orgId = Guid.NewGuid();
+        var goshen = Facility.Create(orgId, "Goshen Plant").Value;
+        var fortWayne = Facility.Create(orgId, "Fort Wayne Plant").Value;
+        facilities.Seed(goshen);
+        facilities.Seed(fortWayne);
 
         var result = await GetFacilitiesHandler.Handle(
-            new GetFacilitiesQuery(org.Id), repository, CancellationToken.None);
+            new GetFacilitiesQuery(orgId), facilities, CancellationToken.None);
 
         result.IsError.ShouldBeFalse();
         result.Value.Count.ShouldBe(2);
@@ -28,26 +28,31 @@ public class GetFacilitiesHandlerTests
     [Fact]
     public async Task Handle_WhenOrgHasNoFacilities_ReturnsEmpty()
     {
-        var repository = new FakeOrgRepository();
-        var org = Org.Create("Rieth-Riley").Value;
-        repository.Seed(org);
+        var facilities = new FakeFacilityRepository();
 
         var result = await GetFacilitiesHandler.Handle(
-            new GetFacilitiesQuery(org.Id), repository, CancellationToken.None);
+            new GetFacilitiesQuery(Guid.NewGuid()), facilities, CancellationToken.None);
 
         result.IsError.ShouldBeFalse();
         result.Value.ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task Handle_WhenOrgMissing_ReturnsNotFound()
+    [Trait("Invariant", "I-D03")]
+    public async Task Handle_OnlyReturnsCallersOwnOrgFacilities()
     {
-        var repository = new FakeOrgRepository();
+        var facilities = new FakeFacilityRepository();
+        var orgA = Guid.NewGuid();
+        var orgB = Guid.NewGuid();
+        var ownFacility = Facility.Create(orgA, "Org A Plant").Value;
+        var otherFacility = Facility.Create(orgB, "Org B Plant").Value;
+        facilities.Seed(ownFacility);
+        facilities.Seed(otherFacility);
 
         var result = await GetFacilitiesHandler.Handle(
-            new GetFacilitiesQuery(Guid.NewGuid()), repository, CancellationToken.None);
+            new GetFacilitiesQuery(orgA), facilities, CancellationToken.None);
 
-        result.IsError.ShouldBeTrue();
-        result.FirstError.Type.ShouldBe(ErrorType.NotFound);
+        result.IsError.ShouldBeFalse();
+        result.Value.ShouldHaveSingleItem().Id.ShouldBe(ownFacility.Id);
     }
 }
