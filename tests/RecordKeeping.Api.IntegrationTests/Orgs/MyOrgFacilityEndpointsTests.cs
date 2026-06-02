@@ -8,6 +8,7 @@ using RecordKeeping.Application.Orgs;
 using RecordKeeping.Infrastructure.Identity;
 using Shouldly;
 using DomainOrg = RecordKeeping.Domain.Orgs.Org;
+using DomainFacility = RecordKeeping.Domain.Facilities.Facility;
 
 namespace RecordKeeping.Api.IntegrationTests.Orgs;
 
@@ -167,12 +168,17 @@ public class MyOrgFacilityEndpointsTests(RecordKeepingApiFactory factory)
     {
         using var scope = factory.Services.CreateScope();
         var orgs = scope.ServiceProvider.GetRequiredService<IOrgRepository>();
+        var facilities = scope.ServiceProvider.GetRequiredService<IFacilityRepository>();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
         var org = DomainOrg.Create($"Org-{Guid.NewGuid():N}").Value;
-        var facility = org.AddFacility(facilityName).Value;
         await orgs.AddAsync(org, CancellationToken.None);
         await orgs.SaveChangesAsync(CancellationToken.None);
+
+        // Facility is its own aggregate (I-D06); create it through its repository.
+        var facility = DomainFacility.Create(org.Id, facilityName).Value;
+        await facilities.AddAsync(facility, CancellationToken.None);
+        await facilities.SaveChangesAsync(CancellationToken.None);
 
         var email = $"user-{Guid.NewGuid():N}@test.local";
         var user = new ApplicationUser

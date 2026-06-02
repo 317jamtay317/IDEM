@@ -11,31 +11,33 @@ public class AddFacilityHandlerTests
     [Trait("Invariant", "I-D06")]
     public async Task Handle_WithValidName_PersistsAndReturnsFacility()
     {
-        var repository = new FakeOrgRepository();
+        var orgs = new FakeOrgRepository();
+        var facilities = new FakeFacilityRepository();
         var org = Org.Create("Rieth-Riley").Value;
-        repository.Seed(org);
+        orgs.Seed(org);
 
         var result = await AddFacilityHandler.Handle(
-            new AddFacilityCommand(org.Id, "Goshen Plant"), repository, CancellationToken.None);
+            new AddFacilityCommand(org.Id, "Goshen Plant"), orgs, facilities, CancellationToken.None);
 
         result.IsError.ShouldBeFalse();
         result.Value.Id.ShouldNotBe(Guid.Empty);
         result.Value.Name.ShouldBe("Goshen Plant");
-        org.Facilities.ShouldContain(f => f.Id == result.Value.Id);
-        repository.SaveChangesCount.ShouldBe(1);
+        facilities.Stored.ShouldContain(f => f.Id == result.Value.Id && f.OrgId == org.Id);
+        facilities.SaveChangesCount.ShouldBe(1);
     }
 
     [Fact]
     public async Task Handle_WhenOrgMissing_ReturnsNotFound()
     {
-        var repository = new FakeOrgRepository();
+        var orgs = new FakeOrgRepository();
+        var facilities = new FakeFacilityRepository();
 
         var result = await AddFacilityHandler.Handle(
-            new AddFacilityCommand(Guid.NewGuid(), "Goshen Plant"), repository, CancellationToken.None);
+            new AddFacilityCommand(Guid.NewGuid(), "Goshen Plant"), orgs, facilities, CancellationToken.None);
 
         result.IsError.ShouldBeTrue();
         result.FirstError.Type.ShouldBe(ErrorType.NotFound);
-        repository.SaveChangesCount.ShouldBe(0);
+        facilities.SaveChangesCount.ShouldBe(0);
     }
 
     [Theory]
@@ -43,15 +45,16 @@ public class AddFacilityHandlerTests
     [InlineData("   ")]
     public async Task Handle_WithInvalidName_ReturnsValidationErrorAndDoesNotPersist(string name)
     {
-        var repository = new FakeOrgRepository();
+        var orgs = new FakeOrgRepository();
+        var facilities = new FakeFacilityRepository();
         var org = Org.Create("Rieth-Riley").Value;
-        repository.Seed(org);
+        orgs.Seed(org);
 
         var result = await AddFacilityHandler.Handle(
-            new AddFacilityCommand(org.Id, name), repository, CancellationToken.None);
+            new AddFacilityCommand(org.Id, name), orgs, facilities, CancellationToken.None);
 
         result.IsError.ShouldBeTrue();
         result.FirstError.Type.ShouldBe(ErrorType.Validation);
-        repository.SaveChangesCount.ShouldBe(0);
+        facilities.SaveChangesCount.ShouldBe(0);
     }
 }

@@ -19,7 +19,8 @@ public static class UpdateOrgHandler
 {
     /// <summary>Applies the update, rejecting rename attempts.</summary>
     /// <param name="command">The update command.</param>
-    /// <param name="repository">The Org repository.</param>
+    /// <param name="orgs">The Org repository.</param>
+    /// <param name="facilities">The Facility repository, used to compose the response.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>
     /// The updated Org; <see cref="OrgErrors.NotFound"/> when it does not exist;
@@ -28,10 +29,11 @@ public static class UpdateOrgHandler
     /// </returns>
     public static async Task<ErrorOr<OrgResponse>> Handle(
         UpdateOrgCommand command,
-        IOrgRepository repository,
+        IOrgRepository orgs,
+        IFacilityRepository facilities,
         CancellationToken cancellationToken)
     {
-        var org = await repository.GetByIdAsync(command.Id, cancellationToken);
+        var org = await orgs.GetByIdAsync(command.Id, cancellationToken);
         if (org is null)
         {
             return OrgErrors.NotFound(command.Id);
@@ -58,7 +60,9 @@ public static class UpdateOrgHandler
             org.DisableSso();
         }
 
-        await repository.SaveChangesAsync(cancellationToken);
-        return OrgResponse.FromOrg(org);
+        await orgs.SaveChangesAsync(cancellationToken);
+
+        var owned = await facilities.GetByOrgAsync(org.Id, cancellationToken);
+        return OrgResponse.FromOrg(org, owned);
     }
 }

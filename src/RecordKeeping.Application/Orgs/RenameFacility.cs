@@ -11,33 +11,33 @@ public sealed record RenameFacilityCommand(Guid OrgId, Guid FacilityId, string N
 /// <summary>Handles <see cref="RenameFacilityCommand"/>.</summary>
 public static class RenameFacilityHandler
 {
-    /// <summary>Renames the Facility through its owning Org aggregate.</summary>
+    /// <summary>Renames the Facility, scoping the lookup to the caller's Org (I-D03).</summary>
     /// <param name="command">The rename command.</param>
-    /// <param name="repository">The Org repository.</param>
+    /// <param name="facilities">The Facility repository.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>
-    /// The renamed Facility as a <see cref="FacilityResponse"/>; <see cref="OrgErrors.NotFound"/>
-    /// when the Org does not exist; a not-found error when the Facility is not in the Org; or a
-    /// validation error when the name is invalid.
+    /// The renamed Facility as a <see cref="FacilityResponse"/>; <see cref="FacilityErrors.NotFound"/>
+    /// when the Facility is not in the caller's Org; or a validation error when the name is invalid.
     /// </returns>
     public static async Task<ErrorOr<FacilityResponse>> Handle(
         RenameFacilityCommand command,
-        IOrgRepository repository,
+        IFacilityRepository facilities,
         CancellationToken cancellationToken)
     {
-        var org = await repository.GetByIdAsync(command.OrgId, cancellationToken);
-        if (org is null)
+        var facility = await facilities.GetByIdAsync(
+            command.OrgId, command.FacilityId, cancellationToken);
+        if (facility is null)
         {
-            return OrgErrors.NotFound(command.OrgId);
+            return FacilityErrors.NotFound(command.FacilityId);
         }
 
-        var result = org.RenameFacility(command.FacilityId, command.Name);
+        var result = facility.Rename(command.Name);
         if (result.IsError)
         {
             return result.Errors;
         }
 
-        await repository.SaveChangesAsync(cancellationToken);
-        return FacilityResponse.FromFacility(result.Value);
+        await facilities.SaveChangesAsync(cancellationToken);
+        return FacilityResponse.FromFacility(facility);
     }
 }

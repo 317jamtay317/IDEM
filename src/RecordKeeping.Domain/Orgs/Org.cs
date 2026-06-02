@@ -1,4 +1,6 @@
 using ErrorOr;
+using RecordKeeping.Domain.Common;
+using RecordKeeping.Domain.Facilities;
 
 namespace RecordKeeping.Domain.Orgs;
 
@@ -9,19 +11,15 @@ namespace RecordKeeping.Domain.Orgs;
 /// exactly one Org.
 /// </summary>
 /// <remarks>
-/// Constructed only via <see cref="Create"/>. The Org owns its <see cref="Facilities"/>
-/// as child entities (I-D06). Org Users are a separate aggregate that reference the
-/// Org by <c>OrgId</c>; they are not held here.
+/// Constructed only via <see cref="Create"/>. <see cref="Facility"/> is a separate aggregate
+/// that references its Org by <c>OrgId</c> (I-D06); likewise Org Users reference the Org by
+/// <c>OrgId</c>. Neither is held on the Org aggregate — they are loaded through their own
+/// repositories and composed into read models on the query side.
 /// </remarks>
-public sealed class Org
+public sealed class Org : AggregateRoot<Guid>
 {
     /// <summary>Maximum permitted length of an Org <see cref="Name"/>.</summary>
     public const int MaxNameLength = 200;
-
-    private readonly List<Facility> _facilities = [];
-
-    /// <summary>Unique identifier.</summary>
-    public Guid Id { get; }
 
     /// <summary>The Org's display name (e.g. "Rieth-Riley").</summary>
     public string Name { get; private set; }
@@ -32,12 +30,8 @@ public sealed class Org
     /// </summary>
     public Guid? TenantId { get; private set; }
 
-    /// <summary>The Facilities operated by this Org (I-D06). An Org may have many.</summary>
-    public IReadOnlyCollection<Facility> Facilities => _facilities;
-
-    private Org(Guid id, string name)
+    private Org(Guid id, string name) : base(id)
     {
-        Id = id;
         Name = name;
     }
 
@@ -58,78 +52,6 @@ public sealed class Org
         }
 
         return new Org(Guid.NewGuid(), validated.Value);
-    }
-
-    /// <summary>
-    /// Adds a new <see cref="Facility"/> owned by this Org (I-D06).
-    /// </summary>
-    /// <param name="name">
-    /// The Facility's name; required, trimmed, and at most
-    /// <see cref="MaxNameLength"/> characters.
-    /// </param>
-    /// <returns>The new Facility, or a validation error when the name is invalid.</returns>
-    public ErrorOr<Facility> AddFacility(string name)
-    {
-        var validated = ValidateName(name);
-        if (validated.IsError)
-        {
-            return validated.Errors;
-        }
-
-        // I-D06: the Facility is created against this Org's id and cannot cross Orgs.
-        var facility = new Facility(Guid.NewGuid(), Id, validated.Value);
-        _facilities.Add(facility);
-        return facility;
-    }
-
-    /// <summary>
-    /// Renames the <see cref="Facility"/> identified by <paramref name="facilityId"/>.
-    /// </summary>
-    /// <param name="facilityId">The id of the Facility to rename; must belong to this Org.</param>
-    /// <param name="name">
-    /// The new name; required, trimmed, and at most <see cref="MaxNameLength"/> characters.
-    /// </param>
-    /// <returns>
-    /// The renamed Facility; a not-found error when no Facility with that id belongs to this Org;
-    /// or a validation error when the name is invalid. The Facility's <c>OrgId</c> is never
-    /// changed (I-D06).
-    /// </returns>
-    public ErrorOr<Facility> RenameFacility(Guid facilityId, string name)
-    {
-        var facility = _facilities.FirstOrDefault(f => f.Id == facilityId);
-        if (facility is null)
-        {
-            return Error.NotFound("Facility.NotFound", $"No Facility exists with id '{facilityId}'.");
-        }
-
-        var validated = ValidateName(name);
-        if (validated.IsError)
-        {
-            return validated.Errors;
-        }
-
-        facility.Rename(validated.Value);
-        return facility;
-    }
-
-    /// <summary>
-    /// Removes the <see cref="Facility"/> identified by <paramref name="facilityId"/> from this Org.
-    /// </summary>
-    /// <param name="facilityId">The id of the Facility to remove; must belong to this Org.</param>
-    /// <returns>
-    /// <see cref="Result.Deleted"/> on success, or a not-found error when no Facility with that id
-    /// belongs to this Org.
-    /// </returns>
-    public ErrorOr<Deleted> RemoveFacility(Guid facilityId)
-    {
-        var facility = _facilities.FirstOrDefault(f => f.Id == facilityId);
-        if (facility is null)
-        {
-            return Error.NotFound("Facility.NotFound", $"No Facility exists with id '{facilityId}'.");
-        }
-
-        _facilities.Remove(facility);
-        return Result.Deleted;
     }
 
     /// <summary>

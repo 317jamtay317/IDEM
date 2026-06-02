@@ -1,4 +1,5 @@
 using RecordKeeping.Application.Orgs;
+using RecordKeeping.Domain.Facilities;
 using RecordKeeping.Domain.Orgs;
 using Shouldly;
 
@@ -7,27 +8,32 @@ namespace RecordKeeping.Application.Tests.Orgs;
 public class GetOrgsHandlerTests
 {
     [Fact]
-    public async Task Handle_ReturnsAllOrgsAsResponses()
+    public async Task Handle_ReturnsAllOrgsWithTheirFacilities()
     {
-        var repository = new FakeOrgRepository();
-        repository.Seed(Org.Create("Rieth-Riley").Value);
-        repository.Seed(Org.Create("Acme Asphalt").Value);
+        var orgs = new FakeOrgRepository();
+        var facilities = new FakeFacilityRepository();
+        var riethRiley = Org.Create("Rieth-Riley").Value;
+        var acme = Org.Create("Acme Asphalt").Value;
+        orgs.Seed(riethRiley);
+        orgs.Seed(acme);
+        facilities.Seed(Facility.Create(riethRiley.Id, "Goshen Plant").Value);
 
         var result = await GetOrgsHandler.Handle(
-            new GetOrgsQuery(), repository, CancellationToken.None);
+            new GetOrgsQuery(), orgs, facilities, CancellationToken.None);
 
         result.Count.ShouldBe(2);
-        result.ShouldContain(o => o.Name == "Rieth-Riley");
-        result.ShouldContain(o => o.Name == "Acme Asphalt");
+        result.ShouldContain(o => o.Name == "Rieth-Riley" && o.Facilities.Count == 1);
+        result.ShouldContain(o => o.Name == "Acme Asphalt" && o.Facilities.Count == 0);
     }
 
     [Fact]
     public async Task Handle_WithNoOrgs_ReturnsEmpty()
     {
-        var repository = new FakeOrgRepository();
+        var orgs = new FakeOrgRepository();
+        var facilities = new FakeFacilityRepository();
 
         var result = await GetOrgsHandler.Handle(
-            new GetOrgsQuery(), repository, CancellationToken.None);
+            new GetOrgsQuery(), orgs, facilities, CancellationToken.None);
 
         result.ShouldBeEmpty();
     }

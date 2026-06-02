@@ -59,6 +59,8 @@ Facilities follow the same isolation guarantee as Records (I-D01): `OrgId` is re
 
 An Org has **many** Facilities — confirmed by the v1 design target (Rieth-Riley) operating ~15–20 plants. Cross-Org transfer of a Facility is not a v1-supported operation; if a plant changes ownership in the real world, it is handled out-of-band by recreating the Facility under the new Org.
 
+> Facility is its own **aggregate root**: it references its Org by `OrgId` (an id reference, not containment) and is loaded through `IFacilityRepository`. The Org aggregate does not hold its Facilities; Org read models compose them on the query side. `OrgId` is enforced (required + immutable) by the `Facility` aggregate itself.
+
 ### I-D07 — Every Record is associated with a Facility ✅
 A Record captures activity *at a specific Facility*, so it must reference one. Required because Orgs have many Facilities — without this, Records cannot be routed to the correct Report or attributed correctly on a regulator filing.
 

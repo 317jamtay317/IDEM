@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using RecordKeeping.Domain.Facilities;
 using RecordKeeping.Domain.Orgs;
 
 namespace RecordKeeping.Infrastructure.Persistence;
@@ -13,10 +14,14 @@ public sealed class RecordKeepingDbContext(DbContextOptions<RecordKeepingDbConte
     /// <summary>The Org aggregate roots.</summary>
     public DbSet<Org> Orgs => Set<Org>();
 
+    /// <summary>The Facility aggregate roots (I-D06).</summary>
+    public DbSet<Facility> Facilities => Set<Facility>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfiguration(new OrgConfiguration());
+        modelBuilder.ApplyConfiguration(new FacilityConfiguration());
     }
 }

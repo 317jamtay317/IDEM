@@ -14,42 +14,46 @@ public partial class OrgEndpoints
     public sealed record UpdateOrgRequest(string Name, Guid? TenantId);
 
     private static async Task<IResult> GetOrgs(
-        IOrgRepository repository, CancellationToken cancellationToken)
+        IOrgRepository orgs, IFacilityRepository facilities, CancellationToken cancellationToken)
     {
-        var orgs = await GetOrgsHandler.Handle(
-            new GetOrgsQuery(), repository, cancellationToken);
-        return Results.Ok(orgs);
+        var result = await GetOrgsHandler.Handle(
+            new GetOrgsQuery(), orgs, facilities, cancellationToken);
+        return Results.Ok(result);
     }
 
     private static async Task<IResult> GetOrgById(
-        Guid id, IOrgRepository repository, CancellationToken cancellationToken)
+        Guid id, IOrgRepository orgs, IFacilityRepository facilities, CancellationToken cancellationToken)
     {
         var result = await GetOrgByIdHandler.Handle(
-            new GetOrgByIdQuery(id), repository, cancellationToken);
+            new GetOrgByIdQuery(id), orgs, facilities, cancellationToken);
         return result.Match(Results.Ok);
     }
 
     private static async Task<IResult> CreateOrg(
-        CreateOrgRequest request, IOrgRepository repository, CancellationToken cancellationToken)
+        CreateOrgRequest request, IOrgRepository orgs, CancellationToken cancellationToken)
     {
         var result = await CreateOrgHandler.Handle(
-            new CreateOrgCommand(request.Name), repository, cancellationToken);
+            new CreateOrgCommand(request.Name), orgs, cancellationToken);
         return result.Match(org => Results.Created($"/orgs/{org.Id}", org));
     }
 
     private static async Task<IResult> UpdateOrg(
-        Guid id, UpdateOrgRequest request, IOrgRepository repository, CancellationToken cancellationToken)
+        Guid id,
+        UpdateOrgRequest request,
+        IOrgRepository orgs,
+        IFacilityRepository facilities,
+        CancellationToken cancellationToken)
     {
         var result = await UpdateOrgHandler.Handle(
-            new UpdateOrgCommand(id, request.Name, request.TenantId), repository, cancellationToken);
+            new UpdateOrgCommand(id, request.Name, request.TenantId), orgs, facilities, cancellationToken);
         return result.Match(Results.Ok);
     }
 
     private static async Task<IResult> DeleteOrg(
-        Guid id, IOrgRepository repository, CancellationToken cancellationToken)
+        Guid id, IOrgRepository orgs, CancellationToken cancellationToken)
     {
         var result = await DeleteOrgHandler.Handle(
-            new DeleteOrgCommand(id), repository, cancellationToken);
+            new DeleteOrgCommand(id), orgs, cancellationToken);
         return result.Match(_ => Results.NoContent());
     }
 }

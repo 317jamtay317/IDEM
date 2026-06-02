@@ -10,7 +10,7 @@ public partial class MyOrgFacilityEndpoints
     public sealed record FacilityRequest(string Name);
 
     private static async Task<IResult> GetMyFacilities(
-        ClaimsPrincipal user, IOrgRepository repository, CancellationToken cancellationToken)
+        ClaimsPrincipal user, IFacilityRepository facilities, CancellationToken cancellationToken)
     {
         if (user.GetOrgId() is not Guid orgId)
         {
@@ -18,14 +18,15 @@ public partial class MyOrgFacilityEndpoints
         }
 
         var result = await GetFacilitiesHandler.Handle(
-            new GetFacilitiesQuery(orgId), repository, cancellationToken);
+            new GetFacilitiesQuery(orgId), facilities, cancellationToken);
         return result.Match(Results.Ok);
     }
 
     private static async Task<IResult> AddMyFacility(
         FacilityRequest request,
         ClaimsPrincipal user,
-        IOrgRepository repository,
+        IOrgRepository orgs,
+        IFacilityRepository facilities,
         CancellationToken cancellationToken)
     {
         if (user.GetOrgId() is not Guid orgId)
@@ -34,7 +35,7 @@ public partial class MyOrgFacilityEndpoints
         }
 
         var result = await AddFacilityHandler.Handle(
-            new AddFacilityCommand(orgId, request.Name), repository, cancellationToken);
+            new AddFacilityCommand(orgId, request.Name), orgs, facilities, cancellationToken);
         return result.Match(facility =>
             Results.Created($"/me/org/facilities/{facility.Id}", facility));
     }
@@ -43,7 +44,7 @@ public partial class MyOrgFacilityEndpoints
         Guid facilityId,
         FacilityRequest request,
         ClaimsPrincipal user,
-        IOrgRepository repository,
+        IFacilityRepository facilities,
         CancellationToken cancellationToken)
     {
         if (user.GetOrgId() is not Guid orgId)
@@ -52,14 +53,14 @@ public partial class MyOrgFacilityEndpoints
         }
 
         var result = await RenameFacilityHandler.Handle(
-            new RenameFacilityCommand(orgId, facilityId, request.Name), repository, cancellationToken);
+            new RenameFacilityCommand(orgId, facilityId, request.Name), facilities, cancellationToken);
         return result.Match(Results.Ok);
     }
 
     private static async Task<IResult> RemoveMyFacility(
         Guid facilityId,
         ClaimsPrincipal user,
-        IOrgRepository repository,
+        IFacilityRepository facilities,
         CancellationToken cancellationToken)
     {
         if (user.GetOrgId() is not Guid orgId)
@@ -68,7 +69,7 @@ public partial class MyOrgFacilityEndpoints
         }
 
         var result = await RemoveFacilityHandler.Handle(
-            new RemoveFacilityCommand(orgId, facilityId), repository, cancellationToken);
+            new RemoveFacilityCommand(orgId, facilityId), facilities, cancellationToken);
         return result.Match(_ => Results.NoContent());
     }
 
