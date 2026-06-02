@@ -1,6 +1,7 @@
 using ErrorOr;
+using RecordKeeping.Application.Orgs;
 
-namespace RecordKeeping.Application.Orgs;
+namespace RecordKeeping.Application.Facilities;
 
 /// <summary>Command to rename a Facility owned by an Org.</summary>
 /// <param name="OrgId">The Org that owns the Facility.</param>

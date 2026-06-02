@@ -4,13 +4,14 @@ using System.Net.Http.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using RecordKeeping.Api.IntegrationTests.Auth;
+using RecordKeeping.Application.Facilities;
 using RecordKeeping.Application.Orgs;
 using RecordKeeping.Infrastructure.Identity;
 using Shouldly;
 using DomainOrg = RecordKeeping.Domain.Orgs.Org;
 using DomainFacility = RecordKeeping.Domain.Facilities.Facility;
 
-namespace RecordKeeping.Api.IntegrationTests.Orgs;
+namespace RecordKeeping.Api.IntegrationTests.Facilities;
 
 /// <summary>
 /// Verifies the Org User self-service Facility endpoints (<c>/me/org/facilities</c>): an Org User

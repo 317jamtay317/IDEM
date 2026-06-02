@@ -1,8 +1,8 @@
-using RecordKeeping.Application.Orgs;
+using RecordKeeping.Application.Facilities;
 using RecordKeeping.Domain.Facilities;
 using Shouldly;
 
-namespace RecordKeeping.Application.Tests.Orgs;
+namespace RecordKeeping.Application.Tests.Facilities;
 
 public class GetFacilitiesHandlerTests
 {

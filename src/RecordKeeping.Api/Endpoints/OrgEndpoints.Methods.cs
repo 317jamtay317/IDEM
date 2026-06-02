@@ -1,3 +1,4 @@
+using RecordKeeping.Application.Facilities;
 using RecordKeeping.Application.Orgs;
 
 namespace RecordKeeping.Api.Endpoints;

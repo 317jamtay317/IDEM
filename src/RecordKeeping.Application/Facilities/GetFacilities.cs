@@ -1,6 +1,7 @@
 using ErrorOr;
+using RecordKeeping.Application.Orgs;
 
-namespace RecordKeeping.Application.Orgs;
+namespace RecordKeeping.Application.Facilities;
 
 /// <summary>Query for the Facilities owned by an Org.</summary>
 /// <param name="OrgId">The Org whose Facilities to list.</param>

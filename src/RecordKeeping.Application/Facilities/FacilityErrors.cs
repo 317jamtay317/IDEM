@@ -1,6 +1,6 @@
 using ErrorOr;
 
-namespace RecordKeeping.Application.Orgs;
+namespace RecordKeeping.Application.Facilities;
 
 /// <summary>
 /// Business-outcome errors for Facility operations, surfaced as <see cref="ErrorOr{T}"/>
