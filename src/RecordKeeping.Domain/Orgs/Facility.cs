@@ -18,7 +18,7 @@ public sealed class Facility
     public Guid OrgId { get; }
 
     /// <summary>Human-readable name of the Facility (e.g. the plant name).</summary>
-    public string Name { get; }
+    public string Name { get; private set; }
 
     // Created only through Org.AddFacility so the aggregate root owns the invariant.
     internal Facility(Guid id, Guid orgId, string name)
@@ -27,4 +27,8 @@ public sealed class Facility
         OrgId = orgId;
         Name = name;
     }
+
+    // Renamed only through Org.RenameFacility so the aggregate root owns name validation.
+    // The OrgId is never touched here (I-D06): renaming changes the name and nothing else.
+    internal void Rename(string name) => Name = name;
 }
