@@ -1,7 +1,7 @@
-import { HomeIcon, RecordsIcon, ReportsIcon, OrgsIcon } from './icons'
+import { HomeIcon, RecordsIcon, ReportsIcon, OrgsIcon, FacilityIcon } from './icons'
 
 /** The primary navigation destinations reachable from the bottom bar / sidebar. */
-export type NavTab = 'home' | 'records' | 'reports' | 'orgs'
+export type NavTab = 'home' | 'records' | 'facilities' | 'reports' | 'orgs'
 
 /**
  * Which audience a {@link NavEntry} is for. SiteAdmins (I-D13) are platform
@@ -37,6 +37,7 @@ export interface NavEntry {
 export const NAV_ENTRIES: NavEntry[] = [
   { tab: 'home', label: 'Dashboard', mobileLabel: 'Home', Icon: HomeIcon, audience: 'orgUser' },
   { tab: 'records', label: 'Records', mobileLabel: 'Records', Icon: RecordsIcon, audience: 'orgUser' },
+  { tab: 'facilities', label: 'Facilities', mobileLabel: 'Facilities', Icon: FacilityIcon, audience: 'orgUser' },
   { tab: 'orgs', label: 'Organizations', mobileLabel: 'Orgs', Icon: OrgsIcon, audience: 'siteAdmin' },
   { tab: 'reports', label: 'Reports', mobileLabel: 'Reports', Icon: ReportsIcon },
 ]
