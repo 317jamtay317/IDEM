@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using OpenIddict.Abstractions;
+using RecordKeeping.Application.Orgs;
+using RecordKeeping.Domain.Orgs;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace RecordKeeping.Infrastructure.Identity;
@@ -16,6 +19,19 @@ public static class AuthSeeder
 
     /// <summary>The bootstrap SiteAdmin's initial password. Printed to console on first seed.</summary>
     public const string BootstrapSiteAdminPassword = "ChangeMe!OnFirstLogin1";
+
+    /// <summary>
+    /// Display name of the sample Org seeded in Development (see
+    /// <see cref="SeedDevelopmentDataAsync"/>). Deliberately distinct from the bare
+    /// "Rieth-Riley" used by tests and fixtures so seeded dev data never collides with them.
+    /// </summary>
+    public const string DevOrgName = "Rieth-Riley (Development)";
+
+    /// <summary>Email of the sample Development Org User, who belongs to the <see cref="DevOrgName"/> Org.</summary>
+    public const string DevOrgUserEmail = "user@recordkeeping.local";
+
+    /// <summary>The sample Development Org User's initial password. Local convenience only.</summary>
+    public const string DevOrgUserPassword = "ChangeMe!OnFirstLogin1";
 
     /// <summary>The SPA OIDC client identifier registered with OpenIddict.</summary>
     public const string SpaClientId = "spa";
@@ -67,6 +83,83 @@ public static class AuthSeeder
         await SeedMcpScopeAsync(services);
         await SeedSpaClientAsync(services);
         await SeedSiteAdminAsync(services);
+    }
+
+    /// <summary>
+    /// Seeds a sample <see cref="DevOrgName"/> Org and an Org User belonging to it, so a developer
+    /// can sign in as a non-SiteAdmin and exercise Org-scoped behavior locally. Seeds only when the
+    /// host runs in the Development environment; otherwise it is a no-op. Idempotent and safe to call
+    /// on every startup. Must run after the domain schema exists (the Org is persisted).
+    /// </summary>
+    /// <param name="services">A scoped service provider.</param>
+    public static async Task SeedDevelopmentDataAsync(IServiceProvider services)
+    {
+        var environment = services.GetRequiredService<IHostEnvironment>();
+        if (!environment.IsDevelopment())
+        {
+            return;
+        }
+
+        var orgId = await SeedDevOrgAsync(services);
+        await SeedDevOrgUserAsync(services, orgId);
+    }
+
+    private static async Task<Guid> SeedDevOrgAsync(IServiceProvider services)
+    {
+        var orgs = services.GetRequiredService<IOrgRepository>();
+
+        var existing = await orgs.GetAllAsync(CancellationToken.None);
+        var devOrg = existing.FirstOrDefault(o => o.Name == DevOrgName);
+        if (devOrg is not null)
+        {
+            return devOrg.Id;
+        }
+
+        // The Org aggregate owns its own creation invariants (name validation).
+        var created = Org.Create(DevOrgName);
+        if (created.IsError)
+        {
+            throw new InvalidOperationException(
+                "Failed to seed development Org: " +
+                string.Join("; ", created.Errors.Select(e => e.Description)));
+        }
+
+        await orgs.AddAsync(created.Value, CancellationToken.None);
+        await orgs.SaveChangesAsync(CancellationToken.None);
+        return created.Value.Id;
+    }
+
+    private static async Task SeedDevOrgUserAsync(IServiceProvider services, Guid orgId)
+    {
+        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+
+        if (await userManager.FindByEmailAsync(DevOrgUserEmail) is not null)
+        {
+            return;
+        }
+
+        var user = new ApplicationUser
+        {
+            Id = Guid.NewGuid(),
+            UserName = DevOrgUserEmail,
+            Email = DevOrgUserEmail,
+            EmailConfirmed = true,
+            DisplayName = "Rieth-Riley Dev User",
+            IsSiteAdmin = false, // I-D13: an Org User is never a SiteAdmin.
+            OrgId = orgId,       // I-D13: an Org User belongs to exactly one Org.
+        };
+
+        var result = await userManager.CreateAsync(user, DevOrgUserPassword);
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException(
+                "Failed to seed development Org User: " +
+                string.Join("; ", result.Errors.Select(e => e.Description)));
+        }
+
+        // Surface the dev credentials so the operator can sign in as an Org User locally.
+        Console.WriteLine(
+            $"[AuthSeeder] Seeded development Org User: {DevOrgUserEmail} / {DevOrgUserPassword} (Org: {DevOrgName})");
     }
 
     private static async Task SeedMcpScopeAsync(IServiceProvider services)

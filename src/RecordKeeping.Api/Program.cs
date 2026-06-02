@@ -192,6 +192,10 @@ using (var scope = app.Services.CreateScope())
     // initializer because EnsureCreated no-ops once the database already exists.
     var domainDb = scope.ServiceProvider.GetRequiredService<RecordKeepingDbContext>();
     await RecordKeepingDbInitializer.InitializeAsync(domainDb);
+
+    // Development-only sample data (a sample Org + Org User); a no-op outside Development.
+    // Runs after the domain schema exists so the Org insert has a table to target.
+    await AuthSeeder.SeedDevelopmentDataAsync(scope.ServiceProvider);
 }
 
 if (app.Environment.IsDevelopment())
