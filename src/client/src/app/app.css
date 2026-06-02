@@ -284,6 +284,12 @@
   color: var(--color-text);
 }
 
+/* Center the Delete / Cancel actions within the dialog (cards elsewhere keep
+   their default left alignment). */
+.modal-card .row-actions {
+  justify-content: center;
+}
+
 @media (min-width: 1024px) {
   .topbar {
     padding: 1.125rem 2rem;
