@@ -13,6 +13,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.8" />
     <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="7.5.0" />
     <PackageReference Include="WolverineFx.EntityFrameworkCore" Version="6.1.0" />
     <PackageReference Include="WolverineFx.SqlServer" Version="6.1.0" />
