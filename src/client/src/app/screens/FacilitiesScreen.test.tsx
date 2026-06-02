@@ -134,7 +134,7 @@ describe('FacilitiesScreen — rename (inline edit)', () => {
 describe('FacilitiesScreen — delete', () => {
   beforeEach(() => stubBreakpoint(true))
 
-  it('deletes a facility', async () => {
+  it('asks for confirmation naming the facility, without deleting yet', async () => {
     const api = makeApi([GOSHEN, FORT_WAYNE])
     const user = userEvent.setup()
     render(<FacilitiesScreen accessToken="tok" api={api} />)
@@ -142,8 +142,38 @@ describe('FacilitiesScreen — delete', () => {
     await screen.findByText('Goshen Plant')
     await user.click(screen.getAllByRole('button', { name: /^delete$/i })[0])
 
+    expect(api.remove).not.toHaveBeenCalled()
+    const dialog = screen.getByRole('dialog')
+    expect(
+      within(dialog).getByText(/are you sure you want to delete goshen plant/i),
+    ).toBeInTheDocument()
+  })
+
+  it('deletes the facility after the user confirms', async () => {
+    const api = makeApi([GOSHEN, FORT_WAYNE])
+    const user = userEvent.setup()
+    render(<FacilitiesScreen accessToken="tok" api={api} />)
+
+    await screen.findByText('Goshen Plant')
+    await user.click(screen.getAllByRole('button', { name: /^delete$/i })[0])
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^delete$/i }))
+
     expect(api.remove).toHaveBeenCalledWith('tok', 'f1')
     await waitFor(() => expect(screen.queryByText('Goshen Plant')).not.toBeInTheDocument())
+  })
+
+  it('does not delete when the user cancels', async () => {
+    const api = makeApi([GOSHEN])
+    const user = userEvent.setup()
+    render(<FacilitiesScreen accessToken="tok" api={api} />)
+
+    await screen.findByText('Goshen Plant')
+    await user.click(screen.getByRole('button', { name: /^delete$/i }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /cancel/i }))
+
+    expect(api.remove).not.toHaveBeenCalled()
+    expect(screen.getByText('Goshen Plant')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
 

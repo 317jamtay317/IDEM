@@ -40,6 +40,7 @@ export function FacilitiesScreen({ accessToken, api = defaultApi }: FacilitiesSc
   const { isDesktop } = useBreakpoint()
   const [facilities, setFacilities] = useState<MyFacility[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<MyFacility | null>(null)
 
   const reload = useCallback(() => {
     let cancelled = false
@@ -80,8 +81,20 @@ export function FacilitiesScreen({ accessToken, api = defaultApi }: FacilitiesSc
     }
   }
 
-  function handleDelete(facility: MyFacility) {
+  /** Ask for confirmation before deleting; the delete itself runs on confirm. */
+  function requestDelete(facility: MyFacility) {
+    setPendingDelete(facility)
+  }
+
+  function confirmDelete() {
+    if (!pendingDelete) return
+    const facility = pendingDelete
+    setPendingDelete(null)
     void run(() => api.remove(accessToken, facility.id))
+  }
+
+  function cancelDelete() {
+    setPendingDelete(null)
   }
 
   const columns: GridColumn<MyFacility>[] = [
@@ -132,7 +145,7 @@ export function FacilitiesScreen({ accessToken, api = defaultApi }: FacilitiesSc
                       <button
                         type="button"
                         className="button button-danger button-sm"
-                        onClick={() => handleDelete(f)}
+                        onClick={() => requestDelete(f)}
                       >
                         Delete
                       </button>
@@ -146,11 +159,34 @@ export function FacilitiesScreen({ accessToken, api = defaultApi }: FacilitiesSc
               facilities={facilities}
               onAdd={(name) => run(() => api.add(accessToken, name))}
               onRename={(f, name) => run(() => api.rename(accessToken, f.id, name))}
-              onDelete={handleDelete}
+              onDelete={requestDelete}
             />
           )
         )}
       </div>
+
+      {pendingDelete && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm delete facility"
+        >
+          <div className="card modal-card">
+            <p className="modal-title">
+              Are you sure you want to delete {pendingDelete.name}?
+            </p>
+            <div className="row-actions">
+              <button type="button" className="button button-danger" onClick={confirmDelete}>
+                Delete
+              </button>
+              <button type="button" className="button button-secondary" onClick={cancelDelete}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
