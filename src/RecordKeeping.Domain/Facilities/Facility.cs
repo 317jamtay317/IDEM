@@ -35,12 +35,12 @@ public sealed class Facility : AggregateRoot<Guid>
     public IReadOnlyCollection<Guid> UserIds => _userIds;
 
     /// <summary>
-    /// Represents the collection of monthly limits associated with a <see cref="Facility"/>.
-    /// Each limit specifies the allowable threshold for a particular emission type.
+    /// The Monthly Limits the Facility holds — each a tons/month cap on one <see cref="EmissionType"/>.
     /// </summary>
     /// <remarks>
-    /// Monthly limits are defined per facility and are immutable once set. These constraints help ensure
-    /// adherence to regulatory requirements on an ongoing basis.
+    /// A Facility holds at most one Monthly Limit per Emission Type (I-D19). Manage them through
+    /// <see cref="AddLimit"/>, <see cref="UpdateLimit"/> (change the tons value), and
+    /// <see cref="RemoveLimit"/>, which enforce the Monthly Limit invariants (I-D19, I-D20).
     /// </remarks>
     public IReadOnlyCollection<MonthlyLimit> Limits => _limits;
 
@@ -221,6 +221,83 @@ public sealed class Facility : AggregateRoot<Guid>
             return FacilityErrors.NoValidPermitForDate;
 
         return permit;
+    }
+
+    /// <summary>
+    /// Adds a Monthly Limit of <paramref name="tons"/> tons/month on <paramref name="emissionType"/>.
+    /// Raises <see cref="MonthlyLimitAdded"/> on success.
+    /// </summary>
+    /// <param name="emissionType">The pollutant the limit constrains.</param>
+    /// <param name="tons">The cap in tons per month; must be positive (I-D20).</param>
+    /// <returns>
+    /// <see cref="Result.Success"/>; <see cref="FacilityErrors.LimitAlreadyExistsForType"/> when the
+    /// Facility already holds a limit for <paramref name="emissionType"/> (I-D19); or
+    /// <see cref="FacilityErrors.LimitValueMustBePositive"/> when <paramref name="tons"/> is not
+    /// positive (I-D20).
+    /// </returns>
+    public ErrorOr<Success> AddLimit(EmissionType emissionType, double tons)
+    {
+        // I-D19: a Facility holds at most one Monthly Limit per Emission Type.
+        if (_limits.Any(limit => limit.EmissionType == emissionType))
+            return FacilityErrors.LimitAlreadyExistsForType;
+
+        var limit = MonthlyLimit.Create(Id, emissionType, tons);
+        if (limit.IsError)
+            return limit.Errors;
+
+        _limits.Add(limit.Value);
+        RaiseDomainEvent(new MonthlyLimitAdded(Id, emissionType));
+        return Result.Success;
+    }
+
+    /// <summary>
+    /// Changes the tons value of the Monthly Limit for <paramref name="emissionType"/>. Raises
+    /// <see cref="MonthlyLimitUpdated"/> on success. The Emission Type itself is the limit's
+    /// identity and is never changed; to change it, remove the limit and add a new one.
+    /// </summary>
+    /// <param name="emissionType">The Emission Type whose limit value to change.</param>
+    /// <param name="tons">The new cap in tons per month; must be positive (I-D20).</param>
+    /// <returns>
+    /// <see cref="Result.Success"/>; <see cref="FacilityErrors.LimitDoesntExistForType"/> when the
+    /// Facility holds no limit for <paramref name="emissionType"/>; or
+    /// <see cref="FacilityErrors.LimitValueMustBePositive"/> when <paramref name="tons"/> is not
+    /// positive (I-D20).
+    /// </returns>
+    public ErrorOr<Success> UpdateLimit(EmissionType emissionType, double tons)
+    {
+        var existing = _limits.FirstOrDefault(limit => limit.EmissionType == emissionType);
+        if (existing is null)
+            return FacilityErrors.LimitDoesntExistForType;
+
+        // MonthlyLimit is an immutable value object; "edit" replaces it with a new value.
+        var updated = MonthlyLimit.Create(Id, emissionType, tons);
+        if (updated.IsError)
+            return updated.Errors;
+
+        _limits.Remove(existing);
+        _limits.Add(updated.Value);
+        RaiseDomainEvent(new MonthlyLimitUpdated(Id, emissionType));
+        return Result.Success;
+    }
+
+    /// <summary>
+    /// Removes the Monthly Limit for <paramref name="emissionType"/>. Raises
+    /// <see cref="MonthlyLimitRemoved"/> on success.
+    /// </summary>
+    /// <param name="emissionType">The Emission Type whose limit to remove.</param>
+    /// <returns>
+    /// <see cref="Result.Success"/>, or <see cref="FacilityErrors.LimitDoesntExistForType"/> when the
+    /// Facility holds no limit for <paramref name="emissionType"/>.
+    /// </returns>
+    public ErrorOr<Success> RemoveLimit(EmissionType emissionType)
+    {
+        var existing = _limits.FirstOrDefault(limit => limit.EmissionType == emissionType);
+        if (existing is null)
+            return FacilityErrors.LimitDoesntExistForType;
+
+        _limits.Remove(existing);
+        RaiseDomainEvent(new MonthlyLimitRemoved(Id, emissionType));
+        return Result.Success;
     }
 
     private static ErrorOr<string> ValidateName(string name)

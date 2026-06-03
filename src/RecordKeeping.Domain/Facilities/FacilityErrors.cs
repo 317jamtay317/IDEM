@@ -58,4 +58,28 @@ public static class FacilityErrors
     /// </remarks>
     public static readonly Error NoValidPermitForDate =
         Error.NotFound("Facility.NoValidPermitForDate", "No valid permit exists for the specified date.");
+
+    /// <summary>
+    /// I-D20: a Monthly Limit's value must be a positive number of tons; a zero or negative value
+    /// is rejected.
+    /// </summary>
+    public static readonly Error LimitValueMustBePositive =
+        Error.Validation("I-D20", "A Monthly Limit's value must be greater than zero.");
+
+    /// <summary>
+    /// I-D19: a Facility holds at most one Monthly Limit per Emission Type, so a limit cannot be
+    /// added for an Emission Type that already has one.
+    /// </summary>
+    public static readonly Error LimitAlreadyExistsForType =
+        Error.Validation("I-D19", "A Monthly Limit already exists for this Emission Type.");
+
+    /// <summary>
+    /// Represents an error indicating that no Monthly Limit exists for the requested Emission Type.
+    /// </summary>
+    /// <remarks>
+    /// Returned by <see cref="Facility.UpdateLimit"/> and <see cref="Facility.RemoveLimit"/> when the
+    /// Facility holds no Monthly Limit for the specified Emission Type.
+    /// </remarks>
+    public static readonly Error LimitDoesntExistForType =
+        Error.NotFound("Facility.LimitDoesntExistForType", "No Monthly Limit exists for the specified Emission Type.");
 }

@@ -9,6 +9,7 @@ import { RecordsScreen } from './screens/RecordsScreen'
 import { ReportsScreen } from './screens/ReportsScreen'
 import { OrgsScreen } from './screens/OrgsScreen'
 import { FacilitiesScreen } from './screens/FacilitiesScreen'
+import { FacilityDetailScreen } from './screens/FacilityDetailScreen'
 import { LogRecordScreen } from './screens/LogRecordScreen'
 import './app.css'
 
@@ -37,7 +38,7 @@ function tabForScreen(screen: Screen): NavTab {
  * while an Org User sees the day-to-day app and never the Organizations screen.
  */
 export function AppShell({ email, isSiteAdmin, accessToken = null, onSignOut }: AppShellProps) {
-  const [screen, navigate] = useHashScreen()
+  const [screen, navigate, facilityId, openFacility] = useHashScreen()
 
   // The destinations this user may reach, and their landing screen (the first).
   const permitted = useMemo(() => visibleNavEntries(isSiteAdmin), [isSiteAdmin])
@@ -67,7 +68,16 @@ export function AppShell({ email, isSiteAdmin, accessToken = null, onSignOut }: 
             {effectiveScreen === 'records' && <RecordsScreen />}
             {effectiveScreen === 'reports' && <ReportsScreen />}
             {effectiveScreen === 'orgs' && <OrgsScreen accessToken={accessToken} />}
-            {effectiveScreen === 'facilities' && <FacilitiesScreen accessToken={accessToken} />}
+            {effectiveScreen === 'facilities' &&
+              (facilityId ? (
+                <FacilityDetailScreen
+                  facilityId={facilityId}
+                  accessToken={accessToken}
+                  onBack={() => navigate('facilities')}
+                />
+              ) : (
+                <FacilitiesScreen accessToken={accessToken} onOpenFacility={openFacility} />
+              ))}
           </main>
 
           <BottomNav active={activeTab} isSiteAdmin={isSiteAdmin} onNavigate={navigate} />
