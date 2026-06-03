@@ -2,7 +2,7 @@
 
 namespace RecordKeeping.Domain.Facilities;
 
-public class License(Guid id, Guid facilityId, DateOnly expirationDate, string licenseValue) : Entity<Guid>(id), IEquatable<License>
+public class License(Guid id, Guid facilityId, DateOnly expirationDate, string value) : Entity<Guid>(id), IEquatable<License>
 {
     /// <summary>
     /// Gets the unique identifier of the plant associated with this license.
@@ -29,7 +29,7 @@ public class License(Guid id, Guid facilityId, DateOnly expirationDate, string l
     /// This property represents the key information of the license, such as a license code or value.
     /// It is assigned during initialization and cannot be modified thereafter.
     /// </remarks>
-    public string Value { get; private set; } = licenseValue;
+    public string Value { get; private set; } = value;
     
     public static License Create( Guid facilityId, DateOnly expirationDate, string licenseValue, Guid? id = null)
     {

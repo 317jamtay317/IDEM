@@ -10,6 +10,11 @@ public partial class MyOrgFacilityEndpoints
     /// <param name="Name">The Facility's name.</param>
     public sealed record FacilityRequest(string Name);
 
+    /// <summary>Request body for adding a license to a Facility.</summary>
+    /// <param name="ExpirationDate">The license's expiration date.</param>
+    /// <param name="Value">The license value/number.</param>
+    public sealed record LicenseRequest(DateOnly ExpirationDate, string Value);
+
     private static async Task<IResult> GetMyFacilities(
         ClaimsPrincipal user, IFacilityRepository facilities, CancellationToken cancellationToken)
     {
@@ -71,6 +76,58 @@ public partial class MyOrgFacilityEndpoints
 
         var result = await RemoveFacilityHandler.Handle(
             new RemoveFacilityCommand(orgId, facilityId), facilities, cancellationToken);
+        return result.Match(_ => Results.NoContent());
+    }
+
+    private static async Task<IResult> GetMyFacilityLicenses(
+        Guid facilityId,
+        ClaimsPrincipal user,
+        IFacilityRepository facilities,
+        CancellationToken cancellationToken)
+    {
+        if (user.GetOrgId() is not Guid orgId)
+        {
+            return NoOrg();
+        }
+
+        var result = await GetLicensesHandler.Handle(
+            new GetLicensesQuery(orgId, facilityId), facilities, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> AddMyFacilityLicense(
+        Guid facilityId,
+        LicenseRequest request,
+        ClaimsPrincipal user,
+        IFacilityRepository facilities,
+        CancellationToken cancellationToken)
+    {
+        if (user.GetOrgId() is not Guid orgId)
+        {
+            return NoOrg();
+        }
+
+        var result = await AddLicenseHandler.Handle(
+            new AddLicenseCommand(orgId, facilityId, request.ExpirationDate, request.Value),
+            facilities, cancellationToken);
+        return result.Match(license =>
+            Results.Created($"/me/org/facilities/{facilityId}/licenses/{license.Id}", license));
+    }
+
+    private static async Task<IResult> RemoveMyFacilityLicense(
+        Guid facilityId,
+        Guid licenseId,
+        ClaimsPrincipal user,
+        IFacilityRepository facilities,
+        CancellationToken cancellationToken)
+    {
+        if (user.GetOrgId() is not Guid orgId)
+        {
+            return NoOrg();
+        }
+
+        var result = await RemoveLicenseHandler.Handle(
+            new RemoveLicenseCommand(orgId, facilityId, licenseId), facilities, cancellationToken);
         return result.Match(_ => Results.NoContent());
     }
 
