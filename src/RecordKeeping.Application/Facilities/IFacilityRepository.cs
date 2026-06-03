@@ -1,6 +1,6 @@
 using RecordKeeping.Domain.Facilities;
 
-namespace RecordKeeping.Application.Orgs;
+namespace RecordKeeping.Application.Facilities;
 
 /// <summary>
 /// Persistence gateway for the <see cref="Facility"/> aggregate. Implemented in the

@@ -1,3 +1,4 @@
+using RecordKeeping.Application.Facilities;
 using RecordKeeping.Domain.Facilities;
 using RecordKeeping.Domain.Orgs;
 

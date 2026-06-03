@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using RecordKeeping.Application.Facilities;
 using RecordKeeping.Application.Orgs;
 
 namespace RecordKeeping.Api.Endpoints;
@@ -8,6 +9,11 @@ public partial class MyOrgFacilityEndpoints
     /// <summary>Request body for adding or renaming a Facility.</summary>
     /// <param name="Name">The Facility's name.</param>
     public sealed record FacilityRequest(string Name);
+
+    /// <summary>Request body for adding a Permit to a Facility.</summary>
+    /// <param name="ExpirationDate">The Permit's expiration date.</param>
+    /// <param name="Value">The permit number / identifier.</param>
+    public sealed record PermitRequest(DateOnly ExpirationDate, string Value);
 
     private static async Task<IResult> GetMyFacilities(
         ClaimsPrincipal user, IFacilityRepository facilities, CancellationToken cancellationToken)
@@ -70,6 +76,58 @@ public partial class MyOrgFacilityEndpoints
 
         var result = await RemoveFacilityHandler.Handle(
             new RemoveFacilityCommand(orgId, facilityId), facilities, cancellationToken);
+        return result.Match(_ => Results.NoContent());
+    }
+
+    private static async Task<IResult> GetMyFacilityPermits(
+        Guid facilityId,
+        ClaimsPrincipal user,
+        IFacilityRepository facilities,
+        CancellationToken cancellationToken)
+    {
+        if (user.GetOrgId() is not Guid orgId)
+        {
+            return NoOrg();
+        }
+
+        var result = await GetPermitsHandler.Handle(
+            new GetPermitsQuery(orgId, facilityId), facilities, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> AddMyFacilityPermit(
+        Guid facilityId,
+        PermitRequest request,
+        ClaimsPrincipal user,
+        IFacilityRepository facilities,
+        CancellationToken cancellationToken)
+    {
+        if (user.GetOrgId() is not Guid orgId)
+        {
+            return NoOrg();
+        }
+
+        var result = await AddPermitHandler.Handle(
+            new AddPermitCommand(orgId, facilityId, request.ExpirationDate, request.Value),
+            facilities, cancellationToken);
+        return result.Match(permit =>
+            Results.Created($"/me/org/facilities/{facilityId}/permits/{permit.Id}", permit));
+    }
+
+    private static async Task<IResult> RemoveMyFacilityPermit(
+        Guid facilityId,
+        Guid permitId,
+        ClaimsPrincipal user,
+        IFacilityRepository facilities,
+        CancellationToken cancellationToken)
+    {
+        if (user.GetOrgId() is not Guid orgId)
+        {
+            return NoOrg();
+        }
+
+        var result = await RemovePermitHandler.Handle(
+            new RemovePermitCommand(orgId, facilityId, permitId), facilities, cancellationToken);
         return result.Match(_ => Results.NoContent());
     }
 

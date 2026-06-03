@@ -1,5 +1,6 @@
 using ErrorOr;
 using RecordKeeping.Application.Orgs;
+using RecordKeeping.Application.Tests.Facilities;
 using RecordKeeping.Domain.Orgs;
 using Shouldly;
 

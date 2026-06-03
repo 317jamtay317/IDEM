@@ -1,3 +1,4 @@
+using RecordKeeping.Application.Facilities;
 using RecordKeeping.Application.Orgs;
 
 namespace RecordKeeping.Api.Endpoints;
@@ -43,5 +44,25 @@ public partial class MyOrgFacilityEndpoints : IEndpoint
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("Removes a Facility from the signed-in user's Org.");
+
+        facilities.MapGet("/{facilityId:guid}/permits", GetMyFacilityPermits)
+            .Produces<IReadOnlyList<PermitResponse>>()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("Lists the permits of a Facility in the signed-in user's Org.");
+
+        facilities.MapPost("/{facilityId:guid}/permits", AddMyFacilityPermit)
+            .Produces<PermitResponse>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("Adds a permit to a Facility in the signed-in user's Org.");
+
+        facilities.MapDelete("/{facilityId:guid}/permits/{permitId:guid}", RemoveMyFacilityPermit)
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("Removes a permit from a Facility in the signed-in user's Org.");
     }
 }

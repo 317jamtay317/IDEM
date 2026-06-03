@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using RecordKeeping.Application.Facilities;
 using RecordKeeping.Application.Orgs;
 
 namespace RecordKeeping.Infrastructure.Persistence;

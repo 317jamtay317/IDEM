@@ -1,3 +1,4 @@
+using RecordKeeping.Application.Facilities;
 using RecordKeeping.Domain.Facilities;
 
 namespace RecordKeeping.Application.Orgs;

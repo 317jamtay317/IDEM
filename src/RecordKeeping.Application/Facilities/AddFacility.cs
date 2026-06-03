@@ -1,7 +1,8 @@
 using ErrorOr;
+using RecordKeeping.Application.Orgs;
 using RecordKeeping.Domain.Facilities;
 
-namespace RecordKeeping.Application.Orgs;
+namespace RecordKeeping.Application.Facilities;
 
 /// <summary>Command to add a new Facility to an Org (I-D06).</summary>
 /// <param name="OrgId">The Org that will own the Facility.</param>

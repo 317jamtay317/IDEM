@@ -1,9 +1,10 @@
 using ErrorOr;
-using RecordKeeping.Application.Orgs;
+using RecordKeeping.Application.Facilities;
+using RecordKeeping.Application.Tests.Orgs;
 using RecordKeeping.Domain.Orgs;
 using Shouldly;
 
-namespace RecordKeeping.Application.Tests.Orgs;
+namespace RecordKeeping.Application.Tests.Facilities;
 
 public class AddFacilityHandlerTests
 {

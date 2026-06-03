@@ -64,6 +64,18 @@ An Org has **many** Facilities — confirmed by the v1 design target (Rieth-Rile
 ### I-D07 — Every Record is associated with a Facility ✅
 A Record captures activity *at a specific Facility*, so it must reference one. Required because Orgs have many Facilities — without this, Records cannot be routed to the correct Report or attributed correctly on a regulator filing.
 
+### I-D17 — A Permit added to a Facility must not already be expired 🟡
+When a Permit (see UbiquitousLanguage `Permit`) is added to a Facility, its expiration date must be on or after the current date; a Permit whose expiration date is already in the past is rejected. Enforced by `Facility.AddPermit`.
+
+❓ — Confirm with the domain owner: is "reject if already expired on the day it is added" the intended rule, and should the comparison use the server's date or the Facility's local date? (Shipped initially as the "License" rule with a non-invariant error code; recorded here on the Permit rename.)
+
+### I-D18 — A Facility's last remaining Permit cannot be removed 🟡
+A Facility that holds Permits must retain at least one; an attempt to remove the only remaining Permit is rejected. Enforced by `Facility.RemovePermit`.
+
+> Note the precise shape as implemented: this constrains **removal**, not creation. A newly-created Facility has zero Permits and is valid until its first Permit is added; the rule only forbids going from one Permit back to zero.
+
+❓ — Confirm whether the stronger rule is wanted instead: a Facility must have ≥ 1 Permit *at all times*, which would also require a Permit at creation.
+
 ---
 
 ## Reporting

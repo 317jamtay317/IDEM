@@ -1,4 +1,5 @@
 using ErrorOr;
+using RecordKeeping.Application.Facilities;
 
 namespace RecordKeeping.Application.Orgs;
 

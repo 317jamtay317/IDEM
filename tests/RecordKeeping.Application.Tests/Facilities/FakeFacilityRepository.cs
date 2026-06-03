@@ -1,7 +1,7 @@
-using RecordKeeping.Application.Orgs;
+using RecordKeeping.Application.Facilities;
 using RecordKeeping.Domain.Facilities;
 
-namespace RecordKeeping.Application.Tests.Orgs;
+namespace RecordKeeping.Application.Tests.Facilities;
 
 /// <summary>
 /// In-memory <see cref="IFacilityRepository"/> test double. Reads are Org-scoped exactly as the

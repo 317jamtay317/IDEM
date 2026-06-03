@@ -108,4 +108,362 @@ public class FacilityTests
         // I-D06: a Facility's OrgId is immutable; renaming touches only the name.
         facility.OrgId.ShouldBe(orgId);
     }
+
+    [Fact]
+    public void AddUser_ShouldAddUserToList_WhenAlreadyNotInList()
+    {
+        //arrange
+        var orgId = Guid.NewGuid();
+        var facility = Facility.Create(orgId, "Goshen Plant").Value;
+
+        var userId = Guid.NewGuid();
+
+        //act
+        var result = facility.AddUser(userId);
+
+        //assert
+        result.IsError.ShouldBeFalse();
+        facility.UserIds.ShouldContain(userId);
+    }
+
+    [Fact]
+    public void AddUser_ShouldNotAddUserToList_WhenAlreadyInList()
+    {
+        //arrange
+        var orgId = Guid.NewGuid();
+        var facility = Facility.Create(orgId, "Goshen Plant").Value;
+
+        var userId = Guid.NewGuid();
+        facility.AddUser(userId);
+
+        //act
+        var result = facility.AddUser(userId);
+
+        //assert
+        result.IsError.ShouldBeTrue();
+        result.FirstError.ShouldBeEquivalentTo(FacilityErrors.UserAlreadyInFacility);
+        facility.UserIds.ShouldContain(userId);
+    }
+
+    [Fact]
+    public void UserCanViewFacility_ShouldReturnTrue_WhenUserIsInFacility()
+    {
+        //arrange
+        var orgId = Guid.NewGuid();
+        var facility = Facility.Create(orgId, "Goshen Plant").Value;
+        var userId = Guid.NewGuid();
+        facility.AddUser(userId);
+
+        //act
+        var canView = facility.UserCanView(userId);
+
+        //assert
+        canView.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void RemoveUser_ShouldRemoveUser_WhenInList()
+    {
+        //arrange
+        var orgId = Guid.NewGuid();
+        var facility = Facility.Create(orgId, "Goshen Plant").Value;
+        var userId = Guid.NewGuid();
+        facility.AddUser(userId);
+
+        //act
+        var result = facility.RemoveUser(userId);
+
+        //assert
+        result.IsError.ShouldBeFalse();
+        facility.UserIds.ShouldNotContain(userId);
+    }
+
+    [Fact]
+    public void RemoveUser_ShouldReturnError_WhenUserNotInList()
+    {
+        //arrange
+        var orgId = Guid.NewGuid();
+        var facility = Facility.Create(orgId, "Goshen Plant").Value;
+        var userId = Guid.NewGuid();
+
+        //act
+        var result = facility.RemoveUser(userId);
+
+        //assert
+        result.IsError.ShouldBeTrue();
+        result.FirstError.ShouldBeEquivalentTo(FacilityErrors.UserNotInFacility);
+    }
+
+    [Fact]
+    [Trait("Invariant", "I-D17")]
+    public void AddPermit_ShouldAddPermit_WhenExpirationDateIsAfterNow()
+    {
+        //arrange
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var permit = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(1)), "123456789");
+
+        //act
+        var result = facility.AddPermit(permit);
+
+        //assert
+        result.IsError.ShouldBeFalse();
+        facility.Permits.ShouldContain(permit);
+    }
+
+    [Fact]
+    [Trait("Invariant", "I-D17")]
+    public void AddPermit_ShouldReturnError_WhenExpirationDateIsBeforeNow()
+    {
+        //arrange
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var permit = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(-1)), "123456789");
+
+        //act
+        var result = facility.AddPermit(permit);
+
+        //assert
+        result.IsError.ShouldBeTrue();
+        result.FirstError.ShouldBeEquivalentTo(FacilityErrors.PermitExpirationDateIsBeforeNow);
+    }
+
+    [Fact]
+    public void ActivePermit_ShouldReturnThePermitWithLatestExpirationDate_WhenMultiplePermitsExist()
+    {
+        //arrange
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var permit1 = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "123456789");
+        var permit2 = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(10)), "987654321");
+        facility.AddPermit(permit1);
+        facility.AddPermit(permit2);
+
+        //act
+
+        //assert
+        facility.ActivePermit.ShouldBe(permit1);
+    }
+
+    [Fact]
+    public void RemovePermit_ShouldRemovePermitFromList_WhenMultiplePermitsExist()
+    {
+        //arrange
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var permit1 = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "123456789");
+        var permit2 = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(10)), "987654321");
+        facility.AddPermit(permit1);
+        facility.AddPermit(permit2);
+
+        //act
+        var result = facility.RemovePermit(permit2.Id);
+
+        //assert
+        result.IsError.ShouldBeFalse();
+        facility.Permits.ShouldContain(permit1);
+        facility.Permits.ShouldNotContain(permit2);
+    }
+
+    [Fact]
+    [Trait("Invariant", "I-D18")]
+    public void RemovePermit_ShouldReturnError_WhenOnlyOnePermitExists()
+    {
+        //arrange
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var permit1 = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "123456789");
+        facility.AddPermit(permit1);
+
+        //act
+        var result = facility.RemovePermit(permit1.Id);
+
+        //assert
+        result.IsError.ShouldBeTrue();
+        result.FirstError.ShouldBeEquivalentTo(FacilityErrors.MustHaveMultiplePermitsToRemove);
+        facility.Permits.ShouldContain(permit1);
+    }
+
+    [Fact]
+    public void RemovePermit_ShouldReturnError_WhenNoPermitsExist()
+    {
+        //arrange
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var permit1 = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "123456789");
+
+        //act
+        var result = facility.RemovePermit(permit1.Id);
+
+        //assert
+        result.IsError.ShouldBeTrue();
+        result.FirstError.ShouldBe(FacilityErrors.PermitDoesntExist);
+    }
+
+    [Fact]
+    public void ActivePermit_WhenNoPermitsExist_ReturnsNull()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+
+        facility.ActivePermit.ShouldBeNull();
+    }
+
+    [Fact]
+    public void AddUser_WhenUserAdded_RaisesUserAddedToFacilityEvent()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var userId = Guid.NewGuid();
+
+        facility.AddUser(userId);
+
+        var raised = facility.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<UserAddedToFacility>();
+        raised.FacilityId.ShouldBe(facility.Id);
+        raised.UserId.ShouldBe(userId);
+    }
+
+    [Fact]
+    public void AddUser_WhenUserAlreadyInList_DoesNotRaiseEvent()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var userId = Guid.NewGuid();
+        facility.AddUser(userId);
+        facility.ClearDomainEvents();
+
+        facility.AddUser(userId);
+
+        facility.DomainEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void RemoveUser_WhenUserRemoved_RaisesUserRemovedFromFacilityEvent()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var userId = Guid.NewGuid();
+        facility.AddUser(userId);
+        facility.ClearDomainEvents();
+
+        facility.RemoveUser(userId);
+
+        var raised = facility.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<UserRemovedFromFacility>();
+        raised.FacilityId.ShouldBe(facility.Id);
+        raised.UserId.ShouldBe(userId);
+    }
+
+    [Fact]
+    public void RemoveUser_WhenUserNotInList_DoesNotRaiseEvent()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+
+        facility.RemoveUser(Guid.NewGuid());
+
+        facility.DomainEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void AddPermit_WhenPermitAdded_RaisesPermitAddedEvent()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var permit = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(1)), "123456789");
+
+        facility.AddPermit(permit);
+
+        var raised = facility.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<PermitAdded>();
+        raised.FacilityId.ShouldBe(facility.Id);
+        raised.PermitId.ShouldBe(permit.Id);
+    }
+
+    [Fact]
+    [Trait("Invariant", "I-D17")]
+    public void AddPermit_WhenExpirationDateIsBeforeNow_DoesNotRaiseEvent()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var expired = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(-1)), "123456789");
+
+        facility.AddPermit(expired);
+
+        facility.DomainEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void RemovePermit_WhenPermitRemoved_RaisesPermitRemovedEvent()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var permit1 = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "123456789");
+        var permit2 = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(10)), "987654321");
+        facility.AddPermit(permit1);
+        facility.AddPermit(permit2);
+        facility.ClearDomainEvents();
+
+        facility.RemovePermit(permit2.Id);
+
+        var raised = facility.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<PermitRemoved>();
+        raised.FacilityId.ShouldBe(facility.Id);
+        raised.PermitId.ShouldBe(permit2.Id);
+    }
+
+    [Fact]
+    public void RemovePermit_WhenPermitDoesNotExist_DoesNotRaiseEvent()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var permit1 = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "123456789");
+        var permit2 = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(10)), "987654321");
+        facility.AddPermit(permit1);
+        facility.AddPermit(permit2);
+        facility.ClearDomainEvents();
+
+        facility.RemovePermit(Guid.NewGuid());
+
+        facility.DomainEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void GetPermitByDate_WhenMultiplePermitsValid_ReturnsTheEarliestExpiringStillValidPermit()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var current = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "CURRENT");
+        var renewal = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(395)), "RENEWAL");
+        facility.AddPermit(current);
+        facility.AddPermit(renewal);
+
+        var result = facility.GetPermitByDate(DateOnly.FromDateTime(DateTime.Today.AddDays(10)));
+
+        result.IsError.ShouldBeFalse();
+        result.Value.ShouldBe(current);
+    }
+
+    [Fact]
+    public void GetPermitByDate_WhenEarliestPermitHasExpired_ReturnsTheNextValidPermit()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var current = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "CURRENT");
+        var renewal = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(395)), "RENEWAL");
+        facility.AddPermit(current);
+        facility.AddPermit(renewal);
+
+        var result = facility.GetPermitByDate(DateOnly.FromDateTime(DateTime.Today.AddDays(100)));
+
+        result.IsError.ShouldBeFalse();
+        result.Value.ShouldBe(renewal);
+    }
+
+    [Fact]
+    public void GetPermitByDate_WhenPermitExpiresExactlyOnThatDate_IsStillValid()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var expiresOnDate = DateOnly.FromDateTime(DateTime.Today.AddDays(30));
+        var permit = Permit.Create(facility.Id, expiresOnDate, "123456789");
+        facility.AddPermit(permit);
+
+        var result = facility.GetPermitByDate(expiresOnDate);
+
+        result.IsError.ShouldBeFalse();
+        result.Value.ShouldBe(permit);
+    }
+
+    [Fact]
+    public void GetPermitByDate_WhenNoPermitValidForDate_ReturnsNoValidPermitForDateError()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        var permit = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "123456789");
+        facility.AddPermit(permit);
+
+        var result = facility.GetPermitByDate(DateOnly.FromDateTime(DateTime.Today.AddDays(60)));
+
+        result.IsError.ShouldBeTrue();
+        result.FirstError.ShouldBe(FacilityErrors.NoValidPermitForDate);
+    }
 }
