@@ -1,8 +1,12 @@
-﻿using ErrorOr;
+using ErrorOr;
 
 namespace RecordKeeping.Domain.Facilities;
 
-public class FacilityErrors
+/// <summary>
+/// Domain errors the <see cref="Facility"/> aggregate returns when an operation would violate one
+/// of its invariants.
+/// </summary>
+public static class FacilityErrors
 {
     /// <summary>
     /// Represents an error indicating that the specified user is already associated with the facility.
@@ -11,7 +15,7 @@ public class FacilityErrors
     /// This error is returned when attempting to add a user to a facility they are already part of.
     /// It is used for validation purposes to prevent duplicate user entries in the facility.
     /// </remarks>
-    public static readonly Error UserAlreadyInFacility = 
+    public static readonly Error UserAlreadyInFacility =
         Error.Validation("Facility.UserAlreadyInFacility", "User is already in facility");
 
     /// <summary>
@@ -25,45 +29,33 @@ public class FacilityErrors
         Error.Validation("Facility.UserNotInFacility", "User is not in facility");
 
     /// <summary>
-    /// Represents an error indicating that the license expiration date is in the past.
+    /// I-D17: a Permit cannot be added to a Facility once its expiration date is in the past.
     /// </summary>
-    /// <remarks>
-    /// This error is returned when attempting to add or associate a license with a facility
-    /// and the expiration date of the license is earlier than the current date.
-    /// It is used to ensure licenses are valid and not expired.
-    /// </remarks>
-    public static readonly Error LicenseExpirationDateIsBeforeNow =
-        Error.Validation("Facility.LicenseExpirationDateIsBeforeNow", "License expiration date is before now");
+    public static readonly Error PermitExpirationDateIsBeforeNow =
+        Error.Validation("I-D17", "A Permit's expiration date is in the past.");
 
     /// <summary>
-    /// Represents an error indicating that a facility must have multiple active licenses
-    /// before a license can be removed.
+    /// I-D18: a Facility must retain at least one Permit, so its last remaining Permit cannot be removed.
     /// </summary>
-    /// <remarks>
-    /// This error is raised when attempting to remove a license from a facility that has only
-    /// one license remaining. It ensures that a facility retains at least one active license
-    /// at all times for compliance and operational purposes.
-    /// </remarks>
-    public static readonly Error MustHaveMultipleLicensesToRemove =
-        Error.Validation("Facility.MustHaveMultipleLicensesToRemove", "Must have multiple licenses to remove");
+    public static readonly Error MustHaveMultiplePermitsToRemove =
+        Error.Validation("I-D18", "A Facility must retain at least one Permit.");
 
     /// <summary>
-    /// Represents an error indicating that the specified license does not exist in the facility.
+    /// Represents an error indicating that the specified permit does not exist on the facility.
     /// </summary>
     /// <remarks>
-    /// This error is returned when an operation is performed on a license that cannot be found in the facility.
-    /// It is used to ensure that the requested license is valid and present within the facility's records.
+    /// This error is returned when an operation is performed on a permit that cannot be found on the facility.
     /// </remarks>
-    public static readonly Error LicenseDoesntExist =
-        Error.NotFound("Facility.LicenseDoesntExist", "The specified license does not exist in the facility");
+    public static readonly Error PermitDoesntExist =
+        Error.NotFound("Facility.PermitDoesntExist", "The specified permit does not exist in the facility");
 
     /// <summary>
-    /// Represents an error indicating that no valid (unexpired) license exists for a requested date.
+    /// Represents an error indicating that no valid (unexpired) permit exists for a requested date.
     /// </summary>
     /// <remarks>
-    /// Returned by <see cref="Facility.GetLicenseByDate"/> when the Facility holds no license whose
+    /// Returned by <see cref="Facility.GetPermitByDate"/> when the Facility holds no permit whose
     /// expiration is on or after the requested date.
     /// </remarks>
-    public static readonly Error NoValidLicenseForDate =
-        Error.NotFound("Facility.NoValidLicenseForDate", "No valid license exists for the specified date.");
+    public static readonly Error NoValidPermitForDate =
+        Error.NotFound("Facility.NoValidPermitForDate", "No valid permit exists for the specified date.");
 }

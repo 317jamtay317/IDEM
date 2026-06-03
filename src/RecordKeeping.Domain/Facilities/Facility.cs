@@ -45,21 +45,19 @@ public sealed class Facility : AggregateRoot<Guid>
     public IReadOnlyCollection<MonthlyLimit> Limits => _limits;
 
     /// <summary>
-    /// The Facility's active license — the one with the latest <see cref="License.ExpirationDate"/> —
-    /// or <see langword="null"/> when the Facility has no licenses.
+    /// The Facility's active Permit — the one with the latest <see cref="Permit.ExpirationDate"/> —
+    /// or <see langword="null"/> when the Facility holds no Permits.
     /// </summary>
-    public License? ActiveLicense => _licenses.MaxBy(license => license.ExpirationDate);
+    public Permit? ActivePermit => _permits.MaxBy(permit => permit.ExpirationDate);
 
     /// <summary>
-    /// Collection of licenses associated with the facility, representing regulatory or operational permissions.
+    /// Collection of Permits the Facility holds, representing its regulatory authorizations to operate.
     /// </summary>
     /// <remarks>
-    /// Each license in this collection is tied to the facility and must be managed in accordance with
-    /// its <see cref="License.ExpirationDate"/> and associated <see cref="License.Value"/>. Licenses are added
-    /// or removed using <see cref="AddLicense"/> and <see cref="RemoveLicense"/> respectively, ensuring compliance
-    /// with domain rules.
+    /// Permits are added or removed using <see cref="AddPermit"/> and <see cref="RemovePermit"/>,
+    /// which enforce the Permit invariants (I-D17, I-D18).
     /// </remarks>
-    public IReadOnlyCollection<License> Licenses => _licenses;
+    public IReadOnlyCollection<Permit> Permits => _permits;
 
     private Facility(Guid id, Guid orgId, string name) : base(id)
     {
@@ -108,11 +106,10 @@ public sealed class Facility : AggregateRoot<Guid>
     /// <summary>
     /// Determines whether a user has permission to view the Facility.
     /// </summary>
-    /// <param name="userId">The unique identifier of the user whose access is being validated.</param>
+    /// <param name="userId">The unique identifier of the user whose access is being checked.</param>
     /// <returns>
-    /// A boolean value indicating whether the specified user has view access to the Facility.
+    /// <see langword="true"/> when the user has been added to the Facility; otherwise <see langword="false"/>.
     /// </returns>
-    /// <exception cref="NotImplementedException">Thrown when the method is not implemented.</exception>
     public bool UserCanView(Guid userId) => _userIds.Contains(userId);
 
     /// <summary>
@@ -161,64 +158,69 @@ public sealed class Facility : AggregateRoot<Guid>
     }
 
     /// <summary>
-    /// Adds a license to the Facility, provided it has not already expired. Raises
-    /// <see cref="LicenseAdded"/> on success.
+    /// Adds a Permit to the Facility, provided it has not already expired. Raises
+    /// <see cref="PermitAdded"/> on success.
     /// </summary>
-    /// <param name="license">The license to add.</param>
+    /// <param name="permit">The Permit to add.</param>
     /// <returns>
-    /// <see cref="Result.Success"/>, or <see cref="FacilityErrors.LicenseExpirationDateIsBeforeNow"/>
-    /// if the license's <see cref="License.ExpirationDate"/> is in the past.
+    /// <see cref="Result.Success"/>, or <see cref="FacilityErrors.PermitExpirationDateIsBeforeNow"/>
+    /// if the Permit's <see cref="Permit.ExpirationDate"/> is in the past.
     /// </returns>
-    public ErrorOr<Success> AddLicense(License license)
+    public ErrorOr<Success> AddPermit(Permit permit)
     {
-        if (license.ExpirationDate < DateOnly.FromDateTime(DateTime.Today))
-            return FacilityErrors.LicenseExpirationDateIsBeforeNow;
+        // I-D17: a Permit cannot be added once its expiration date is in the past.
+        if (permit.ExpirationDate < DateOnly.FromDateTime(DateTime.Today))
+            return FacilityErrors.PermitExpirationDateIsBeforeNow;
 
-        _licenses.Add(license);
-        RaiseDomainEvent(new LicenseAdded(Id, license.Id));
+        _permits.Add(permit);
+        RaiseDomainEvent(new PermitAdded(Id, permit.Id));
         return Result.Success;
     }
 
     /// <summary>
-    /// Removes a license from the Facility. Raises <see cref="LicenseRemoved"/> on success. A Facility
-    /// must retain at least one license, so the last remaining license cannot be removed.
+    /// Removes a Permit from the Facility. Raises <see cref="PermitRemoved"/> on success. A Facility
+    /// must retain at least one Permit, so the last remaining Permit cannot be removed (I-D18).
     /// </summary>
-    /// <param name="licenseId">The unique identifier of the license to be removed.</param>
+    /// <param name="permitId">The unique identifier of the Permit to remove.</param>
     /// <returns>
-    /// <see cref="Result.Success"/>; <see cref="FacilityErrors.LicenseDoesntExist"/> if no such license
-    /// exists; or <see cref="FacilityErrors.MustHaveMultipleLicensesToRemove"/> if it is the only license.
+    /// <see cref="Result.Success"/>; <see cref="FacilityErrors.PermitDoesntExist"/> if no such Permit
+    /// exists; or <see cref="FacilityErrors.MustHaveMultiplePermitsToRemove"/> if it is the only Permit.
     /// </returns>
-    public ErrorOr<Success> RemoveLicense(Guid licenseId)
+    public ErrorOr<Success> RemovePermit(Guid permitId)
     {
-        if (!Licenses.Any(l => l.Id == licenseId))
-            return FacilityErrors.LicenseDoesntExist;
-        if (Licenses.Count() <= 1) return FacilityErrors.MustHaveMultipleLicensesToRemove;
-        _licenses.Remove(Licenses.First(l => l.Id == licenseId));
-        RaiseDomainEvent(new LicenseRemoved(Id, licenseId));
+        if (!_permits.Any(p => p.Id == permitId))
+            return FacilityErrors.PermitDoesntExist;
+
+        // I-D18: a Facility must retain at least one Permit; the last one cannot be removed.
+        if (_permits.Count <= 1)
+            return FacilityErrors.MustHaveMultiplePermitsToRemove;
+
+        _permits.Remove(_permits.First(p => p.Id == permitId));
+        RaiseDomainEvent(new PermitRemoved(Id, permitId));
         return Result.Success;
     }
 
     /// <summary>
-    /// Gets the license in force on <paramref name="date"/> — among the licenses still valid on that
-    /// date (<see cref="License.ExpirationDate"/> on or after it, inclusive), the one with the earliest
+    /// Gets the Permit in force on <paramref name="date"/> — among the Permits still valid on that
+    /// date (<see cref="Permit.ExpirationDate"/> on or after it, inclusive), the one with the earliest
     /// expiration.
     /// </summary>
-    /// <param name="date">The date to find the in-force license for.</param>
+    /// <param name="date">The date to find the in-force Permit for.</param>
     /// <returns>
-    /// The license in force on <paramref name="date"/>, or
-    /// <see cref="FacilityErrors.NoValidLicenseForDate"/> if no license is valid on it.
+    /// The Permit in force on <paramref name="date"/>, or
+    /// <see cref="FacilityErrors.NoValidPermitForDate"/> if no Permit is valid on it.
     /// </returns>
-    public ErrorOr<License> GetLicenseByDate(DateOnly date)
+    public ErrorOr<Permit> GetPermitByDate(DateOnly date)
     {
-        var license = _licenses
-            .Where(l => l.ExpirationDate >= date)
-            .OrderBy(l => l.ExpirationDate)
+        var permit = _permits
+            .Where(p => p.ExpirationDate >= date)
+            .OrderBy(p => p.ExpirationDate)
             .FirstOrDefault();
 
-        if (license is null)
-            return FacilityErrors.NoValidLicenseForDate;
+        if (permit is null)
+            return FacilityErrors.NoValidPermitForDate;
 
-        return license;
+        return permit;
     }
 
     private static ErrorOr<string> ValidateName(string name)
@@ -238,8 +240,8 @@ public sealed class Facility : AggregateRoot<Guid>
 
         return trimmed;
     }
-    
+
     private List<Guid> _userIds = [];
     private List<MonthlyLimit> _limits = [];
-    private List<License> _licenses = [];
+    private List<Permit> _permits = [];
 }

@@ -10,10 +10,10 @@ public partial class MyOrgFacilityEndpoints
     /// <param name="Name">The Facility's name.</param>
     public sealed record FacilityRequest(string Name);
 
-    /// <summary>Request body for adding a license to a Facility.</summary>
-    /// <param name="ExpirationDate">The license's expiration date.</param>
-    /// <param name="Value">The license value/number.</param>
-    public sealed record LicenseRequest(DateOnly ExpirationDate, string Value);
+    /// <summary>Request body for adding a Permit to a Facility.</summary>
+    /// <param name="ExpirationDate">The Permit's expiration date.</param>
+    /// <param name="Value">The permit number / identifier.</param>
+    public sealed record PermitRequest(DateOnly ExpirationDate, string Value);
 
     private static async Task<IResult> GetMyFacilities(
         ClaimsPrincipal user, IFacilityRepository facilities, CancellationToken cancellationToken)
@@ -79,7 +79,7 @@ public partial class MyOrgFacilityEndpoints
         return result.Match(_ => Results.NoContent());
     }
 
-    private static async Task<IResult> GetMyFacilityLicenses(
+    private static async Task<IResult> GetMyFacilityPermits(
         Guid facilityId,
         ClaimsPrincipal user,
         IFacilityRepository facilities,
@@ -90,14 +90,14 @@ public partial class MyOrgFacilityEndpoints
             return NoOrg();
         }
 
-        var result = await GetLicensesHandler.Handle(
-            new GetLicensesQuery(orgId, facilityId), facilities, cancellationToken);
+        var result = await GetPermitsHandler.Handle(
+            new GetPermitsQuery(orgId, facilityId), facilities, cancellationToken);
         return result.Match(Results.Ok);
     }
 
-    private static async Task<IResult> AddMyFacilityLicense(
+    private static async Task<IResult> AddMyFacilityPermit(
         Guid facilityId,
-        LicenseRequest request,
+        PermitRequest request,
         ClaimsPrincipal user,
         IFacilityRepository facilities,
         CancellationToken cancellationToken)
@@ -107,16 +107,16 @@ public partial class MyOrgFacilityEndpoints
             return NoOrg();
         }
 
-        var result = await AddLicenseHandler.Handle(
-            new AddLicenseCommand(orgId, facilityId, request.ExpirationDate, request.Value),
+        var result = await AddPermitHandler.Handle(
+            new AddPermitCommand(orgId, facilityId, request.ExpirationDate, request.Value),
             facilities, cancellationToken);
-        return result.Match(license =>
-            Results.Created($"/me/org/facilities/{facilityId}/licenses/{license.Id}", license));
+        return result.Match(permit =>
+            Results.Created($"/me/org/facilities/{facilityId}/permits/{permit.Id}", permit));
     }
 
-    private static async Task<IResult> RemoveMyFacilityLicense(
+    private static async Task<IResult> RemoveMyFacilityPermit(
         Guid facilityId,
-        Guid licenseId,
+        Guid permitId,
         ClaimsPrincipal user,
         IFacilityRepository facilities,
         CancellationToken cancellationToken)
@@ -126,8 +126,8 @@ public partial class MyOrgFacilityEndpoints
             return NoOrg();
         }
 
-        var result = await RemoveLicenseHandler.Handle(
-            new RemoveLicenseCommand(orgId, facilityId, licenseId), facilities, cancellationToken);
+        var result = await RemovePermitHandler.Handle(
+            new RemovePermitCommand(orgId, facilityId, permitId), facilities, cancellationToken);
         return result.Match(_ => Results.NoContent());
     }
 

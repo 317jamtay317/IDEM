@@ -29,16 +29,16 @@ internal sealed class FacilityConfiguration : IEntityTypeConfiguration<Facility>
             .IsRequired()
             .HasMaxLength(Facility.MaxNameLength);
 
-        // Licenses are part of the Facility aggregate: stored in their own table, loaded with the
-        // Facility, and exposed read-only through the _licenses backing field.
-        builder.OwnsMany(f => f.Licenses, license =>
+        // Permits are part of the Facility aggregate: stored in their own table, loaded with the
+        // Facility, and exposed read-only through the _permits backing field.
+        builder.OwnsMany(f => f.Permits, permit =>
         {
-            license.ToTable("Licenses");
-            license.WithOwner().HasForeignKey(nameof(License.FacilityId));
-            license.HasKey(l => l.Id);
-            license.Property(l => l.Id).ValueGeneratedNever();
-            license.Property(l => l.ExpirationDate).IsRequired();
-            license.Property(l => l.Value).IsRequired();
+            permit.ToTable("Permits");
+            permit.WithOwner().HasForeignKey(nameof(Permit.FacilityId));
+            permit.HasKey(p => p.Id);
+            permit.Property(p => p.Id).ValueGeneratedNever();
+            permit.Property(p => p.ExpirationDate).IsRequired();
+            permit.Property(p => p.Value).IsRequired();
         });
 
         // Not yet persisted: no surface populates monthly limits and MonthlyLimit is a keyless value

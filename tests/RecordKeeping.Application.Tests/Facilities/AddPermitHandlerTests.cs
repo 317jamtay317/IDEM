@@ -5,23 +5,23 @@ using Shouldly;
 
 namespace RecordKeeping.Application.Tests.Facilities;
 
-public class AddLicenseHandlerTests
+public class AddPermitHandlerTests
 {
     [Fact]
-    public async Task Handle_WithFutureExpiration_AddsLicenseAndPersists()
+    public async Task Handle_WithFutureExpiration_AddsPermitAndPersists()
     {
         var facilities = new FakeFacilityRepository();
         var orgId = Guid.NewGuid();
         var facility = Facility.Create(orgId, "Goshen Plant").Value;
         facilities.Seed(facility);
 
-        var result = await AddLicenseHandler.Handle(
-            new AddLicenseCommand(orgId, facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "LIC-1"),
+        var result = await AddPermitHandler.Handle(
+            new AddPermitCommand(orgId, facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "PERMIT-1"),
             facilities, CancellationToken.None);
 
         result.IsError.ShouldBeFalse();
-        result.Value.Value.ShouldBe("LIC-1");
-        facility.Licenses.ShouldContain(l => l.Id == result.Value.Id);
+        result.Value.Value.ShouldBe("PERMIT-1");
+        facility.Permits.ShouldContain(p => p.Id == result.Value.Id);
         facilities.SaveChangesCount.ShouldBe(1);
     }
 
@@ -34,8 +34,8 @@ public class AddLicenseHandlerTests
         facilities.Seed(facility);
 
         // I-D03: a different Org's caller scopes the lookup to its own Org and finds nothing.
-        var result = await AddLicenseHandler.Handle(
-            new AddLicenseCommand(Guid.NewGuid(), facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "LIC-1"),
+        var result = await AddPermitHandler.Handle(
+            new AddPermitCommand(Guid.NewGuid(), facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "PERMIT-1"),
             facilities, CancellationToken.None);
 
         result.IsError.ShouldBeTrue();
@@ -44,6 +44,7 @@ public class AddLicenseHandlerTests
     }
 
     [Fact]
+    [Trait("Invariant", "I-D17")]
     public async Task Handle_WhenExpirationInPast_ReturnsValidationErrorAndDoesNotPersist()
     {
         var facilities = new FakeFacilityRepository();
@@ -51,8 +52,8 @@ public class AddLicenseHandlerTests
         var facility = Facility.Create(orgId, "Goshen Plant").Value;
         facilities.Seed(facility);
 
-        var result = await AddLicenseHandler.Handle(
-            new AddLicenseCommand(orgId, facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(-1)), "LIC-1"),
+        var result = await AddPermitHandler.Handle(
+            new AddPermitCommand(orgId, facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(-1)), "PERMIT-1"),
             facilities, CancellationToken.None);
 
         result.IsError.ShouldBeTrue();

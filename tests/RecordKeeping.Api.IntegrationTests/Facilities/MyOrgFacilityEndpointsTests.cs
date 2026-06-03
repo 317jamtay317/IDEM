@@ -26,8 +26,8 @@ public class MyOrgFacilityEndpointsTests(RecordKeepingApiFactory factory)
     private sealed record FacilityRequest(string Name);
     private sealed record FacilityResponse(Guid Id, string Name);
     private sealed record SeededOrg(Guid OrgId, Guid FacilityId, string FacilityName, string Email);
-    private sealed record LicenseRequest(DateOnly ExpirationDate, string Value);
-    private sealed record LicenseResponse(Guid Id, DateOnly ExpirationDate, string Value);
+    private sealed record PermitRequest(DateOnly ExpirationDate, string Value);
+    private sealed record PermitResponse(Guid Id, DateOnly ExpirationDate, string Value);
 
     [Fact]
     public async Task Get_WithoutToken_Returns401()
@@ -168,60 +168,61 @@ public class MyOrgFacilityEndpointsTests(RecordKeepingApiFactory factory)
     }
 
     [Fact]
-    public async Task PostLicense_AsOrgUser_AddsLicenseToOwnFacility()
+    public async Task PostPermit_AsOrgUser_AddsPermitToOwnFacility()
     {
         var seeded = await SeedOrgWithUserAsync("Goshen Plant");
         var client = await AuthenticatedClientAsync(seeded.Email);
 
         var response = await client.PostAsJsonAsync(
-            $"/me/org/facilities/{seeded.FacilityId}/licenses",
-            new LicenseRequest(DateOnly.FromDateTime(DateTime.Today.AddDays(365)), "LIC-1"));
+            $"/me/org/facilities/{seeded.FacilityId}/permits",
+            new PermitRequest(DateOnly.FromDateTime(DateTime.Today.AddDays(365)), "PERMIT-1"));
 
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        var created = await response.Content.ReadFromJsonAsync<LicenseResponse>();
+        var created = await response.Content.ReadFromJsonAsync<PermitResponse>();
         created.ShouldNotBeNull();
-        created!.Value.ShouldBe("LIC-1");
+        created!.Value.ShouldBe("PERMIT-1");
 
-        // It round-trips through SQL: a fresh GET sees the persisted license.
-        var list = await client.GetFromJsonAsync<List<LicenseResponse>>(
-            $"/me/org/facilities/{seeded.FacilityId}/licenses");
-        list!.ShouldContain(l => l.Id == created.Id && l.Value == "LIC-1");
+        // It round-trips through SQL: a fresh GET sees the persisted permit.
+        var list = await client.GetFromJsonAsync<List<PermitResponse>>(
+            $"/me/org/facilities/{seeded.FacilityId}/permits");
+        list!.ShouldContain(p => p.Id == created.Id && p.Value == "PERMIT-1");
     }
 
     [Fact]
-    public async Task PostLicense_WithPastExpiration_Returns400()
+    [Trait("Invariant", "I-D17")]
+    public async Task PostPermit_WithPastExpiration_Returns400()
     {
         var seeded = await SeedOrgWithUserAsync("Goshen Plant");
         var client = await AuthenticatedClientAsync(seeded.Email);
 
         var response = await client.PostAsJsonAsync(
-            $"/me/org/facilities/{seeded.FacilityId}/licenses",
-            new LicenseRequest(DateOnly.FromDateTime(DateTime.Today.AddDays(-1)), "LIC-1"));
+            $"/me/org/facilities/{seeded.FacilityId}/permits",
+            new PermitRequest(DateOnly.FromDateTime(DateTime.Today.AddDays(-1)), "PERMIT-1"));
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     [Fact]
-    public async Task DeleteLicense_RemovesItWhenMultipleExist()
+    public async Task DeletePermit_RemovesItWhenMultipleExist()
     {
         var seeded = await SeedOrgWithUserAsync("Goshen Plant");
         var client = await AuthenticatedClientAsync(seeded.Email);
-        var keep = await AddLicenseAsync(client, seeded.FacilityId, "KEEP", 365);
-        var remove = await AddLicenseAsync(client, seeded.FacilityId, "REMOVE", 30);
+        var keep = await AddPermitAsync(client, seeded.FacilityId, "KEEP", 365);
+        var remove = await AddPermitAsync(client, seeded.FacilityId, "REMOVE", 30);
 
         var response = await client.DeleteAsync(
-            $"/me/org/facilities/{seeded.FacilityId}/licenses/{remove.Id}");
+            $"/me/org/facilities/{seeded.FacilityId}/permits/{remove.Id}");
 
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        var list = await client.GetFromJsonAsync<List<LicenseResponse>>(
-            $"/me/org/facilities/{seeded.FacilityId}/licenses");
-        list!.ShouldContain(l => l.Id == keep.Id);
-        list!.ShouldNotContain(l => l.Id == remove.Id);
+        var list = await client.GetFromJsonAsync<List<PermitResponse>>(
+            $"/me/org/facilities/{seeded.FacilityId}/permits");
+        list!.ShouldContain(p => p.Id == keep.Id);
+        list!.ShouldNotContain(p => p.Id == remove.Id);
     }
 
     [Fact]
     [Trait("Invariant", "I-D03")]
-    public async Task PostLicense_ToAnotherOrgsFacility_Returns404()
+    public async Task PostPermit_ToAnotherOrgsFacility_Returns404()
     {
         var orgA = await SeedOrgWithUserAsync("Org A Plant");
         var orgB = await SeedOrgWithUserAsync("Org B Plant");
@@ -229,20 +230,20 @@ public class MyOrgFacilityEndpointsTests(RecordKeepingApiFactory factory)
 
         // I-D03: Org A's user targets Org B's facility id; scoped to Org A, it is not found.
         var response = await clientA.PostAsJsonAsync(
-            $"/me/org/facilities/{orgB.FacilityId}/licenses",
-            new LicenseRequest(DateOnly.FromDateTime(DateTime.Today.AddDays(365)), "Hijack"));
+            $"/me/org/facilities/{orgB.FacilityId}/permits",
+            new PermitRequest(DateOnly.FromDateTime(DateTime.Today.AddDays(365)), "Hijack"));
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
-    private static async Task<LicenseResponse> AddLicenseAsync(
+    private static async Task<PermitResponse> AddPermitAsync(
         HttpClient client, Guid facilityId, string value, int daysUntilExpiry)
     {
         var response = await client.PostAsJsonAsync(
-            $"/me/org/facilities/{facilityId}/licenses",
-            new LicenseRequest(DateOnly.FromDateTime(DateTime.Today.AddDays(daysUntilExpiry)), value));
+            $"/me/org/facilities/{facilityId}/permits",
+            new PermitRequest(DateOnly.FromDateTime(DateTime.Today.AddDays(daysUntilExpiry)), value));
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        return (await response.Content.ReadFromJsonAsync<LicenseResponse>())!;
+        return (await response.Content.ReadFromJsonAsync<PermitResponse>())!;
     }
 
     private async Task<SeededOrg> SeedOrgWithUserAsync(string facilityName)

@@ -5,25 +5,25 @@ using Shouldly;
 
 namespace RecordKeeping.Application.Tests.Facilities;
 
-public class RemoveLicenseHandlerTests
+public class RemovePermitHandlerTests
 {
     [Fact]
-    public async Task Handle_WhenLicenseExists_RemovesAndPersists()
+    public async Task Handle_WhenPermitExists_RemovesAndPersists()
     {
         var facilities = new FakeFacilityRepository();
         var orgId = Guid.NewGuid();
         var facility = Facility.Create(orgId, "Goshen Plant").Value;
-        var keep = License.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "KEEP");
-        var remove = License.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(10)), "REMOVE");
-        facility.AddLicense(keep);
-        facility.AddLicense(remove);
+        var keep = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "KEEP");
+        var remove = Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(10)), "REMOVE");
+        facility.AddPermit(keep);
+        facility.AddPermit(remove);
         facilities.Seed(facility);
 
-        var result = await RemoveLicenseHandler.Handle(
-            new RemoveLicenseCommand(orgId, facility.Id, remove.Id), facilities, CancellationToken.None);
+        var result = await RemovePermitHandler.Handle(
+            new RemovePermitCommand(orgId, facility.Id, remove.Id), facilities, CancellationToken.None);
 
         result.IsError.ShouldBeFalse();
-        facility.Licenses.ShouldNotContain(l => l.Id == remove.Id);
+        facility.Permits.ShouldNotContain(p => p.Id == remove.Id);
         facilities.SaveChangesCount.ShouldBe(1);
     }
 
@@ -35,8 +35,8 @@ public class RemoveLicenseHandlerTests
         var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
         facilities.Seed(facility);
 
-        var result = await RemoveLicenseHandler.Handle(
-            new RemoveLicenseCommand(Guid.NewGuid(), facility.Id, Guid.NewGuid()), facilities, CancellationToken.None);
+        var result = await RemovePermitHandler.Handle(
+            new RemovePermitCommand(Guid.NewGuid(), facility.Id, Guid.NewGuid()), facilities, CancellationToken.None);
 
         result.IsError.ShouldBeTrue();
         result.FirstError.Type.ShouldBe(ErrorType.NotFound);
@@ -44,16 +44,16 @@ public class RemoveLicenseHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenLicenseMissing_ReturnsNotFoundAndDoesNotPersist()
+    public async Task Handle_WhenPermitMissing_ReturnsNotFoundAndDoesNotPersist()
     {
         var facilities = new FakeFacilityRepository();
         var orgId = Guid.NewGuid();
         var facility = Facility.Create(orgId, "Goshen Plant").Value;
-        facility.AddLicense(License.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "ONLY"));
+        facility.AddPermit(Permit.Create(facility.Id, DateOnly.FromDateTime(DateTime.Today.AddDays(30)), "ONLY"));
         facilities.Seed(facility);
 
-        var result = await RemoveLicenseHandler.Handle(
-            new RemoveLicenseCommand(orgId, facility.Id, Guid.NewGuid()), facilities, CancellationToken.None);
+        var result = await RemovePermitHandler.Handle(
+            new RemovePermitCommand(orgId, facility.Id, Guid.NewGuid()), facilities, CancellationToken.None);
 
         result.IsError.ShouldBeTrue();
         result.FirstError.Type.ShouldBe(ErrorType.NotFound);

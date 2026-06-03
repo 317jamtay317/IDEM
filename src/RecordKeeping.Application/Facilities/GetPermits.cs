@@ -2,24 +2,24 @@ using ErrorOr;
 
 namespace RecordKeeping.Application.Facilities;
 
-/// <summary>Query for the licenses held by a Facility in the caller's Org.</summary>
+/// <summary>Query for the Permits held by a Facility in the caller's Org.</summary>
 /// <param name="OrgId">The caller's Org; scopes the Facility lookup (I-D03).</param>
-/// <param name="FacilityId">The Facility whose licenses to list.</param>
-public sealed record GetLicensesQuery(Guid OrgId, Guid FacilityId);
+/// <param name="FacilityId">The Facility whose Permits to list.</param>
+public sealed record GetPermitsQuery(Guid OrgId, Guid FacilityId);
 
-/// <summary>Handles <see cref="GetLicensesQuery"/>.</summary>
-public static class GetLicensesHandler
+/// <summary>Handles <see cref="GetPermitsQuery"/>.</summary>
+public static class GetPermitsHandler
 {
-    /// <summary>Returns the Facility's licenses, scoped to the caller's Org (I-D03).</summary>
+    /// <summary>Returns the Facility's Permits, scoped to the caller's Org (I-D03).</summary>
     /// <param name="query">The query carrying the Org and Facility ids.</param>
     /// <param name="facilities">The Facility repository.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>
-    /// The Facility's licenses as <see cref="LicenseResponse"/> values; a not-found error when the
+    /// The Facility's Permits as <see cref="PermitResponse"/> values; a not-found error when the
     /// Facility is not in the caller's Org (I-D03).
     /// </returns>
-    public static async Task<ErrorOr<IReadOnlyList<LicenseResponse>>> Handle(
-        GetLicensesQuery query,
+    public static async Task<ErrorOr<IReadOnlyList<PermitResponse>>> Handle(
+        GetPermitsQuery query,
         IFacilityRepository facilities,
         CancellationToken cancellationToken)
     {
@@ -29,8 +29,8 @@ public static class GetLicensesHandler
             return FacilityErrors.NotFound(query.FacilityId);
         }
 
-        IReadOnlyList<LicenseResponse> responses =
-            facility.Licenses.Select(LicenseResponse.FromLicense).ToList();
+        IReadOnlyList<PermitResponse> responses =
+            facility.Permits.Select(PermitResponse.FromPermit).ToList();
         return responses.ToErrorOr();
     }
 }

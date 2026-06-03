@@ -64,6 +64,18 @@ Facilities may be **stationary** or **portable**. Portable plants are relocated 
 
 ❓ — Lifecycle details still open: permit attachment, decommissioning, and cross-Org transfer. Cross-Org transfer is assumed out-of-scope for v1 (see I-D06).
 
+### Permit ✅
+A regulatory authorization a Facility holds in order to operate. For asphalt plants this is the **air-emission permit** issued by the Facility's Regulator (MDEQ / IDEM). A Permit has an **expiration date** and a **value** (the permit number / identifier).
+
+A Facility may hold more than one Permit over time — typically a current Permit and its renewal. Two derived notions are used in code:
+
+- **Active Permit** — the Permit with the latest expiration date (the one that keeps the Facility covered furthest into the future).
+- **Permit in force on a date** — among the Permits still valid on that date (expiration on or after it, inclusive), the one expiring earliest.
+
+> Do **not** call this a "License" in code, tests, or UL. The legacy app and the Regulators speak of **permits** (air permits, permit deviations, permit limits); **Permit** is the canonical term. The first implementation shipped under the name "License" and was renamed to match this vocabulary.
+
+❓ — Open: (a) does a Facility require ≥ 1 Permit *at all times* (i.e. at creation), or only that its last Permit cannot be removed once it has one (see I-D18)? (b) Is the "expired on add" check (I-D17) compared against the server date or the Facility's local date? (c) Is `value` simply the permit number, or are issue-date / permit-type / Regulator fields needed for v1?
+
 ---
 
 ## Regulators
