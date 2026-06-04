@@ -11,6 +11,7 @@ import { OrgsScreen } from './screens/OrgsScreen'
 import { FacilitiesScreen } from './screens/FacilitiesScreen'
 import { LogRecordScreen } from './screens/LogRecordScreen'
 import { ProductionFieldsScreen } from './screens/ProductionFieldsScreen'
+import { FieldLimitsScreen } from './screens/FieldLimitsScreen'
 import './app.css'
 
 /** Props for {@link AppShell}. */
@@ -72,6 +73,7 @@ export function AppShell({ email, isSiteAdmin, accessToken = null, onSignOut }: 
               <ProductionFieldsScreen accessToken={accessToken} />
             )}
             {effectiveScreen === 'facilities' && <FacilitiesScreen accessToken={accessToken} />}
+            {effectiveScreen === 'fieldLimits' && <FieldLimitsScreen accessToken={accessToken} />}
           </main>
 
           <BottomNav active={activeTab} isSiteAdmin={isSiteAdmin} onNavigate={navigate} />

@@ -13,7 +13,7 @@ export type Screen = NavTab | 'log'
  * {@link NavTab} is caught here at compile time; only additions need a manual
  * entry (an unknown hash simply falls back to `home`).
  */
-const SCREENS: readonly Screen[] = ['home', 'records', 'reports', 'orgs', 'productionFields', 'log', 'facilities']
+const SCREENS: readonly Screen[] = ['home', 'records', 'reports', 'orgs', 'productionFields', 'fieldLimits', 'log', 'facilities']
 
 /**
  * Parses the active {@link Screen} out of a location hash. The bare (`#`), root

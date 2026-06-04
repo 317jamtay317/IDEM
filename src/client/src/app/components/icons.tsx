@@ -35,6 +35,17 @@ export function RecordsIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** Field limits (gauge / dial) glyph. */
+export function GaugeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 15a8 8 0 0 1 16 0" />
+      <path d="M12 15l4-3" />
+      <circle cx="12" cy="15" r="1" />
+    </svg>
+  )
+}
+
 /** Reports (bar chart) glyph. */
 export function ReportsIcon(props: SVGProps<SVGSVGElement>) {
   return (
