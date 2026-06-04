@@ -109,20 +109,28 @@ function ToggleButton(props: { label: string; pressed: boolean; onClick: () => v
 
 /** Props for {@link PropertiesPanel}. */
 export interface PropertiesPanelProps {
-  /** The selected element, or `null` when nothing is selected. */
+  /** The sole selected element, or `null` when nothing (or more than one) is selected. */
   element: ReportElement | null
+  /**
+   * How many elements are selected. Defaults to one when `element` is set and
+   * zero otherwise; pass it explicitly so a multi-selection shows a count rather
+   * than an editor.
+   */
+  selectedCount?: number
   /** Reports an edit as a partial element to merge into the model. */
   onChange?: (patch: Partial<ReportElement>) => void
 }
 
 /**
  * Renders the Properties/Data panel for the current selection. With no
- * selection it prompts the user to pick an element; otherwise the Properties tab
- * exposes the element's text, geometry and styling as editable controls.
+ * selection it prompts the user to pick an element; with several selected it
+ * shows a count and points to the alignment tools; with exactly one it exposes
+ * that element's text, geometry and styling as editable controls.
  */
-export function PropertiesPanel({ element, onChange }: PropertiesPanelProps) {
+export function PropertiesPanel({ element, selectedCount, onChange }: PropertiesPanelProps) {
   const [tab, setTab] = useState<'properties' | 'data'>('properties')
   const style = element?.style
+  const count = selectedCount ?? (element ? 1 : 0)
 
   // Patch one rect dimension (entered in px) while keeping the others' inches.
   const editRect = (dim: keyof Rect, px: number) => {
@@ -159,7 +167,9 @@ export function PropertiesPanel({ element, onChange }: PropertiesPanelProps) {
         </button>
       </div>
 
-      {element === null ? (
+      {count > 1 ? (
+        <p className="rb-empty">{count} elements selected. Use the alignment tools to arrange them.</p>
+      ) : element === null ? (
         <p className="rb-empty">Select an element to edit its properties.</p>
       ) : tab === 'properties' ? (
         <div role="tabpanel" aria-labelledby="rb-tab-properties" className="rb-prop-body">

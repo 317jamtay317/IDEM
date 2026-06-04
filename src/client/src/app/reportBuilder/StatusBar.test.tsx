@@ -56,4 +56,23 @@ describe('StatusBar', () => {
 
     expect(screen.getByText('Snap: Off')).toBeInTheDocument()
   })
+
+  it('summarises a multi-selection by its count', () => {
+    render(<StatusBar selected={null} zoom={100} selectedCount={3} />)
+
+    expect(screen.getByText('Selected: 3 elements')).toBeInTheDocument()
+  })
+
+  it('still shows the single-element detail when exactly one is selected', () => {
+    render(<StatusBar selected={el} zoom={100} selectedCount={1} />)
+
+    expect(screen.getByText(/Selected: Label/)).toBeInTheDocument()
+    expect(screen.queryByText(/elements/)).not.toBeInTheDocument()
+  })
+
+  it('reports no selection when the count is zero', () => {
+    render(<StatusBar selected={null} zoom={100} selectedCount={0} />)
+
+    expect(screen.getByText('No selection')).toBeInTheDocument()
+  })
 })

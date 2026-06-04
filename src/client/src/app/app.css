@@ -1599,6 +1599,14 @@
   cursor: pointer;
 }
 
+/* Align & distribute toolbar group (Phase 8). */
+.rb-align {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
 .rb-body {
   flex: 1;
   display: flex;
@@ -1897,6 +1905,11 @@
 .rb-toggle:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 1px;
+}
+
+.rb-toggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .rb-toggle-gap {

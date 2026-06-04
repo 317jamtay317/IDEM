@@ -7,6 +7,12 @@ import { InsertSheet } from '../reportBuilder/InsertSheet'
 import { DEFAULT_ZOOM, zoomIn, zoomOut } from '../reportBuilder/geometry'
 import { fromDisplayPx, toDisplayPx } from '../reportBuilder/elementDisplay'
 import {
+  alignRects,
+  distributeRects,
+  type AlignEdge,
+  type DistributeAxis,
+} from '../reportBuilder/align'
+import {
   BAND_ORDER,
   addElement,
   bandKindOf,
@@ -14,6 +20,7 @@ import {
   findElement,
   nextElementId,
   updateElement,
+  updateElementRects,
   updateSettings,
   type BandKind,
   type ElementType,
@@ -25,6 +32,22 @@ import { createSampleTemplate } from '../reportBuilder/sampleTemplate'
 
 /** The grid spacings (in display pixels) the toolbar offers; the model stores inches. */
 const GRID_SIZE_OPTIONS_PX = [6, 12, 24]
+
+/** The alignment toolbar actions, each with its edge, label and decorative glyph. */
+const ALIGN_ACTIONS: { edge: AlignEdge; label: string; icon: string }[] = [
+  { edge: 'left', label: 'Align left', icon: '⇤' },
+  { edge: 'center', label: 'Align center', icon: '⇔' },
+  { edge: 'right', label: 'Align right', icon: '⇥' },
+  { edge: 'top', label: 'Align top', icon: '⤒' },
+  { edge: 'middle', label: 'Align middle', icon: '⇕' },
+  { edge: 'bottom', label: 'Align bottom', icon: '⤓' },
+]
+
+/** The distribution toolbar actions, each with its axis, label and decorative glyph. */
+const DISTRIBUTE_ACTIONS: { axis: DistributeAxis; label: string; icon: string }[] = [
+  { axis: 'horizontal', label: 'Distribute horizontally', icon: '⇿' },
+  { axis: 'vertical', label: 'Distribute vertically', icon: '⤢' },
+]
 
 /** Props for {@link ReportBuilderScreen}. */
 export interface ReportBuilderScreenProps {
@@ -66,7 +89,7 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
   // stand-in sample until templates can be loaded from the backend (Phase 13).
   const [template, setTemplate] = useState<ReportTemplate>(() => createSampleTemplate(templateArg))
   const [zoom, setZoom] = useState(DEFAULT_ZOOM)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [insertSheetOpen, setInsertSheetOpen] = useState(false)
 
   // Re-seed (and clear the selection) if the route's template id changes while
@@ -75,26 +98,56 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
   if (templateId !== loadedFor) {
     setLoadedFor(templateId)
     setTemplate(createSampleTemplate(templateArg))
-    setSelectedId(null)
+    setSelectedIds([])
   }
 
-  const selected = useMemo(() => findElement(template, selectedId), [template, selectedId])
+  // The Properties/Status panels edit a single element; they show it only when
+  // exactly one is selected (a multi-selection summarises by count instead).
+  const soleId = selectedIds.length === 1 ? selectedIds[0] : null
+  const selected = useMemo(() => findElement(template, soleId), [template, soleId])
 
-  // Merge a Properties-panel edit into the selected element.
+  // Change the selection: a plain click replaces it with one element, a modified
+  // (Shift/Ctrl/Cmd) click toggles that element in or out, and an empty-canvas
+  // click clears it.
+  const handleSelect = (id: string | null, additive: boolean) => {
+    if (id === null) {
+      setSelectedIds([])
+      return
+    }
+    setSelectedIds((current) =>
+      additive ? (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]) : [id],
+    )
+  }
+
+  // Merge a Properties-panel edit into the sole selected element.
   const handleEdit = (patch: Partial<ReportElement>) => {
-    if (selectedId !== null) {
-      setTemplate((current) => updateElement(current, selectedId, (el) => ({ ...el, ...patch })))
+    if (soleId !== null) {
+      setTemplate((current) => updateElement(current, soleId, (el) => ({ ...el, ...patch })))
     }
   }
+
+  // Apply a geometry transform (align or distribute) to every selected element's
+  // rect at once, writing the results back across bands in one immutable update.
+  const arrangeSelection = (transform: (rects: Rect[]) => Rect[]) => {
+    const elements = selectedIds
+      .map((id) => findElement(template, id))
+      .filter((el): el is ReportElement => el !== null)
+    const rects = transform(elements.map((el) => el.rect))
+    setTemplate(updateElementRects(template, new Map(elements.map((el, i) => [el.id, rects[i]]))))
+  }
+
+  const handleAlign = (edge: AlignEdge) => arrangeSelection((rects) => alignRects(rects, edge))
+  const handleDistribute = (axis: DistributeAxis) =>
+    arrangeSelection((rects) => distributeRects(rects, axis))
 
   // Insert a new element of the given type into the active band — the band of
   // the current selection, or the first band when nothing is selected — then
   // select it so it can be edited straight away.
   const handleInsert = (type: ElementType) => {
-    const bandKind = bandKindOf(template, selectedId) ?? BAND_ORDER[0]
+    const bandKind = bandKindOf(template, selectedIds[0] ?? null) ?? BAND_ORDER[0]
     const id = nextElementId(template, type)
     setTemplate(addElement(template, bandKind, createElement(type, id)))
-    setSelectedId(id)
+    setSelectedIds([id])
     setInsertSheetOpen(false)
   }
 
@@ -105,7 +158,7 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
     const element = createElement(type, id)
     const placed = { ...element, rect: { ...element.rect, x: Math.max(0, pos.x), y: Math.max(0, pos.y) } }
     setTemplate(addElement(template, bandKind, placed))
-    setSelectedId(id)
+    setSelectedIds([id])
   }
 
   // Reposition a placed element as it is dragged on the canvas.
@@ -155,7 +208,6 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
         </div>
       </header>
 
-      {/* Snap-to-grid and alignment controls are added in later phases. */}
       <div className="rb-toolbar" role="toolbar" aria-label="Report builder tools">
         <div className="rb-zoom" role="group" aria-label="Zoom">
           <button
@@ -204,6 +256,35 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
           </select>
         </div>
 
+        {/* Align & distribute the selection (Phase 8). Aligning needs two
+            elements, distributing three. */}
+        <div className="rb-align" role="group" aria-label="Arrange">
+          {ALIGN_ACTIONS.map(({ edge, label, icon }) => (
+            <button
+              key={edge}
+              type="button"
+              className="rb-toggle"
+              aria-label={label}
+              disabled={selectedIds.length < 2}
+              onClick={() => handleAlign(edge)}
+            >
+              <span aria-hidden="true">{icon}</span>
+            </button>
+          ))}
+          {DISTRIBUTE_ACTIONS.map(({ axis, label, icon }) => (
+            <button
+              key={axis}
+              type="button"
+              className="rb-toggle"
+              aria-label={label}
+              disabled={selectedIds.length < 3}
+              onClick={() => handleDistribute(axis)}
+            >
+              <span aria-hidden="true">{icon}</span>
+            </button>
+          ))}
+        </div>
+
         {/* Phone entry point to the Insert palette; the desktop sidebar replaces
             it at wider widths. */}
         <button
@@ -226,8 +307,8 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
             <ReportCanvas
               template={template}
               zoom={zoom}
-              selectedId={selectedId}
-              onSelectElement={setSelectedId}
+              selectedIds={selectedIds}
+              onSelectElement={handleSelect}
               onInsertAt={handleInsertAt}
               onMoveElement={handleMove}
               onResize={handleResize}
@@ -236,12 +317,13 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
         </div>
 
         <aside className="rb-panel rb-properties" aria-label="Properties">
-          <PropertiesPanel element={selected} onChange={handleEdit} />
+          <PropertiesPanel element={selected} selectedCount={selectedIds.length} onChange={handleEdit} />
         </aside>
       </div>
 
       <StatusBar
         selected={selected}
+        selectedCount={selectedIds.length}
         zoom={zoom}
         snapToGrid={template.settings.snapToGrid}
         gridSize={template.settings.gridSize}

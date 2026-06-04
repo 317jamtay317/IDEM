@@ -49,14 +49,16 @@ export interface ReportCanvasProps {
   template: ReportTemplate
   /** The canvas zoom, as a percentage (100 = actual size). */
   zoom: number
-  /** The id of the currently selected element, if any. */
-  selectedId?: string | null
+  /** The ids of the currently selected elements (empty when nothing is selected). */
+  selectedIds?: string[]
   /**
    * Called when the selection changes: the clicked element's id, or `null` when
-   * the empty canvas is clicked (deselect). Omit to render a non-interactive
-   * canvas.
+   * the empty canvas is clicked (deselect). `additive` is `true` when a modifier
+   * (Shift/Ctrl/Cmd) was held, meaning the element should be toggled in or out of
+   * the current selection rather than replacing it. Omit to render a
+   * non-interactive canvas.
    */
-  onSelectElement?: (id: string | null) => void
+  onSelectElement?: (id: string | null, additive: boolean) => void
   /**
    * Called when a palette item is dropped onto a band: the dropped element type,
    * the band it landed in, and the drop position within that band, in inches.
@@ -86,7 +88,7 @@ export interface ReportCanvasProps {
 export function ReportCanvas({
   template,
   zoom,
-  selectedId,
+  selectedIds = [],
   onSelectElement,
   onInsertAt,
   onMoveElement,
@@ -95,16 +97,23 @@ export function ReportCanvas({
   const px = (inches: number) => `${inchesToPx(inches, zoom)}px`
   const { snapToGrid, gridSize } = template.settings
 
+  // Resize handles are a single-element affordance: shown only when exactly one
+  // element is selected.
+  const soleSelectedId = selectedIds.length === 1 ? selectedIds[0] : null
+
   // The element being dragged: its id and the anchor (its start position plus the
   // pointer's start point) from which each move computes an absolute new position.
   const drag = useRef<{ id: string; startX: number; startY: number; pointerX: number; pointerY: number } | null>(null)
 
   // Begin a drag (and select) when an element is pressed with the primary button.
+  // A modified press (Shift/Ctrl/Cmd) toggles the element in the selection and
+  // does not start a drag — the user is building a multi-selection, not moving.
   const handlePointerDown = (el: ReportElement) => (e: PointerEvent) => {
     if (e.button !== 0) return
     e.stopPropagation()
-    onSelectElement?.(el.id)
-    if (!onMoveElement) return
+    const additive = e.shiftKey || e.metaKey || e.ctrlKey
+    onSelectElement?.(el.id, additive)
+    if (additive || !onMoveElement) return
     drag.current = { id: el.id, startX: el.rect.x, startY: el.rect.y, pointerX: e.clientX, pointerY: e.clientY }
     e.currentTarget.setPointerCapture?.(e.pointerId)
   }
@@ -192,7 +201,7 @@ export function ReportCanvas({
         width: px(template.page.width),
         ...(showGrid ? { backgroundSize: `${gridPx}px ${gridPx}px` } : {}),
       }}
-      onClick={() => onSelectElement?.(null)}
+      onClick={() => onSelectElement?.(null, false)}
     >
       {template.bands.map((band) => (
         <div
@@ -214,9 +223,9 @@ export function ReportCanvas({
               <Fragment key={el.id}>
                 <button
                   type="button"
-                  className={`rb-el rb-el-${el.type}${el.id === selectedId ? ' rb-el-selected' : ''}`}
+                  className={`rb-el rb-el-${el.type}${selectedIds.includes(el.id) ? ' rb-el-selected' : ''}`}
                   data-element-id={el.id}
-                  aria-pressed={el.id === selectedId}
+                  aria-pressed={selectedIds.includes(el.id)}
                   aria-label={content === '' ? ELEMENT_TYPE_LABELS[el.type] : undefined}
                   style={{
                     left: px(el.rect.x),
@@ -227,7 +236,10 @@ export function ReportCanvas({
                   }}
                   onClick={(e) => {
                     e.stopPropagation() // don't bubble to the page's deselect handler
-                    onSelectElement?.(el.id)
+                    // Mouse selection happens on pointer down; handle keyboard
+                    // activation (Enter/Space) here, which fires click with no
+                    // preceding pointer press (detail === 0).
+                    if (e.detail === 0) onSelectElement?.(el.id, e.shiftKey || e.metaKey || e.ctrlKey)
                   }}
                   onPointerDown={handlePointerDown(el)}
                   onPointerMove={onMoveElement ? handlePointerMove : undefined}
@@ -236,9 +248,9 @@ export function ReportCanvas({
                   {content}
                 </button>
 
-                {/* Corner resize handles, shown only on the selected element. */}
+                {/* Corner resize handles, shown only on a lone selected element. */}
                 {onResize &&
-                  el.id === selectedId &&
+                  el.id === soleSelectedId &&
                   RESIZE_HANDLES.map(({ handle, label }) => {
                     const cornerX = handle === 'ne' || handle === 'se' ? el.rect.x + el.rect.w : el.rect.x
                     const cornerY = handle === 'sw' || handle === 'se' ? el.rect.y + el.rect.h : el.rect.y

@@ -228,6 +228,34 @@ export function updateElement(
 }
 
 /**
+ * Returns a new template with each named element's rect replaced by the rect
+ * mapped to its id. The original template is not mutated; elements whose id is
+ * not in `rects` (and all their other fields) are left unchanged. Used to apply
+ * an alignment or distribution to several selected elements at once, across
+ * bands, in a single immutable update.
+ *
+ * @param template The template to update.
+ * @param rects A map from element id to its new {@link Rect}.
+ * @returns A new {@link ReportTemplate} with the listed elements repositioned.
+ */
+export function updateElementRects(
+  template: ReportTemplate,
+  rects: ReadonlyMap<string, Rect>,
+): ReportTemplate {
+  if (rects.size === 0) return template
+  return {
+    ...template,
+    bands: template.bands.map((band) => ({
+      ...band,
+      elements: band.elements.map((el) => {
+        const rect = rects.get(el.id)
+        return rect ? { ...el, rect } : el
+      }),
+    })),
+  }
+}
+
+/**
  * Returns a new template with `patch` merged into its designer settings. The
  * original template is not mutated; its bands and page are shared by reference,
  * as only the settings change.

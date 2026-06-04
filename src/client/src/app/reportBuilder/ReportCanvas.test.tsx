@@ -36,12 +36,18 @@ function fireDropAt(node: Element, type: string, clientX: number, clientY: numbe
 function firePointer(
   node: Element,
   type: 'pointerDown' | 'pointerMove' | 'pointerUp',
-  { clientX = 0, clientY = 0, button = 0 }: { clientX?: number; clientY?: number; button?: number } = {},
+  {
+    clientX = 0,
+    clientY = 0,
+    button = 0,
+    shiftKey = false,
+  }: { clientX?: number; clientY?: number; button?: number; shiftKey?: boolean } = {},
 ) {
   const event = createEvent[type](node, { pointerId: 1 })
   Object.defineProperty(event, 'clientX', { get: () => clientX })
   Object.defineProperty(event, 'clientY', { get: () => clientY })
   Object.defineProperty(event, 'button', { get: () => button })
+  Object.defineProperty(event, 'shiftKey', { get: () => shiftKey })
   fireEvent(node, event)
 }
 
@@ -159,21 +165,68 @@ describe('ReportCanvas', () => {
 })
 
 describe('ReportCanvas — selection', () => {
-  it('reports the element id when an element is clicked', async () => {
+  it('reports the element id (non-additive) when an element is clicked', async () => {
     const onSelectElement = vi.fn()
     const user = userEvent.setup()
     render(<ReportCanvas template={fixture()} zoom={100} onSelectElement={onSelectElement} />)
 
     await user.click(screen.getByText('Hello Report'))
 
-    expect(onSelectElement).toHaveBeenCalledWith('title')
+    expect(onSelectElement).toHaveBeenCalledWith('title', false)
   })
 
   it('marks the selected element as pressed and others as not', () => {
-    render(<ReportCanvas template={fixture()} zoom={100} selectedId="title" />)
+    render(<ReportCanvas template={fixture()} zoom={100} selectedIds={['title']} />)
 
     expect(screen.getByText('Hello Report')).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByText('{Record.Tons}')).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('marks every element of a multi-selection as pressed', () => {
+    render(<ReportCanvas template={fixture()} zoom={100} selectedIds={['title', 'tons']} />)
+
+    expect(screen.getByText('Hello Report')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('{Record.Tons}')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Image' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('reports an additive selection when an element is shift-clicked', () => {
+    const onSelectElement = vi.fn()
+    render(<ReportCanvas template={fixture()} zoom={100} onSelectElement={onSelectElement} />)
+
+    firePointer(screen.getByText('Hello Report'), 'pointerDown', { shiftKey: true })
+
+    expect(onSelectElement).toHaveBeenCalledWith('title', true)
+  })
+
+  it('selects on keyboard activation (a click with no preceding pointer press)', () => {
+    const onSelectElement = vi.fn()
+    render(<ReportCanvas template={fixture()} zoom={100} onSelectElement={onSelectElement} />)
+
+    // A keyboard-driven click has detail 0; pointer-driven selection is covered
+    // separately. fireEvent.click dispatches only the click (no pointer press).
+    fireEvent.click(screen.getByText('Hello Report'))
+
+    expect(onSelectElement).toHaveBeenCalledWith('title', false)
+  })
+
+  it('does not start a drag on a shift (additive) press', () => {
+    const onSelectElement = vi.fn()
+    const onMoveElement = vi.fn()
+    render(
+      <ReportCanvas
+        template={fixture()}
+        zoom={100}
+        onSelectElement={onSelectElement}
+        onMoveElement={onMoveElement}
+      />,
+    )
+
+    const title = screen.getByText('Hello Report')
+    firePointer(title, 'pointerDown', { clientX: 0, clientY: 0, shiftKey: true })
+    firePointer(title, 'pointerMove', { clientX: 96, clientY: 0 })
+
+    expect(onMoveElement).not.toHaveBeenCalled()
   })
 
   it('deselects when the empty canvas is clicked', async () => {
@@ -183,7 +236,7 @@ describe('ReportCanvas — selection', () => {
       <ReportCanvas
         template={fixture()}
         zoom={100}
-        selectedId="title"
+        selectedIds={['title']}
         onSelectElement={onSelectElement}
       />,
     )
@@ -191,7 +244,7 @@ describe('ReportCanvas — selection', () => {
     // The Page Header band is empty in the fixture — clicking it is a canvas click.
     await user.click(screen.getByRole('group', { name: BAND_LABELS.pageHeader }))
 
-    expect(onSelectElement).toHaveBeenCalledWith(null)
+    expect(onSelectElement).toHaveBeenCalledWith(null, false)
   })
 
   it('labels shape elements that have no text so they are still selectable', () => {
@@ -284,7 +337,7 @@ describe('ReportCanvas — move', () => {
 
     firePointer(screen.getByText('Hello Report'), 'pointerDown', { clientX: 0, clientY: 0 })
 
-    expect(onSelectElement).toHaveBeenCalledWith('title')
+    expect(onSelectElement).toHaveBeenCalledWith('title', false)
   })
 
   it('reports a new position as the element is dragged', () => {
@@ -394,7 +447,7 @@ describe('ReportCanvas — grid overlay', () => {
 
 describe('ReportCanvas — resize', () => {
   it('shows four corner handles on the selected element', () => {
-    render(<ReportCanvas template={fixture()} zoom={100} selectedId="title" onResize={vi.fn()} />)
+    render(<ReportCanvas template={fixture()} zoom={100} selectedIds={['title']} onResize={vi.fn()} />)
 
     for (const corner of ['top-left', 'top-right', 'bottom-left', 'bottom-right']) {
       expect(screen.getByRole('button', { name: `Resize ${corner}` })).toBeInTheDocument()
@@ -407,9 +460,15 @@ describe('ReportCanvas — resize', () => {
     expect(screen.queryByRole('button', { name: /Resize/ })).not.toBeInTheDocument()
   })
 
+  it('shows no resize handles while several elements are selected', () => {
+    render(<ReportCanvas template={fixture()} zoom={100} selectedIds={['title', 'tons']} onResize={vi.fn()} />)
+
+    expect(screen.queryByRole('button', { name: /Resize/ })).not.toBeInTheDocument()
+  })
+
   it('resizes from a corner handle as it is dragged', () => {
     const onResize = vi.fn()
-    render(<ReportCanvas template={fixture()} zoom={100} selectedId="title" onResize={onResize} />)
+    render(<ReportCanvas template={fixture()} zoom={100} selectedIds={['title']} onResize={onResize} />)
 
     // title rect = {x:1, y:0.5, w:3, h:0.25}; drag SE by +96px,+48px → +1in,+0.5in.
     const se = screen.getByRole('button', { name: 'Resize bottom-right' })
@@ -421,7 +480,7 @@ describe('ReportCanvas — resize', () => {
 
   it('does not start a resize on a non-primary button', () => {
     const onResize = vi.fn()
-    render(<ReportCanvas template={fixture()} zoom={100} selectedId="title" onResize={onResize} />)
+    render(<ReportCanvas template={fixture()} zoom={100} selectedIds={['title']} onResize={onResize} />)
 
     const se = screen.getByRole('button', { name: 'Resize bottom-right' })
     firePointer(se, 'pointerDown', { clientX: 0, clientY: 0, button: 2 })
@@ -432,7 +491,7 @@ describe('ReportCanvas — resize', () => {
 
   it('does not resize before a handle drag has started', () => {
     const onResize = vi.fn()
-    render(<ReportCanvas template={fixture()} zoom={100} selectedId="title" onResize={onResize} />)
+    render(<ReportCanvas template={fixture()} zoom={100} selectedIds={['title']} onResize={onResize} />)
 
     firePointer(screen.getByRole('button', { name: 'Resize bottom-right' }), 'pointerMove', { clientX: 96, clientY: 48 })
 
@@ -441,7 +500,7 @@ describe('ReportCanvas — resize', () => {
 
   it('ignores a handle pointer up when no resize is in progress', () => {
     const onResize = vi.fn()
-    render(<ReportCanvas template={fixture()} zoom={100} selectedId="title" onResize={onResize} />)
+    render(<ReportCanvas template={fixture()} zoom={100} selectedIds={['title']} onResize={onResize} />)
 
     expect(() => firePointer(screen.getByRole('button', { name: 'Resize bottom-right' }), 'pointerUp')).not.toThrow()
     expect(onResize).not.toHaveBeenCalled()
@@ -449,7 +508,7 @@ describe('ReportCanvas — resize', () => {
 
   it('stops resizing once the pointer is released', () => {
     const onResize = vi.fn()
-    render(<ReportCanvas template={fixture()} zoom={100} selectedId="title" onResize={onResize} />)
+    render(<ReportCanvas template={fixture()} zoom={100} selectedIds={['title']} onResize={onResize} />)
 
     const se = screen.getByRole('button', { name: 'Resize bottom-right' })
     firePointer(se, 'pointerDown', { clientX: 0, clientY: 0 })
@@ -463,7 +522,7 @@ describe('ReportCanvas — resize', () => {
   it('keeps the selection when a resize handle is clicked', () => {
     const onSelectElement = vi.fn()
     render(
-      <ReportCanvas template={fixture()} zoom={100} selectedId="title" onSelectElement={onSelectElement} onResize={vi.fn()} />,
+      <ReportCanvas template={fixture()} zoom={100} selectedIds={['title']} onSelectElement={onSelectElement} onResize={vi.fn()} />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Resize bottom-right' }))
@@ -474,7 +533,7 @@ describe('ReportCanvas — resize', () => {
   it('snaps a resized edge to the grid when snap-to-grid is on', () => {
     const onResize = vi.fn()
     // Fixture snaps to a 0.125in grid; title rect = {x:1, y:0.5, w:3, h:0.25}.
-    render(<ReportCanvas template={fixture()} zoom={100} selectedId="title" onResize={onResize} />)
+    render(<ReportCanvas template={fixture()} zoom={100} selectedIds={['title']} onResize={onResize} />)
 
     const se = screen.getByRole('button', { name: 'Resize bottom-right' })
     firePointer(se, 'pointerDown', { clientX: 0, clientY: 0 })

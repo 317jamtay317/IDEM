@@ -26,6 +26,13 @@ describe('PropertiesPanel', () => {
     expect(screen.getByText(/select an element/i)).toBeInTheDocument()
   })
 
+  it('summarises a multi-selection by its count instead of an editor', () => {
+    render(<PropertiesPanel element={null} selectedCount={3} />)
+
+    expect(screen.getByText(/3 elements selected/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Text')).not.toBeInTheDocument()
+  })
+
   it('reflects the selected element type', () => {
     render(<PropertiesPanel element={labelEl} />)
 

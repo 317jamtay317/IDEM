@@ -9,6 +9,7 @@ import {
   findElement,
   nextElementId,
   updateElement,
+  updateElementRects,
   updateSettings,
 } from './model'
 
@@ -112,6 +113,71 @@ describe('updateElement', () => {
     const t = withTwo()
 
     expect(updateElement(t, 'missing', (el) => ({ ...el, text: 'x' }))).toEqual(t)
+  })
+})
+
+describe('updateElementRects', () => {
+  /** A template with one element per band, spanning two bands. */
+  function withTwoBands() {
+    const t = createEmptyTemplate('t1', 'T1')
+    t.bands.find((b) => b.kind === 'pageHeader')!.elements.push({
+      id: 'head',
+      type: 'label',
+      rect: { x: 1, y: 1, w: 2, h: 0.25 },
+      text: 'Head',
+    })
+    t.bands.find((b) => b.kind === 'detail')!.elements.push({
+      id: 'cell',
+      type: 'dataField',
+      rect: { x: 3, y: 0, w: 1, h: 0.25 },
+      text: '{Cell}',
+    })
+    return t
+  }
+
+  it('replaces the rects of the listed elements, across bands, leaving others alone', () => {
+    const t = withTwoBands()
+
+    const next = updateElementRects(
+      t,
+      new Map([
+        ['head', { x: 0.5, y: 1, w: 2, h: 0.25 }],
+        ['cell', { x: 0.5, y: 0, w: 1, h: 0.25 }],
+      ]),
+    )
+
+    expect(findElement(next, 'head')!.rect.x).toBe(0.5)
+    expect(findElement(next, 'cell')!.rect.x).toBe(0.5)
+  })
+
+  it('only touches elements named in the map', () => {
+    const t = withTwoBands()
+
+    const next = updateElementRects(t, new Map([['head', { x: 9, y: 9, w: 9, h: 9 }]]))
+
+    expect(findElement(next, 'cell')!.rect).toEqual({ x: 3, y: 0, w: 1, h: 0.25 })
+  })
+
+  it('preserves an element’s non-geometry fields', () => {
+    const t = withTwoBands()
+
+    const next = updateElementRects(t, new Map([['head', { x: 0, y: 0, w: 1, h: 1 }]]))
+
+    expect(findElement(next, 'head')!.text).toBe('Head')
+  })
+
+  it('does not mutate the original template', () => {
+    const original = withTwoBands()
+
+    updateElementRects(original, new Map([['head', { x: 5, y: 5, w: 5, h: 5 }]]))
+
+    expect(findElement(original, 'head')!.rect.x).toBe(1)
+  })
+
+  it('returns an equivalent template for an empty map', () => {
+    const t = withTwoBands()
+
+    expect(updateElementRects(t, new Map())).toEqual(t)
   })
 })
 

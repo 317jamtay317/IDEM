@@ -20,12 +20,18 @@ function makeDataTransfer() {
 function firePointer(
   node: Element,
   type: 'pointerDown' | 'pointerMove' | 'pointerUp',
-  { clientX = 0, clientY = 0, button = 0 }: { clientX?: number; clientY?: number; button?: number } = {},
+  {
+    clientX = 0,
+    clientY = 0,
+    button = 0,
+    shiftKey = false,
+  }: { clientX?: number; clientY?: number; button?: number; shiftKey?: boolean } = {},
 ) {
   const event = createEvent[type](node, { pointerId: 1 })
   Object.defineProperty(event, 'clientX', { get: () => clientX })
   Object.defineProperty(event, 'clientY', { get: () => clientY })
   Object.defineProperty(event, 'button', { get: () => button })
+  Object.defineProperty(event, 'shiftKey', { get: () => shiftKey })
   fireEvent(node, event)
 }
 
@@ -358,5 +364,82 @@ describe('ReportBuilderScreen — snap to grid (Phase 7)', () => {
     firePointer(title, 'pointerMove', { clientX: 30, clientY: 0 })
 
     expect(screen.getByText('Annual Emissions Inventory')).toHaveStyle({ left: '72px' })
+  })
+})
+
+describe('ReportBuilderScreen — multi-select & align (Phase 8)', () => {
+  /** The rendered `left` of a canvas element, in pixels. */
+  const leftPxOf = (text: string) => parseFloat((screen.getByText(text) as HTMLElement).style.left)
+
+  /** Scopes a query to the canvas region (the Insert palette shares some names). */
+  const canvas = () => within(screen.getByRole('region', { name: 'Report canvas' }))
+
+  it('builds a multi-selection with shift-click, summarised in the panels', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    firePointer(screen.getByText('Annual Emissions Inventory'), 'pointerDown')
+    firePointer(canvas().getByRole('button', { name: 'Image' }), 'pointerDown', { shiftKey: true })
+
+    expect(screen.getByText('Selected: 2 elements')).toBeInTheDocument()
+    const props = within(screen.getByRole('complementary', { name: 'Properties' }))
+    expect(props.getByText(/2 elements selected/i)).toBeInTheDocument()
+  })
+
+  it('replaces a multi-selection with a single element on a plain click', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    firePointer(screen.getByText('Annual Emissions Inventory'), 'pointerDown')
+    firePointer(canvas().getByRole('button', { name: 'Image' }), 'pointerDown', { shiftKey: true })
+    expect(screen.getByText('Selected: 2 elements')).toBeInTheDocument()
+
+    // A plain (non-additive) press collapses the selection to just that element.
+    firePointer(screen.getByText('Annual Emissions Inventory'), 'pointerDown')
+
+    expect(screen.getByText(/Selected: Label/)).toBeInTheDocument()
+  })
+
+  it('aligns selected elements to a shared left edge across bands', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    // Title (report header, x=0.42in) + a detail data field (x=3.6in); their
+    // shared min X is 0.42in → 40.32px. Alignment lines the column up across bands.
+    firePointer(screen.getByText('Annual Emissions Inventory'), 'pointerDown')
+    firePointer(screen.getByText('{Record.Tons}'), 'pointerDown', { shiftKey: true })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Align left' }))
+
+    expect(screen.getByText('{Record.Tons}')).toHaveStyle({ left: '40.32px' })
+    expect(screen.getByText('Annual Emissions Inventory')).toHaveStyle({ left: '40.32px' })
+  })
+
+  it('distributes three selected elements with equal horizontal gaps', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    // The three detail columns: x=0.42 (w2), 3.6 (w1.2), 5.4 (w1.2). Distributing
+    // keeps the extremes and gives the middle x=3.31in → 317.76px.
+    firePointer(screen.getByText('{Record.Field}'), 'pointerDown')
+    firePointer(screen.getByText('{Record.Tons}'), 'pointerDown', { shiftKey: true })
+    firePointer(screen.getByText('{Record.Limit}'), 'pointerDown', { shiftKey: true })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Distribute horizontally' }))
+
+    expect(leftPxOf('{Record.Tons}')).toBeCloseTo(317.76, 2)
+    expect(leftPxOf('{Record.Field}')).toBeCloseTo(40.32, 2) // first extreme stays
+    expect(leftPxOf('{Record.Limit}')).toBeCloseTo(518.4, 2) // last extreme stays (5.4in)
+  })
+
+  it('enables the alignment tools only when enough elements are selected', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    // Nothing selected: both align and distribute are unavailable.
+    expect(screen.getByRole('button', { name: 'Align left' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Distribute horizontally' })).toBeDisabled()
+
+    // Two selected: align is available, distribute still needs a third.
+    firePointer(screen.getByText('Annual Emissions Inventory'), 'pointerDown')
+    firePointer(screen.getByText('{Record.Tons}'), 'pointerDown', { shiftKey: true })
+
+    expect(screen.getByRole('button', { name: 'Align left' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Distribute horizontally' })).toBeDisabled()
   })
 })
