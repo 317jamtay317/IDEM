@@ -104,16 +104,28 @@ The regulated facility type for v1 customers. Produces hot mix asphalt (HMA). Su
 
 ❓ — Confirm the full scope of regulated media: air only, or air + stormwater + SPCC + USTs?
 
-### Production Fields 🟡
-The per-day quantities captured for an Asphalt Plant, shown in the Records production drill-down. Tentative pending domain-owner confirmation of the full Field set and units:
+### Production Field ✅
+One entry in the platform-wide **catalog** of data points that can be captured on a Record — e.g. *Hot Mix*, *Waste Oil*, *Baghouse Pressure Drop*. The catalog is the source of truth for *which* fields exist; Record values (a later slice) are stored sparsely, keyed by a field's immutable `PropertyName`.
 
-- **Hot Mix** — hot mix asphalt produced (tons).
-- **Cold Mix** — cold mix asphalt produced (tons).
-- **Steel Slag** — steel-slag aggregate consumed/produced (tons). 🟡
-- **Blast Furnace** — blast-furnace slag aggregate (tons). 🟡
-- **Plant Ran** — hours the plant operated that day (0 when idle). 🟡 "Plant" here is customer-facing copy for the Facility's plant, not the `Facility` entity.
+Each Production Field carries:
+- **PropertyName** — the stable, machine-facing key (e.g. `HotMix`). Required, **immutable**, and unique (I-D19). Record values are stored against it, so it must never change.
+- **FriendlyName** — the human-facing label shown wherever a user picks or searches for a field (e.g. "Hot Mix"). Editable; unique among active fields so a search result is unambiguous (I-D20).
+- **Description** — optional help text explaining what the field captures.
+- **DataType** — `Decimal`, `Integer`, `Boolean`, or `Date` (the value kinds carried over from the legacy plant-pollution record).
+- **Category** — optional grouping for the field picker (e.g. *Mixes*, *Fuels & Burners*, *Oil Heaters*, *RAP*, *Baghouse*).
+- **Summary** — whether the field appears in summary views and Reports by default (the legacy `IsSummaryProperty`).
+- **Active** / **Display order** — whether the field is offered for new Records, and its position in the picker.
 
-❓ — Confirm the canonical Field list and units (tons vs. other), and whether "Plant Ran" is recorded as hours or a yes/no flag.
+The catalog is **platform-global and SiteAdmin-managed**: the same fields are offered to every Org, and only a SiteAdmin may add, rename, or retire one. It is therefore *not* Org-scoped, and I-D03 does not apply to it. This is also the field vocabulary the Report Template designer binds to.
+
+> **Naming note.** This supersedes the earlier tentative "Production Fields" entry. Many fields are production quantities (tons of mix, hours run), but the catalog also holds non-production points (sulfur %, BTU/gal, baghouse inlet temperature, pressure drop). The entity name **Production Field** is confirmed; the full field *set* stays 🟡 until the seeded catalog is reviewed with the domain owner.
+
+Representative fields (tons unless noted):
+- **Hot Mix** / **Cold Mix** — hot- and cold-mix asphalt produced.
+- **Steel Slag** / **Blast Furnace** — slag aggregates. 🟡
+- **Plant Ran** — hours the plant operated that day (0 when idle); "Plant" is customer-facing copy for the Facility's plant, not the `Facility` entity. 🟡
+
+❓ — Confirm the seeded field set and, for **Plant Ran**, whether it is recorded as hours or a yes/no flag.
 
 ### (Record subtypes) ❓
 Concrete Record types cannot be named until the dominant compliance burden is identified with the domain owner. Candidates that may apply (do not adopt until confirmed):

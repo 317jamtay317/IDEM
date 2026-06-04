@@ -139,6 +139,20 @@ Every MCP tool call must carry an access token that includes the **`mcp` scope**
 
 ---
 
+## Production Fields
+
+### I-D19 — A Production Field's PropertyName is a required, immutable, unique key ✅
+Every ProductionField has a non-empty `PropertyName` that is assigned once at creation and never changes, and that is unique across the catalog. Record values are stored keyed by `PropertyName`, so renaming it would orphan stored data and a duplicate would collide it.
+
+> Enforced in two places: the `ProductionField` aggregate rejects an empty `PropertyName` at creation and exposes no setter for it (required + immutable); the application/persistence layer rejects a duplicate `PropertyName`, backed by a unique index (uniqueness).
+
+### I-D20 — A Production Field's FriendlyName is unique among active fields 🟡
+No two active ProductionFields may share a `FriendlyName`, so that when a user searches or picks a field by its label the result is unambiguous. (The legacy model labeled two distinct diesel-generator fields identically — "Generator 1 Diesel" twice; this rule prevents that.)
+
+> Enforced at the application/persistence layer (uniqueness check + unique index over active fields). 🟡 — confirm whether uniqueness must hold only among active fields or across retired ones too.
+
+---
+
 ## Domain — Asphalt Operations
 
 ### I-D## (reserved — pending) ❓
