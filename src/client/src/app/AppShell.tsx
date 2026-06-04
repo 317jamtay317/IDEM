@@ -25,9 +25,9 @@ export interface AppShellProps {
   onSignOut: () => void
 }
 
-/** The navigation tab that governs a screen — `log` belongs to the dashboard (home). */
+/** The navigation tab that governs a screen — logging a Record is a Records activity. */
 function tabForScreen(screen: Screen): NavTab {
-  return screen === 'log' ? 'home' : screen
+  return screen === 'log' ? 'records' : screen
 }
 
 /**

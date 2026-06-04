@@ -131,3 +131,22 @@ export function CheckIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   )
 }
+
+/** Left-pointing chevron, used to page backwards (e.g. the previous month). */
+export function ChevronLeftIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="m15 6-6 6 6 6" />
+    </svg>
+  )
+}
+
+/** Calendar glyph, used on date fields. */
+export function CalendarIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3" y="4.5" width="18" height="16" rx="2" />
+      <path d="M3 9h18M8 2.5v4M16 2.5v4" />
+    </svg>
+  )
+}

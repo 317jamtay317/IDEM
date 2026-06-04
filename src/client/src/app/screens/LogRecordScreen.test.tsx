@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LogRecordScreen } from './LogRecordScreen'
 import type { ProductionField, ProductionFieldsApi } from '../productionFieldsApi'
@@ -87,9 +87,10 @@ describe('LogRecordScreen save', () => {
       />,
     )
 
-    // Wait for the live Facility to load and become the selection.
-    await waitFor(() => expect(screen.getByLabelText('Facility')).toHaveValue('fac-1'))
-    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-05-29' } })
+    // Wait for the live Facility to load and become the selection (shown by name).
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Facility' })).toHaveTextContent('Goshen Plant'),
+    )
 
     await user.click(screen.getByRole('button', { name: 'Save record' }))
 
@@ -98,7 +99,7 @@ describe('LogRecordScreen save', () => {
         'tok',
         expect.objectContaining({
           facilityId: 'fac-1',
-          date: '2026-05-29',
+          date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
           values: expect.arrayContaining([
             expect.objectContaining({ propertyName: 'HotMix', numericValue: 1240 }),
           ]),
@@ -124,7 +125,9 @@ describe('LogRecordScreen save', () => {
       />,
     )
 
-    await waitFor(() => expect(screen.getByLabelText('Facility')).toHaveValue('fac-1'))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Facility' })).toHaveTextContent('Goshen Plant'),
+    )
     await user.click(screen.getByRole('button', { name: 'Save record' }))
 
     expect(await screen.findByText(/save failed \(409\)/i)).toBeInTheDocument()

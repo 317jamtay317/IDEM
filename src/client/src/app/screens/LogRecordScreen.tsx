@@ -14,7 +14,8 @@ import { myFacilitiesApi as defaultFacilitiesApi, type MyFacilitiesApi, type MyF
 import { recordsApi as defaultRecordsApi, type RecordsApi, type RecordValueInput } from '../recordsApi'
 import { TopBar } from '../components/TopBar'
 import { SearchableSelect } from '../components/SearchableSelect'
-import { ChevronDownIcon, CloseIcon, PlusIcon } from '../components/icons'
+import { DatePicker } from '../components/DatePicker'
+import { CloseIcon, PlusIcon } from '../components/icons'
 
 let nextId = 100
 
@@ -67,6 +68,12 @@ export function LogRecordScreen({
   const [selectedFacilityId, setSelectedFacilityId] = useState('')
   const [date, setDate] = useState<string>(todayIso)
   const [saveState, setSaveState] = useState<SaveState>({ status: 'idle' })
+
+  // Facility options: the live Org Facilities when authenticated, else the static sample. The
+  // selector tracks the chosen Facility by id while showing its name.
+  const facilitySource = liveFacilities.length > 0 ? liveFacilities : facilities
+  const facilityOptions = facilitySource.map((facility) => ({ value: facility.id, label: facility.name }))
+  const selectedFacility = selectedFacilityId || facilityOptions[0]?.value || ''
 
   useEffect(() => {
     if (!accessToken) return
@@ -163,42 +170,21 @@ export function LogRecordScreen({
           <h2 className="form-card-title">New production record</h2>
 
           <div className="field-row">
-            <label className="field">
+            <div className="field">
               <span className="field-label">Facility</span>
-              <div className="select">
-                {liveFacilities.length > 0 ? (
-                  <select
-                    aria-label="Facility"
-                    value={selectedFacilityId}
-                    onChange={(e) => setSelectedFacilityId(e.target.value)}
-                  >
-                    {liveFacilities.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <select aria-label="Facility" defaultValue={facilities[0].name}>
-                    {facilities.map((f) => (
-                      <option key={f.id}>{f.name}</option>
-                    ))}
-                  </select>
-                )}
-                <ChevronDownIcon className="select-chevron" />
-              </div>
-            </label>
-
-            <label className="field">
-              <span className="field-label">Date</span>
-              <input
-                type="date"
-                className="date-input"
-                aria-label="Date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
+              <SearchableSelect
+                label="Facility"
+                options={facilityOptions}
+                value={selectedFacility}
+                onChange={setSelectedFacilityId}
+                searchPlaceholder="Search facilities…"
               />
-            </label>
+            </div>
+
+            <div className="field">
+              <span className="field-label">Date</span>
+              <DatePicker value={date} onChange={setDate} ariaLabel="Date" />
+            </div>
           </div>
 
           <h2 className="section-title">Production entries</h2>
