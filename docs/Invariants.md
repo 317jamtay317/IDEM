@@ -166,6 +166,24 @@ A Facility has **at most one** Record for any given calendar date. Logging a sec
 
 ---
 
+## Production Field Limits
+
+### I-D24 — At most one Production Field Limit per Org per Production Field 🟡
+An Org configures **at most one** limit for any given Production Field. Setting a limit for a field that already has one updates that limit in place rather than creating a second, so a recorded value is never ambiguous about which range applies. A Production Field Limit's owning `OrgId` and `PropertyName` are assigned at creation and never change.
+
+> **Enforcement.** The `SetProductionFieldLimit` handler upserts — it loads the Org's existing limit for the field (by the catalog's canonical `PropertyName`) and updates it, otherwise creates one. Backed by a unique index over (`OrgId`, `PropertyName`). Reads stay Org-scoped (I-D03): a limit set by one Org is never visible to another, proven by `MyOrgProductionFieldLimitEndpointsTests`.
+>
+> 🟡 — The Production Field Limit concept (per-Org low/high bounds with a percentage-or-tons unit) is pending domain-owner confirmation, including the unit set and whether a bound may be open-ended (only a high, or only a low).
+
+### I-D25 — A Production Field Limit's low bound does not exceed its high bound 🟡
+For any Production Field Limit, `LowLimit ≤ HighLimit`, so the acceptable range it defines is never empty. Equal bounds are allowed (a single permitted value).
+
+> **Enforcement.** Owned by the `ProductionFieldLimit` aggregate: both `Create` and `Update` reject a low bound greater than the high bound with error code `I-D25`, leaving an existing limit unchanged on a rejected update.
+>
+> 🟡 — Pending confirmation of whether bounds must also be non-negative (a negative tons or percentage limit is presumably invalid, but is not yet enforced).
+
+---
+
 ## Domain — Asphalt Operations
 
 ### I-D## (reserved — pending) ❓

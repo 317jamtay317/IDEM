@@ -127,6 +127,21 @@ Representative fields (tons unless noted):
 
 ❓ — Confirm the seeded field set and, for **Plant Ran**, whether it is recorded as hours or a yes/no flag.
 
+### Production Field Limit 🟡
+An Org's configured acceptable range for the values recorded against a single **Production Field**, keyed by that field's immutable `PropertyName`. It carries a **low limit** and a **high limit** (a `decimal` range) and a **Limit Unit**. A recorded value below the low limit or above the high limit is an **Exceedance**.
+
+Unlike the **Production Field** catalog (which is platform-global and SiteAdmin-managed), a Production Field Limit is **Org-scoped** (I-D03): each Org sets its own limits, and an Org holds at most one limit per field (I-D24, low ≤ high per I-D25). Editing a limit changes only its bounds and unit; the field it applies to is fixed.
+
+> Authoring of limits is intended for the (not-yet-built) Org Admin area; the backend — Org-scoped set/read endpoints under `/me/org/production-field-limits` and persistence — exists ahead of that UI.
+>
+> ❓ — Confirm: may a bound be open-ended (only a high, or only a low)? Must bounds be non-negative? Is "percentage vs tons" the right unit set, or is a richer unit/dimension needed?
+
+### Limit Unit 🟡
+How a **Production Field Limit**'s bounds are expressed: **Percentage** or **Tons** (an absolute quantity). Tentative — the real unit set is pending domain-owner confirmation.
+
+### Exceedance 🟡
+A recorded value that falls outside its Production Field's configured range for the Org — below the **low limit** or above the **high limit** of the applicable **Production Field Limit**. Surfacing exceedances on the records views (and feeding them into Reports) is the next increment.
+
 ### (Record subtypes) ❓
 Concrete Record types cannot be named until the dominant compliance burden is identified with the domain owner. Candidates that may apply (do not adopt until confirmed):
 
