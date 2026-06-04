@@ -153,6 +153,17 @@ No two active ProductionFields may share a `FriendlyName`, so that when a user s
 
 ---
 
+## Records
+
+### I-D23 — At most one Record per Facility per date ✅
+A Facility has **at most one** Record for any given calendar date. Logging a second Record for a Facility + date that already has one is **rejected as a conflict**, never silently merged, overwritten, or duplicated. A Record's Facility and date are assigned at creation and never change, so this identity is stable.
+
+> **Rationale.** A Record captures a Facility's activity *for a day*; two Records for the same Facility+date would make a Report ambiguous about which to use, undermining reproducibility (I-D08). Confirmed **write-once** for v1 — correcting a day's Record is a later, explicit operation, not an in-place overwrite.
+>
+> **Enforcement.** The aggregate owns the immutability of its `OrgId` (I-D01), `FacilityId` (I-D07), and `Date`. Cross-Record uniqueness is enforced at the application/persistence layer: the `LogRecord` handler rejects a duplicate with error code `I-D23` (a conflict), backed by a unique index over (`FacilityId`, `Date`). Reads stay Org-scoped (I-D03).
+
+---
+
 ## Domain — Asphalt Operations
 
 ### I-D## (reserved — pending) ❓

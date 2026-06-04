@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using RecordKeeping.Domain.Facilities;
 using RecordKeeping.Domain.Orgs;
 using RecordKeeping.Domain.ProductionFields;
+using RecordKeeping.Domain.Records;
 
 namespace RecordKeeping.Infrastructure.Persistence;
 
@@ -21,6 +22,9 @@ public sealed class RecordKeepingDbContext(DbContextOptions<RecordKeepingDbConte
     /// <summary>The platform-global Production Field catalog (not Org-scoped).</summary>
     public DbSet<ProductionField> ProductionFields => Set<ProductionField>();
 
+    /// <summary>The Record aggregate roots — daily Facility activity entries (I-D01, I-D07, I-D23).</summary>
+    public DbSet<Record> Records => Set<Record>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -28,5 +32,6 @@ public sealed class RecordKeepingDbContext(DbContextOptions<RecordKeepingDbConte
         modelBuilder.ApplyConfiguration(new OrgConfiguration());
         modelBuilder.ApplyConfiguration(new FacilityConfiguration());
         modelBuilder.ApplyConfiguration(new ProductionFieldConfiguration());
+        modelBuilder.ApplyConfiguration(new RecordConfiguration());
     }
 }

@@ -146,6 +146,13 @@ Concrete Record types cannot be named until the dominant compliance burden is id
 ### Record ✅
 A persisted data entry made by a User on behalf of an Org, capturing a compliance-relevant fact. The concrete subtypes of Record are domain-specific and listed above (pending confirmation).
 
+A Record is made *for a specific Facility on a specific date* and there is **at most one per Facility per date** (I-D23). Its owning Org (I-D01), Facility (I-D07), and date are fixed at creation. A Record holds its field values sparsely — see **Record Value**.
+
+### Record Value ✅
+A single field's value on a Record, keyed by a **Production Field**'s immutable `PropertyName` (I-D21). A Record stores its values **sparsely** — only the fields actually entered for that day, not a row per catalog field. Each Record Value carries exactly one typed value matching its field's **DataType**: a numeric value (`Decimal` / `Integer`), a boolean (`Boolean`), or a date (`Date`).
+
+> **Persistence shape (decided).** One `RecordValue` child row per entered field — (`PropertyName`, `NumericValue?`, `BooleanValue?`, `DateValue?`) — with exactly the one value column its DataType dictates populated. Deliberately **not** a wide ~60-column table (the legacy `PlantPollution` shape); the sparse form fits the write-once/read-heavy direction and keeps the Production Field catalog the single source of truth for which fields exist. Numeric values stay in a numeric column so Report totals remain directly summable.
+
 ### Report ✅
 A produced artifact (PDF, electronic submission file, etc.) derived from Records, intended either for filing with a Regulator or for the Org's internal audit file.
 
