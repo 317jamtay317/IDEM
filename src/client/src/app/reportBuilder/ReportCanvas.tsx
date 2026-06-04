@@ -93,6 +93,7 @@ export function ReportCanvas({
   onResize,
 }: ReportCanvasProps) {
   const px = (inches: number) => `${inchesToPx(inches, zoom)}px`
+  const { snapToGrid, gridSize } = template.settings
 
   // The element being dragged: its id and the anchor (its start position plus the
   // pointer's start point) from which each move computes an absolute new position.
@@ -108,13 +109,20 @@ export function ReportCanvas({
     e.currentTarget.setPointerCapture?.(e.pointerId)
   }
 
-  // While dragging, report the element's new position (live, so it follows the cursor).
+  // While dragging, report the element's new position (live, so it follows the
+  // cursor), snapped to the grid when snap-to-grid is enabled.
   const handlePointerMove = (e: PointerEvent) => {
     const d = drag.current
     if (!d || !onMoveElement) return
     onMoveElement(
       d.id,
-      draggedPosition({ x: d.startX, y: d.startY }, { x: e.clientX - d.pointerX, y: e.clientY - d.pointerY }, zoom),
+      draggedPosition(
+        { x: d.startX, y: d.startY },
+        { x: e.clientX - d.pointerX, y: e.clientY - d.pointerY },
+        zoom,
+        gridSize,
+        snapToGrid,
+      ),
     )
   }
 
@@ -137,12 +145,13 @@ export function ReportCanvas({
     e.currentTarget.setPointerCapture?.(e.pointerId)
   }
 
-  // While resizing, report the element's new rect (live).
+  // While resizing, report the element's new rect (live), snapping the dragged
+  // edges to the grid when snap-to-grid is enabled.
   const handleResizeMove = (e: PointerEvent) => {
     const r = resize.current
     if (!r || !onResize) return
     const delta = { x: pxToInches(e.clientX - r.pointerX, zoom), y: pxToInches(e.clientY - r.pointerY, zoom) }
-    onResize(r.id, resizedRect(r.startRect, r.handle, delta))
+    onResize(r.id, resizedRect(r.startRect, r.handle, delta, gridSize, snapToGrid))
   }
 
   // End the resize.
@@ -170,11 +179,19 @@ export function ReportCanvas({
     })
   }
 
+  // A grid overlay (drawn by .rb-page-grid in CSS) is shown when snapping is on;
+  // its cell size tracks the grid spacing in pixels at the current zoom.
+  const gridPx = inchesToPx(gridSize, zoom)
+  const showGrid = snapToGrid && gridPx > 0
+
   return (
     // Clicking the page background (anywhere but an element) clears the selection.
     <div
-      className="rb-page"
-      style={{ width: px(template.page.width) }}
+      className={`rb-page${showGrid ? ' rb-page-grid' : ''}`}
+      style={{
+        width: px(template.page.width),
+        ...(showGrid ? { backgroundSize: `${gridPx}px ${gridPx}px` } : {}),
+      }}
       onClick={() => onSelectElement?.(null)}
     >
       {template.bands.map((band) => (

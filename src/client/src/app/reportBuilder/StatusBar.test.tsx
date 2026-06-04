@@ -44,4 +44,16 @@ describe('StatusBar', () => {
 
     expect(screen.getByText(/Selected: Rectangle "frame"/)).toBeInTheDocument()
   })
+
+  it('shows snap-to-grid on with the grid size in pixels', () => {
+    render(<StatusBar selected={null} zoom={100} snapToGrid gridSize={0.125} />)
+
+    expect(screen.getByText('Snap: On · Grid 12px')).toBeInTheDocument()
+  })
+
+  it('shows snap-to-grid off without a grid size', () => {
+    render(<StatusBar selected={null} zoom={100} snapToGrid={false} gridSize={0.125} />)
+
+    expect(screen.getByText('Snap: Off')).toBeInTheDocument()
+  })
 })

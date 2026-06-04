@@ -9,6 +9,7 @@ import {
   findElement,
   nextElementId,
   updateElement,
+  updateSettings,
 } from './model'
 
 describe('createEmptyTemplate', () => {
@@ -185,6 +186,38 @@ describe('addElement', () => {
     const t = addElement(createEmptyTemplate('t1', 'T1'), 'detail', createElement('label', 'label-1'))
 
     expect(t.bands.find((b) => b.kind === 'reportHeader')!.elements).toHaveLength(0)
+  })
+})
+
+describe('updateSettings', () => {
+  it('merges the patch into the template settings', () => {
+    const next = updateSettings(createEmptyTemplate('t1', 'T1'), { snapToGrid: false })
+
+    expect(next.settings).toEqual({ snapToGrid: false, gridSize: 0.125 })
+  })
+
+  it('can change the grid size', () => {
+    const next = updateSettings(createEmptyTemplate('t1', 'T1'), { gridSize: 0.25 })
+
+    expect(next.settings).toEqual({ snapToGrid: true, gridSize: 0.25 })
+  })
+
+  it('does not mutate the original template', () => {
+    const original = createEmptyTemplate('t1', 'T1')
+
+    const next = updateSettings(original, { snapToGrid: false })
+
+    expect(original.settings.snapToGrid).toBe(true)
+    expect(next).not.toBe(original)
+  })
+
+  it('leaves the bands and page untouched', () => {
+    const original = createEmptyTemplate('t1', 'T1')
+
+    const next = updateSettings(original, { snapToGrid: false })
+
+    expect(next.bands).toBe(original.bands)
+    expect(next.page).toBe(original.page)
   })
 })
 

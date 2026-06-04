@@ -8,6 +8,7 @@ import {
   pointsToPx,
   pxToInches,
   resizedRect,
+  snap,
   zoomIn,
   zoomOut,
 } from './geometry'
@@ -64,6 +65,39 @@ describe('draggedPosition', () => {
   it('clamps the position to the band/page origin (never negative)', () => {
     expect(draggedPosition({ x: 0.5, y: 0.5 }, { x: -96, y: -96 }, 100)).toEqual({ x: 0, y: 0 })
   })
+
+  it('snaps the dragged position to the grid when snapping is enabled', () => {
+    // start (1,1) + 30px @100% = +0.3125in → (1.3125, 1.3125), snapped to 0.125in → (1.375, 1.375).
+    expect(draggedPosition({ x: 1, y: 1 }, { x: 30, y: 30 }, 100, 0.125, true)).toEqual({ x: 1.375, y: 1.375 })
+  })
+
+  it('does not snap when snapping is disabled (the default)', () => {
+    expect(draggedPosition({ x: 1, y: 1 }, { x: 30, y: 30 }, 100)).toEqual({ x: 1.3125, y: 1.3125 })
+  })
+})
+
+describe('snap', () => {
+  it('rounds a value to the nearest multiple of the grid when enabled', () => {
+    expect(snap(1.2, 0.125, true)).toBe(1.25)
+    expect(snap(1.18, 0.125, true)).toBe(1.125)
+  })
+
+  it('leaves a value already on the grid exactly where it is', () => {
+    expect(snap(0.5, 0.125, true)).toBe(0.5)
+  })
+
+  it('rounds a half-cell up to the next grid line', () => {
+    expect(snap(0.0625, 0.125, true)).toBe(0.125)
+  })
+
+  it('returns the value unchanged when snapping is disabled', () => {
+    expect(snap(1.2, 0.125, false)).toBe(1.2)
+  })
+
+  it('returns the value unchanged when the grid is zero or negative', () => {
+    expect(snap(1.2, 0, true)).toBe(1.2)
+    expect(snap(1.2, -0.125, true)).toBe(1.2)
+  })
 })
 
 describe('resizedRect', () => {
@@ -91,6 +125,20 @@ describe('resizedRect', () => {
 
   it('keeps a moved edge on the page (origin never negative)', () => {
     expect(resizedRect(start, 'nw', { x: -5, y: -5 })).toEqual({ x: 0, y: 0, w: 3, h: 2 })
+  })
+
+  it('snaps the dragged edges to the grid when snapping is enabled (SE handle)', () => {
+    // se moves right & bottom: right 3 + 0.3125 = 3.3125 → 3.375; bottom 2 + 0.3125 = 2.3125 → 2.375.
+    expect(resizedRect(start, 'se', { x: 0.3125, y: 0.3125 }, 0.125, true)).toEqual({ x: 1, y: 1, w: 2.375, h: 1.375 })
+  })
+
+  it('snaps the dragged edges to the grid when snapping is enabled (NW handle)', () => {
+    // nw moves left & top: left 1 + 0.1875 = 1.1875 → 1.25; top 1 + 0.1875 = 1.1875 → 1.25.
+    expect(resizedRect(start, 'nw', { x: 0.1875, y: 0.1875 }, 0.125, true)).toEqual({ x: 1.25, y: 1.25, w: 1.75, h: 0.75 })
+  })
+
+  it('does not snap when snapping is disabled (the default)', () => {
+    expect(resizedRect(start, 'se', { x: 0.3125, y: 0.3125 })).toEqual({ x: 1, y: 1, w: 2.3125, h: 1.3125 })
   })
 })
 

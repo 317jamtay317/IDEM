@@ -64,6 +64,14 @@ describe('toRdl / parseRdl', () => {
     expect(parseRdl(toRdl(t))).toEqual(t)
   })
 
+  it('round-trips snap-to-grid settings (toggle off and a custom grid size)', () => {
+    const t = createEmptyTemplate('t1', 'Blank')
+    t.settings = { snapToGrid: false, gridSize: 0.25 }
+
+    const back = parseRdl(toRdl(t))
+    expect(back.settings).toEqual({ snapToGrid: false, gridSize: 0.25 })
+  })
+
   it('emits an RDL document carrying the namespace and schema version (I-D08)', () => {
     const xml = toRdl(createEmptyTemplate('t1', 'Blank'))
 

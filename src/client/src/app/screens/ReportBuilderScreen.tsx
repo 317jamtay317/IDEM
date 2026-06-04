@@ -5,6 +5,7 @@ import { StatusBar } from '../reportBuilder/StatusBar'
 import { InsertPalette } from '../reportBuilder/InsertPalette'
 import { InsertSheet } from '../reportBuilder/InsertSheet'
 import { DEFAULT_ZOOM, zoomIn, zoomOut } from '../reportBuilder/geometry'
+import { fromDisplayPx, toDisplayPx } from '../reportBuilder/elementDisplay'
 import {
   BAND_ORDER,
   addElement,
@@ -13,6 +14,7 @@ import {
   findElement,
   nextElementId,
   updateElement,
+  updateSettings,
   type BandKind,
   type ElementType,
   type Rect,
@@ -20,6 +22,9 @@ import {
   type ReportTemplate,
 } from '../reportBuilder/model'
 import { createSampleTemplate } from '../reportBuilder/sampleTemplate'
+
+/** The grid spacings (in display pixels) the toolbar offers; the model stores inches. */
+const GRID_SIZE_OPTIONS_PX = [6, 12, 24]
 
 /** Props for {@link ReportBuilderScreen}. */
 export interface ReportBuilderScreenProps {
@@ -113,6 +118,16 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
     setTemplate((current) => updateElement(current, id, (el) => ({ ...el, rect })))
   }
 
+  // Turn snap-to-grid on or off.
+  const handleToggleSnap = () => {
+    setTemplate((current) => updateSettings(current, { snapToGrid: !current.settings.snapToGrid }))
+  }
+
+  // Change the grid spacing (the select offers display pixels; the model is inches).
+  const handleGridSize = (px: number) => {
+    setTemplate((current) => updateSettings(current, { gridSize: fromDisplayPx(px) }))
+  }
+
   return (
     <div className="rb">
       <header className="rb-topbar">
@@ -164,6 +179,31 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
           </button>
         </div>
 
+        {/* Snap-to-grid: a toggle plus the grid spacing (Phase 7). */}
+        <div className="rb-snap" role="group" aria-label="Grid">
+          <button
+            type="button"
+            className={`rb-toggle${template.settings.snapToGrid ? ' rb-toggle-active' : ''}`}
+            aria-label="Snap to grid"
+            aria-pressed={template.settings.snapToGrid}
+            onClick={handleToggleSnap}
+          >
+            Snap
+          </button>
+          <select
+            className="rb-grid-size"
+            aria-label="Grid size"
+            value={toDisplayPx(template.settings.gridSize)}
+            onChange={(e) => handleGridSize(Number(e.target.value))}
+          >
+            {GRID_SIZE_OPTIONS_PX.map((px) => (
+              <option key={px} value={px}>
+                {px} px
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Phone entry point to the Insert palette; the desktop sidebar replaces
             it at wider widths. */}
         <button
@@ -200,7 +240,12 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
         </aside>
       </div>
 
-      <StatusBar selected={selected} zoom={zoom} />
+      <StatusBar
+        selected={selected}
+        zoom={zoom}
+        snapToGrid={template.settings.snapToGrid}
+        gridSize={template.settings.gridSize}
+      />
 
       {insertSheetOpen && (
         <InsertSheet onClose={() => setInsertSheetOpen(false)} onInsert={handleInsert} />

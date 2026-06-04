@@ -342,6 +342,54 @@ describe('ReportCanvas — move', () => {
     expect(() => firePointer(screen.getByText('Hello Report'), 'pointerUp')).not.toThrow()
     expect(onMoveElement).not.toHaveBeenCalled()
   })
+
+  it('snaps the dragged position to the grid when snap-to-grid is on', () => {
+    const onMoveElement = vi.fn()
+    // The fixture's template enables snapping with an eighth-inch (12px) grid.
+    render(<ReportCanvas template={fixture()} zoom={100} onMoveElement={onMoveElement} />)
+
+    const title = screen.getByText('Hello Report') // starts at x=1in, y=0.5in
+    firePointer(title, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(title, 'pointerMove', { clientX: 30, clientY: 30 }) // +0.3125in each → snapped to grid
+
+    expect(onMoveElement).toHaveBeenLastCalledWith('title', { x: 1.375, y: 0.875 })
+  })
+
+  it('does not snap the dragged position when snap-to-grid is off', () => {
+    const onMoveElement = vi.fn()
+    const t = fixture()
+    t.settings.snapToGrid = false
+    render(<ReportCanvas template={t} zoom={100} onMoveElement={onMoveElement} />)
+
+    const title = screen.getByText('Hello Report')
+    firePointer(title, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(title, 'pointerMove', { clientX: 30, clientY: 30 })
+
+    expect(onMoveElement).toHaveBeenLastCalledWith('title', { x: 1.3125, y: 0.8125 })
+  })
+})
+
+describe('ReportCanvas — grid overlay', () => {
+  it('shows the grid overlay when snap-to-grid is enabled', () => {
+    const { container } = render(<ReportCanvas template={fixture()} zoom={100} />)
+
+    expect(container.querySelector('.rb-page')).toHaveClass('rb-page-grid')
+  })
+
+  it('hides the grid overlay when snap-to-grid is disabled', () => {
+    const t = fixture()
+    t.settings.snapToGrid = false
+    const { container } = render(<ReportCanvas template={t} zoom={100} />)
+
+    expect(container.querySelector('.rb-page')).not.toHaveClass('rb-page-grid')
+  })
+
+  it('sizes the grid overlay to the grid spacing in pixels at the current zoom', () => {
+    const { container } = render(<ReportCanvas template={fixture()} zoom={100} />)
+
+    // 0.125in × 96px/in = 12px cells.
+    expect(container.querySelector('.rb-page')).toHaveStyle({ backgroundSize: '12px 12px' })
+  })
 })
 
 describe('ReportCanvas — resize', () => {
@@ -421,5 +469,17 @@ describe('ReportCanvas — resize', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resize bottom-right' }))
 
     expect(onSelectElement).not.toHaveBeenCalled() // the handle swallows the click; no deselect
+  })
+
+  it('snaps a resized edge to the grid when snap-to-grid is on', () => {
+    const onResize = vi.fn()
+    // Fixture snaps to a 0.125in grid; title rect = {x:1, y:0.5, w:3, h:0.25}.
+    render(<ReportCanvas template={fixture()} zoom={100} selectedId="title" onResize={onResize} />)
+
+    const se = screen.getByRole('button', { name: 'Resize bottom-right' })
+    firePointer(se, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(se, 'pointerMove', { clientX: 30, clientY: 30 }) // +0.3125in: right→4.375, bottom→1.125
+
+    expect(onResize).toHaveBeenLastCalledWith('title', { x: 1, y: 0.5, w: 3.375, h: 0.625 })
   })
 })

@@ -282,6 +282,10 @@ describe('ReportBuilderScreen — Insert palette (Phase 5)', () => {
   it('moves a placed element when it is dragged on the canvas', () => {
     render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
 
+    // Disable snap so this exercises the raw drag mechanics (snap is on by default
+    // from Phase 7; snapping is covered by its own tests).
+    fireEvent.click(screen.getByRole('button', { name: 'Snap to grid' }))
+
     // The title sits at x=0.42in → 40.32px at 100% zoom.
     expect(screen.getByText('Annual Emissions Inventory')).toHaveStyle({ left: '40.32px' })
 
@@ -298,6 +302,9 @@ describe('ReportBuilderScreen — Insert palette (Phase 5)', () => {
     const user = userEvent.setup()
     render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
 
+    // Disable snap so this exercises the raw resize mechanics (see the move test).
+    await user.click(screen.getByRole('button', { name: 'Snap to grid' }))
+
     // Select the title (4in wide → 384px at 100%); its resize handles appear.
     await user.click(screen.getByText('Annual Emissions Inventory'))
     expect(screen.getByText('Annual Emissions Inventory')).toHaveStyle({ width: '384px' })
@@ -307,5 +314,49 @@ describe('ReportBuilderScreen — Insert palette (Phase 5)', () => {
     firePointer(se, 'pointerMove', { clientX: 96, clientY: 0 }) // widen by 1in
 
     expect(screen.getByText('Annual Emissions Inventory')).toHaveStyle({ width: '480px' }) // 5in
+  })
+})
+
+describe('ReportBuilderScreen — snap to grid (Phase 7)', () => {
+  it('starts with snap-to-grid on, shown in the status bar', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    expect(screen.getByText('Snap: On · Grid 12px')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Snap to grid' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('toggles snap-to-grid off and on from the toolbar', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+    const toggle = screen.getByRole('button', { name: 'Snap to grid' })
+
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByText('Snap: Off')).toBeInTheDocument()
+
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('Snap: On · Grid 12px')).toBeInTheDocument()
+  })
+
+  it('changes the grid size from the toolbar', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Grid size' }), '24')
+
+    expect(screen.getByText('Snap: On · Grid 24px')).toBeInTheDocument()
+  })
+
+  it('snaps a dragged element to the grid', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    // Title sits at x=0.42in. Drag right by 0.3125in (30px); with snap on (0.125in
+    // grid) 0.42+0.3125=0.7325in snaps to 0.75in → 72px.
+    const title = screen.getByText('Annual Emissions Inventory')
+    firePointer(title, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(title, 'pointerMove', { clientX: 30, clientY: 0 })
+
+    expect(screen.getByText('Annual Emissions Inventory')).toHaveStyle({ left: '72px' })
   })
 })

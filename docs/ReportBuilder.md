@@ -31,7 +31,7 @@ A banded report designer in the Crystal/RDLC tradition: a canvas of stacked **ba
 
 > **Note on [I-D09](./Invariants.md) (visual fidelity):** choosing RDL governs the *template definition format*, not rendered-output fidelity. I-D09 (matching the legacy WPF reports) is satisfied later by the Report Engine that renders RDL → PDF, not by this format choice.
 
-> **Update (2026-06-04) — react-rnd not yet adopted.** Phase 6 *move* shipped with **native pointer events** instead of react-rnd, to preserve the accessible-`<button>` canvas and its tested geometry and avoid a dependency. Whether *resize* + grid-snap (Phases 7–8) adopt react-rnd or continue native is **pending owner confirmation**. Palette→canvas insertion uses native HTML5 drag-and-drop (a separate mechanism from element move).
+> **Update (2026-06-04) — react-rnd not adopted.** Phase 6 *move/resize* and Phase 7 *grid-snap* shipped with **native pointer events** (snapping is pure math layered on the existing move/resize), preserving the accessible-`<button>` canvas and its tested geometry and avoiding a dependency. Whether Phase 8 alignment/smart-guides adopts react-rnd or continues native is **pending owner confirmation**. Palette→canvas insertion uses native HTML5 drag-and-drop (a separate mechanism from element move).
 
 ---
 
@@ -112,9 +112,9 @@ Foundational phases (0, 2–6) make the designer usable enough to exercise the s
 
 ### Milestone C — The six headline features
 
-- [ ] **Phase 7 — Snap to grid (#3).** ⬜
-  Toggle + grid size (8px), grid overlay, move/resize snap; status bar `Snap: On · Grid 8px`.
-  *Tests:* pure `snap(value, grid, enabled)`; dragging with snap on lands on grid; setting round-trips in RDL.
+- [x] **Phase 7 — Snap to grid (#3).** ✅
+  A toolbar **Snap** toggle and a **Grid size** picker (6 / 12 / 24 px ⇒ 1/16″, 1/8″, 1/4″) drive `template.settings.snapToGrid` / `gridSize` (the model already carried them; the default is on at a 1/8″ = 12px grid). The canvas shows a hairline **grid overlay** when snapping is on (cell size tracks the zoom), and move/resize snap the dragged corner/edges to the grid — pure `reportBuilder/geometry.ts` `snap(value, grid, enabled)`, composed into `draggedPosition`/`resizedRect` (new optional `grid`/`snapEnabled` args, default off so prior callers are unchanged). The status bar reads `Snap: On · Grid 12px` / `Snap: Off`. Settings serialize losslessly in RDL (built in Phase 1; an explicit non-default round-trip test now guards it). Snap stayed on **native pointer events** (consistent with Phase 6; no react-rnd needed — snapping is pure math). `model.ts` gained `updateSettings(template, patch)` (immutable settings merge). Grid spacing is presented in display px (`elementDisplay` `toDisplayPx`/`fromDisplayPx`) to match the rest of the UI; the model stays in inches.
+  *Tests:* pure `snap` (round to nearest cell, half-cell-up, disabled / zero-grid passthrough); `draggedPosition`/`resizedRect` snap the dragged position/edges when enabled and pass through when off; `updateSettings` merges immutably; canvas snaps move + resize when on and not when off; grid overlay shows/hides and is sized to the grid; status bar shows the snap readout; toolbar toggle flips snap and the grid-size picker changes the cell; a screen drag lands on the grid; snap settings round-trip in RDL. ✅
 
 - [ ] **Phase 8 — Multi-select + alignment/distribution across groups (#4).** ⬜
   Shift-click/marquee select; align L/C/R/T/M/B + distribute; smart guides while dragging.

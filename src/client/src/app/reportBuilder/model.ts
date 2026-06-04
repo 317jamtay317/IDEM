@@ -227,6 +227,22 @@ export function updateElement(
   }
 }
 
+/**
+ * Returns a new template with `patch` merged into its designer settings. The
+ * original template is not mutated; its bands and page are shared by reference,
+ * as only the settings change.
+ *
+ * @param template The template whose settings to update.
+ * @param patch The settings fields to change (e.g. `{ snapToGrid: false }`).
+ * @returns A new {@link ReportTemplate} with the updated settings.
+ */
+export function updateSettings(
+  template: ReportTemplate,
+  patch: Partial<BuilderSettings>,
+): ReportTemplate {
+  return { ...template, settings: { ...template.settings, ...patch } }
+}
+
 /** Default size and offset (inches) for a freshly inserted element of each type. */
 const DEFAULT_RECTS: Record<ElementType, Rect> = {
   label: { x: 0.5, y: 0.1, w: 2, h: 0.25 },

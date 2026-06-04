@@ -57,38 +57,68 @@ export function pxToInches(px: number, zoomPercent: number): number {
 }
 
 /**
+ * Snaps a measurement to the nearest grid line. When snapping is disabled (or the
+ * grid is non-positive) the value is returned unchanged, so callers can route
+ * every coordinate through `snap` regardless of the current setting.
+ *
+ * @param value The measurement, in inches.
+ * @param grid The grid spacing, in inches.
+ * @param enabled Whether snapping is active.
+ * @returns The value rounded to the nearest multiple of `grid`, or the original
+ * value when snapping is off or `grid` is zero or negative.
+ */
+export function snap(value: number, grid: number, enabled: boolean): number {
+  if (!enabled || grid <= 0) return value
+  return Math.round(value / grid) * grid
+}
+
+/**
  * The new top-left position (inches) of an element being dragged: its start
  * position offset by the pointer's pixel delta (converted to inches at the given
- * zoom), clamped so it never moves past the band/page origin.
+ * zoom), clamped so it never moves past the band/page origin and, when snapping
+ * is enabled, aligned to the grid.
  *
  * @param start The element's position at drag start, in inches.
  * @param deltaPx The pointer movement since drag start, in CSS pixels.
  * @param zoomPercent The canvas zoom, as a percentage (100 = actual size).
- * @returns The clamped new position, in inches.
+ * @param grid The grid spacing, in inches (defaults to no grid).
+ * @param snapEnabled Whether to snap the result to the grid (defaults to `false`).
+ * @returns The clamped (and optionally snapped) new position, in inches.
  */
 export function draggedPosition(
   start: { x: number; y: number },
   deltaPx: { x: number; y: number },
   zoomPercent: number,
+  grid = 0,
+  snapEnabled = false,
 ): { x: number; y: number } {
   return {
-    x: Math.max(0, start.x + pxToInches(deltaPx.x, zoomPercent)),
-    y: Math.max(0, start.y + pxToInches(deltaPx.y, zoomPercent)),
+    x: snap(Math.max(0, start.x + pxToInches(deltaPx.x, zoomPercent)), grid, snapEnabled),
+    y: snap(Math.max(0, start.y + pxToInches(deltaPx.y, zoomPercent)), grid, snapEnabled),
   }
 }
 
 /**
  * The new rect for an element being resized by dragging one of its corner
  * handles by `deltaInches`. Only the two edges the handle owns move; the
- * opposite corner stays put. Edges are clamped so the rect never inverts (size
+ * opposite corner stays put. When snapping is enabled the dragged edges are
+ * aligned to the grid. Edges are clamped so the rect never inverts (size
  * collapses to zero instead) and a moved edge never crosses the page origin.
  *
  * @param start The element's rect at resize start, in inches.
  * @param handle The corner being dragged.
  * @param deltaInches The pointer movement since resize start, in inches.
+ * @param grid The grid spacing, in inches (defaults to no grid).
+ * @param snapEnabled Whether to snap the dragged edges to the grid (defaults to `false`).
  * @returns The new {@link Rect}, in inches.
  */
-export function resizedRect(start: Rect, handle: ResizeHandle, deltaInches: { x: number; y: number }): Rect {
+export function resizedRect(
+  start: Rect,
+  handle: ResizeHandle,
+  deltaInches: { x: number; y: number },
+  grid = 0,
+  snapEnabled = false,
+): Rect {
   const startLeft = start.x
   const startTop = start.y
   const startRight = start.x + start.w
@@ -99,10 +129,14 @@ export function resizedRect(start: Rect, handle: ResizeHandle, deltaInches: { x:
   let right = startRight
   let bottom = startBottom
 
-  if (handle === 'se' || handle === 'ne') right = Math.max(startLeft, startRight + deltaInches.x)
-  if (handle === 'sw' || handle === 'nw') left = Math.min(startRight, Math.max(0, startLeft + deltaInches.x))
-  if (handle === 'se' || handle === 'sw') bottom = Math.max(startTop, startBottom + deltaInches.y)
-  if (handle === 'ne' || handle === 'nw') top = Math.min(startBottom, Math.max(0, startTop + deltaInches.y))
+  // Snap each dragged edge to its target grid line before clamping, so the moved
+  // edge lands on the grid regardless of where it started.
+  const s = (edge: number) => snap(edge, grid, snapEnabled)
+
+  if (handle === 'se' || handle === 'ne') right = Math.max(startLeft, s(startRight + deltaInches.x))
+  if (handle === 'sw' || handle === 'nw') left = Math.min(startRight, Math.max(0, s(startLeft + deltaInches.x)))
+  if (handle === 'se' || handle === 'sw') bottom = Math.max(startTop, s(startBottom + deltaInches.y))
+  if (handle === 'ne' || handle === 'nw') top = Math.min(startBottom, Math.max(0, s(startTop + deltaInches.y)))
 
   return { x: left, y: top, w: right - left, h: bottom - top }
 }
