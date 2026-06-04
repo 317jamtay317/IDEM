@@ -343,3 +343,83 @@ describe('ReportCanvas — move', () => {
     expect(onMoveElement).not.toHaveBeenCalled()
   })
 })
+
+describe('ReportCanvas — resize', () => {
+  it('shows four corner handles on the selected element', () => {
+    render(<ReportCanvas template={fixture()} zoom={100} selectedId="title" onResize={vi.fn()} />)
+
+    for (const corner of ['top-left', 'top-right', 'bottom-left', 'bottom-right']) {
+      expect(screen.getByRole('button', { name: `Resize ${corner}` })).toBeInTheDocument()
+    }
+  })
+
+  it('shows no resize handles when nothing is selected', () => {
+    render(<ReportCanvas template={fixture()} zoom={100} onResize={vi.fn()} />)
+
+    expect(screen.queryByRole('button', { name: /Resize/ })).not.toBeInTheDocument()
+  })
+
+  it('resizes from a corner handle as it is dragged', () => {
+    const onResize = vi.fn()
+    render(<ReportCanvas template={fixture()} zoom={100} selectedId="title" onResize={onResize} />)
+
+    // title rect = {x:1, y:0.5, w:3, h:0.25}; drag SE by +96px,+48px → +1in,+0.5in.
+    const se = screen.getByRole('button', { name: 'Resize bottom-right' })
+    firePointer(se, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(se, 'pointerMove', { clientX: 96, clientY: 48 })
+
+    expect(onResize).toHaveBeenLastCalledWith('title', { x: 1, y: 0.5, w: 4, h: 0.75 })
+  })
+
+  it('does not start a resize on a non-primary button', () => {
+    const onResize = vi.fn()
+    render(<ReportCanvas template={fixture()} zoom={100} selectedId="title" onResize={onResize} />)
+
+    const se = screen.getByRole('button', { name: 'Resize bottom-right' })
+    firePointer(se, 'pointerDown', { clientX: 0, clientY: 0, button: 2 })
+    firePointer(se, 'pointerMove', { clientX: 96, clientY: 48 })
+
+    expect(onResize).not.toHaveBeenCalled()
+  })
+
+  it('does not resize before a handle drag has started', () => {
+    const onResize = vi.fn()
+    render(<ReportCanvas template={fixture()} zoom={100} selectedId="title" onResize={onResize} />)
+
+    firePointer(screen.getByRole('button', { name: 'Resize bottom-right' }), 'pointerMove', { clientX: 96, clientY: 48 })
+
+    expect(onResize).not.toHaveBeenCalled()
+  })
+
+  it('ignores a handle pointer up when no resize is in progress', () => {
+    const onResize = vi.fn()
+    render(<ReportCanvas template={fixture()} zoom={100} selectedId="title" onResize={onResize} />)
+
+    expect(() => firePointer(screen.getByRole('button', { name: 'Resize bottom-right' }), 'pointerUp')).not.toThrow()
+    expect(onResize).not.toHaveBeenCalled()
+  })
+
+  it('stops resizing once the pointer is released', () => {
+    const onResize = vi.fn()
+    render(<ReportCanvas template={fixture()} zoom={100} selectedId="title" onResize={onResize} />)
+
+    const se = screen.getByRole('button', { name: 'Resize bottom-right' })
+    firePointer(se, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(se, 'pointerUp', { clientX: 0, clientY: 0 })
+    onResize.mockClear()
+    firePointer(se, 'pointerMove', { clientX: 96, clientY: 48 })
+
+    expect(onResize).not.toHaveBeenCalled()
+  })
+
+  it('keeps the selection when a resize handle is clicked', () => {
+    const onSelectElement = vi.fn()
+    render(
+      <ReportCanvas template={fixture()} zoom={100} selectedId="title" onSelectElement={onSelectElement} onResize={vi.fn()} />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resize bottom-right' }))
+
+    expect(onSelectElement).not.toHaveBeenCalled() // the handle swallows the click; no deselect
+  })
+})

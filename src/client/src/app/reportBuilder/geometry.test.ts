@@ -7,6 +7,7 @@ import {
   inchesToPx,
   pointsToPx,
   pxToInches,
+  resizedRect,
   zoomIn,
   zoomOut,
 } from './geometry'
@@ -62,6 +63,34 @@ describe('draggedPosition', () => {
 
   it('clamps the position to the band/page origin (never negative)', () => {
     expect(draggedPosition({ x: 0.5, y: 0.5 }, { x: -96, y: -96 }, 100)).toEqual({ x: 0, y: 0 })
+  })
+})
+
+describe('resizedRect', () => {
+  const start = { x: 1, y: 1, w: 2, h: 1 } // left 1, top 1, right 3, bottom 2
+
+  it('grows width and height from the bottom-right handle', () => {
+    expect(resizedRect(start, 'se', { x: 1, y: 0.5 })).toEqual({ x: 1, y: 1, w: 3, h: 1.5 })
+  })
+
+  it('moves the left and top edges from the top-left handle', () => {
+    expect(resizedRect(start, 'nw', { x: 0.5, y: 0.25 })).toEqual({ x: 1.5, y: 1.25, w: 1.5, h: 0.75 })
+  })
+
+  it('moves the left edge and bottom edge from the bottom-left handle', () => {
+    expect(resizedRect(start, 'sw', { x: 0.5, y: 0.5 })).toEqual({ x: 1.5, y: 1, w: 1.5, h: 1.5 })
+  })
+
+  it('moves the right edge and top edge from the top-right handle', () => {
+    expect(resizedRect(start, 'ne', { x: 1, y: 0.5 })).toEqual({ x: 1, y: 1.5, w: 3, h: 0.5 })
+  })
+
+  it('collapses to zero rather than inverting when over-dragged', () => {
+    expect(resizedRect(start, 'se', { x: -5, y: -5 })).toEqual({ x: 1, y: 1, w: 0, h: 0 })
+  })
+
+  it('keeps a moved edge on the page (origin never negative)', () => {
+    expect(resizedRect(start, 'nw', { x: -5, y: -5 })).toEqual({ x: 0, y: 0, w: 3, h: 2 })
   })
 })
 

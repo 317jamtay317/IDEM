@@ -7,13 +7,21 @@
  * data only at preview time (a later phase). Selection and editing arrive in
  * Phases 3–6.
  */
-import { useRef, type DragEvent, type PointerEvent } from 'react'
+import { Fragment, useRef, type DragEvent, type PointerEvent } from 'react'
 import { BAND_LABELS } from './bandLabels'
 import { ELEMENT_DRAG_MIME, isElementType } from './dnd'
 import { ELEMENT_TYPE_LABELS } from './elementDisplay'
 import { elementTextCss } from './elementStyleCss'
-import { draggedPosition, inchesToPx, pxToInches } from './geometry'
-import { type BandKind, type ElementType, type ReportElement, type ReportTemplate } from './model'
+import { draggedPosition, inchesToPx, pxToInches, resizedRect, type ResizeHandle } from './geometry'
+import { type BandKind, type ElementType, type Rect, type ReportElement, type ReportTemplate } from './model'
+
+/** The corner resize handles, with the accessible label shown for each. */
+const RESIZE_HANDLES: { handle: ResizeHandle; label: string }[] = [
+  { handle: 'nw', label: 'top-left' },
+  { handle: 'ne', label: 'top-right' },
+  { handle: 'sw', label: 'bottom-left' },
+  { handle: 'se', label: 'bottom-right' },
+]
 
 /** The text shown for an element on the read-only canvas. */
 function elementContent(el: ReportElement): string {
@@ -61,6 +69,11 @@ export interface ReportCanvasProps {
    * select-only (not movable).
    */
   onMoveElement?: (id: string, position: { x: number; y: number }) => void
+  /**
+   * Called as the selected element is resized by dragging a corner handle: the
+   * element's id and its new rect, in inches. Omit to hide the resize handles.
+   */
+  onResize?: (id: string, rect: Rect) => void
 }
 
 /**
@@ -77,6 +90,7 @@ export function ReportCanvas({
   onSelectElement,
   onInsertAt,
   onMoveElement,
+  onResize,
 }: ReportCanvasProps) {
   const px = (inches: number) => `${inchesToPx(inches, zoom)}px`
 
@@ -109,6 +123,33 @@ export function ReportCanvas({
     if (!drag.current) return
     e.currentTarget.releasePointerCapture?.(e.pointerId)
     drag.current = null
+  }
+
+  // The element being resized: its id, the handle grabbed, its start rect, and
+  // the pointer's start point.
+  const resize = useRef<{ id: string; handle: ResizeHandle; startRect: Rect; pointerX: number; pointerY: number } | null>(null)
+
+  // Begin a resize when a corner handle is pressed (without starting a move).
+  const handleResizeDown = (el: ReportElement, handle: ResizeHandle) => (e: PointerEvent) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    resize.current = { id: el.id, handle, startRect: el.rect, pointerX: e.clientX, pointerY: e.clientY }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+  }
+
+  // While resizing, report the element's new rect (live).
+  const handleResizeMove = (e: PointerEvent) => {
+    const r = resize.current
+    if (!r || !onResize) return
+    const delta = { x: pxToInches(e.clientX - r.pointerX, zoom), y: pxToInches(e.clientY - r.pointerY, zoom) }
+    onResize(r.id, resizedRect(r.startRect, r.handle, delta))
+  }
+
+  // End the resize.
+  const handleResizeUp = (e: PointerEvent) => {
+    if (!resize.current) return
+    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    resize.current = null
   }
 
   // Allow a drop only when the host accepts inserts; copy is the drop effect.
@@ -153,30 +194,52 @@ export function ReportCanvas({
           {band.elements.map((el) => {
             const content = elementContent(el)
             return (
-              <button
-                key={el.id}
-                type="button"
-                className={`rb-el rb-el-${el.type}${el.id === selectedId ? ' rb-el-selected' : ''}`}
-                data-element-id={el.id}
-                aria-pressed={el.id === selectedId}
-                aria-label={content === '' ? ELEMENT_TYPE_LABELS[el.type] : undefined}
-                style={{
-                  left: px(el.rect.x),
-                  top: px(el.rect.y),
-                  width: px(el.rect.w),
-                  height: px(el.rect.h),
-                  ...elementTextCss(el.style, zoom),
-                }}
-                onClick={(e) => {
-                  e.stopPropagation() // don't bubble to the page's deselect handler
-                  onSelectElement?.(el.id)
-                }}
-                onPointerDown={handlePointerDown(el)}
-                onPointerMove={onMoveElement ? handlePointerMove : undefined}
-                onPointerUp={onMoveElement ? handlePointerUp : undefined}
-              >
-                {content}
-              </button>
+              <Fragment key={el.id}>
+                <button
+                  type="button"
+                  className={`rb-el rb-el-${el.type}${el.id === selectedId ? ' rb-el-selected' : ''}`}
+                  data-element-id={el.id}
+                  aria-pressed={el.id === selectedId}
+                  aria-label={content === '' ? ELEMENT_TYPE_LABELS[el.type] : undefined}
+                  style={{
+                    left: px(el.rect.x),
+                    top: px(el.rect.y),
+                    width: px(el.rect.w),
+                    height: px(el.rect.h),
+                    ...elementTextCss(el.style, zoom),
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation() // don't bubble to the page's deselect handler
+                    onSelectElement?.(el.id)
+                  }}
+                  onPointerDown={handlePointerDown(el)}
+                  onPointerMove={onMoveElement ? handlePointerMove : undefined}
+                  onPointerUp={onMoveElement ? handlePointerUp : undefined}
+                >
+                  {content}
+                </button>
+
+                {/* Corner resize handles, shown only on the selected element. */}
+                {onResize &&
+                  el.id === selectedId &&
+                  RESIZE_HANDLES.map(({ handle, label }) => {
+                    const cornerX = handle === 'ne' || handle === 'se' ? el.rect.x + el.rect.w : el.rect.x
+                    const cornerY = handle === 'sw' || handle === 'se' ? el.rect.y + el.rect.h : el.rect.y
+                    return (
+                      <button
+                        key={handle}
+                        type="button"
+                        className={`rb-handle rb-handle-${handle}`}
+                        aria-label={`Resize ${label}`}
+                        style={{ left: px(cornerX), top: px(cornerY) }}
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={handleResizeDown(el, handle)}
+                        onPointerMove={handleResizeMove}
+                        onPointerUp={handleResizeUp}
+                      />
+                    )
+                  })}
+              </Fragment>
             )
           })}
         </div>

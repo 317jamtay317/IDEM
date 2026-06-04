@@ -15,6 +15,7 @@ import {
   updateElement,
   type BandKind,
   type ElementType,
+  type Rect,
   type ReportElement,
   type ReportTemplate,
 } from '../reportBuilder/model'
@@ -107,6 +108,11 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
     setTemplate((current) => updateElement(current, id, (el) => ({ ...el, rect: { ...el.rect, x: pos.x, y: pos.y } })))
   }
 
+  // Resize a placed element as a corner handle is dragged.
+  const handleResize = (id: string, rect: Rect) => {
+    setTemplate((current) => updateElement(current, id, (el) => ({ ...el, rect })))
+  }
+
   return (
     <div className="rb">
       <header className="rb-topbar">
@@ -184,6 +190,7 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
               onSelectElement={setSelectedId}
               onInsertAt={handleInsertAt}
               onMoveElement={handleMove}
+              onResize={handleResize}
             />
           </section>
         </div>

@@ -293,4 +293,19 @@ describe('ReportBuilderScreen — Insert palette (Phase 5)', () => {
     expect(screen.getByText('Annual Emissions Inventory')).toHaveStyle({ left: '136.32px' })
     expect(screen.getByText(/Selected: Label/)).toBeInTheDocument()
   })
+
+  it('resizes a selected element when a corner handle is dragged', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    // Select the title (4in wide → 384px at 100%); its resize handles appear.
+    await user.click(screen.getByText('Annual Emissions Inventory'))
+    expect(screen.getByText('Annual Emissions Inventory')).toHaveStyle({ width: '384px' })
+
+    const se = screen.getByRole('button', { name: 'Resize bottom-right' })
+    firePointer(se, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(se, 'pointerMove', { clientX: 96, clientY: 0 }) // widen by 1in
+
+    expect(screen.getByText('Annual Emissions Inventory')).toHaveStyle({ width: '480px' }) // 5in
+  })
 })
