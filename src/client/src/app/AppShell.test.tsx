@@ -219,3 +219,56 @@ describe('AppShell — Org User Facilities (I-D06)', () => {
     expect(screen.queryByRole('button', { name: 'Facilities' })).not.toBeInTheDocument()
   })
 })
+
+describe('AppShell — Report Builder (SiteAdmin only, I-D13)', () => {
+  it('opens the builder from the Reports screen for a SiteAdmin', async () => {
+    stubBreakpoint(true)
+    window.location.hash = '#/reports'
+    const user = userEvent.setup()
+    renderShell({ isSiteAdmin: true })
+
+    await user.click(await screen.findByRole('button', { name: 'New Report Template' }))
+
+    expect(
+      await screen.findByRole('toolbar', { name: 'Report builder tools' }),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(window.location.hash).toBe('#/report-builder/new'))
+  })
+
+  it('restores the builder and its template id from the URL hash (survives a refresh)', async () => {
+    stubBreakpoint(true)
+    window.location.hash = '#/report-builder/annual-emissions'
+
+    renderShell({ isSiteAdmin: true })
+
+    expect(
+      await screen.findByRole('toolbar', { name: 'Report builder tools' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('annual-emissions')).toBeInTheDocument()
+  })
+
+  it('redirects an Org User away from the builder, showing no builder (I-D13)', async () => {
+    stubBreakpoint(true)
+    window.location.hash = '#/report-builder/annual-emissions'
+
+    renderShell() // Org User by default
+
+    expect(await screen.findByText('Recent records')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('toolbar', { name: 'Report builder tools' }),
+    ).not.toBeInTheDocument()
+    await waitFor(() => expect(window.location.hash).toBe('#/'))
+  })
+
+  it('returns to the Reports screen when the builder is closed', async () => {
+    stubBreakpoint(true)
+    window.location.hash = '#/report-builder/annual-emissions'
+    const user = userEvent.setup()
+    renderShell({ isSiteAdmin: true })
+
+    await user.click(await screen.findByRole('button', { name: 'Back to Reports' }))
+
+    expect(await screen.findByText('IDEM Reports')).toBeInTheDocument()
+    await waitFor(() => expect(window.location.hash).toBe('#/reports'))
+  })
+})

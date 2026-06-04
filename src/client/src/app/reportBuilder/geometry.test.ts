@@ -1,0 +1,101 @@
+import { describe, it, expect } from 'vitest'
+import {
+  DEFAULT_ZOOM,
+  PX_PER_INCH,
+  ZOOM_LEVELS,
+  draggedPosition,
+  inchesToPx,
+  pointsToPx,
+  pxToInches,
+  zoomIn,
+  zoomOut,
+} from './geometry'
+
+describe('inchesToPx', () => {
+  it('maps inches to CSS pixels at the reference resolution when zoomed to 100%', () => {
+    expect(inchesToPx(1, 100)).toBe(PX_PER_INCH)
+    expect(inchesToPx(8.5, 100)).toBe(8.5 * PX_PER_INCH)
+  })
+
+  it('scales the pixel size with the zoom level', () => {
+    expect(inchesToPx(1, 200)).toBe(PX_PER_INCH * 2)
+    expect(inchesToPx(1, 50)).toBe(PX_PER_INCH / 2)
+  })
+
+  it('maps zero inches to zero pixels at any zoom', () => {
+    expect(inchesToPx(0, 150)).toBe(0)
+  })
+})
+
+describe('pointsToPx', () => {
+  it('converts points to pixels at the reference resolution and zoom', () => {
+    expect(pointsToPx(72, 100)).toBe(96) // 72pt = 1in = 96px
+    expect(pointsToPx(12, 100)).toBe(16)
+    expect(pointsToPx(12, 200)).toBe(32)
+  })
+})
+
+describe('pxToInches', () => {
+  it('inverts inchesToPx at 100% zoom', () => {
+    expect(pxToInches(96, 100)).toBe(1)
+    expect(pxToInches(48, 100)).toBe(0.5)
+  })
+
+  it('accounts for the zoom level', () => {
+    expect(pxToInches(192, 200)).toBe(1) // 192px at 200% is 1in on the page
+    expect(pxToInches(48, 50)).toBe(1) // 48px at 50% is 1in on the page
+  })
+
+  it('round-trips a value through inchesToPx', () => {
+    expect(pxToInches(inchesToPx(0.42, 125), 125)).toBeCloseTo(0.42, 10)
+  })
+})
+
+describe('draggedPosition', () => {
+  it('offsets the start position by a pixel delta converted to inches', () => {
+    expect(draggedPosition({ x: 1, y: 1 }, { x: 96, y: 48 }, 100)).toEqual({ x: 2, y: 1.5 })
+  })
+
+  it('scales the delta by the zoom level', () => {
+    expect(draggedPosition({ x: 1, y: 0 }, { x: 192, y: 0 }, 200)).toEqual({ x: 2, y: 0 })
+  })
+
+  it('clamps the position to the band/page origin (never negative)', () => {
+    expect(draggedPosition({ x: 0.5, y: 0.5 }, { x: -96, y: -96 }, 100)).toEqual({ x: 0, y: 0 })
+  })
+})
+
+describe('zoom levels', () => {
+  it('defaults to 100% and includes it among the selectable levels', () => {
+    expect(DEFAULT_ZOOM).toBe(100)
+    expect(ZOOM_LEVELS).toContain(100)
+  })
+
+  it('lists the levels in ascending order', () => {
+    expect([...ZOOM_LEVELS]).toEqual([...ZOOM_LEVELS].sort((a, b) => a - b))
+  })
+})
+
+describe('zoomIn', () => {
+  it('steps up to the next selectable level', () => {
+    expect(zoomIn(100)).toBe(125)
+    expect(zoomIn(50)).toBe(75)
+  })
+
+  it('clamps at the maximum level', () => {
+    const max = ZOOM_LEVELS[ZOOM_LEVELS.length - 1]
+    expect(zoomIn(max)).toBe(max)
+  })
+})
+
+describe('zoomOut', () => {
+  it('steps down to the previous selectable level', () => {
+    expect(zoomOut(100)).toBe(75)
+    expect(zoomOut(200)).toBe(150)
+  })
+
+  it('clamps at the minimum level', () => {
+    const min = ZOOM_LEVELS[0]
+    expect(zoomOut(min)).toBe(min)
+  })
+})

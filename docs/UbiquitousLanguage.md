@@ -155,6 +155,11 @@ The definition of a Report's layout, data bindings, and parameters. Authored by 
 ### Report Engine 🟡
 The runtime that produces a Report from a Report Template and a set of source Records. Built in-house (handoff decision: no third-party commercial reporting vendor).
 
+### Report Builder 🟡
+The in-product, **SiteAdmin-only** designer used to author a **Report Template**. It presents a banded canvas (report-header / page-header / detail / sub-report / page-footer bands) onto which labels, data fields, formulas, shapes, images, barcodes and sub-reports are placed, then saved as the Template's definition (serialized to RDL/RDLC XML). "Report Builder" names the editing tool; the artifact it produces is the **Report Template**, and the runtime that executes a Template against Records is the **Report Engine**.
+
+> SiteAdmin-only because RecordKeeping authors the v1 Templates (see Report Template). 🟡 — confirm the name "Report Builder" (vs. "Report Designer") with the product owner.
+
 ---
 
 ## Cross-cutting Concepts
