@@ -6,7 +6,9 @@ using Microsoft.Extensions.DependencyInjection;
 using RecordKeeping.Api.IntegrationTests.Auth;
 using RecordKeeping.Application.Facilities;
 using RecordKeeping.Application.Orgs;
+using RecordKeeping.Application.ProductionFieldLimits;
 using RecordKeeping.Application.Records;
+using RecordKeeping.Domain.ProductionFieldLimits;
 using RecordKeeping.Domain.ProductionFields;
 using RecordKeeping.Infrastructure.Identity;
 using Shouldly;
@@ -39,7 +41,8 @@ public class MyOrgRecordEndpointsTests(RecordKeepingApiFactory factory)
     private sealed record RecordRequest(Guid FacilityId, DateOnly Date, IReadOnlyList<RecordValueRequest> Values);
 
     private sealed record RecordValueResponse(
-        string PropertyName, decimal? NumericValue, bool? BooleanValue, DateOnly? DateValue);
+        string PropertyName, decimal? NumericValue, bool? BooleanValue, DateOnly? DateValue,
+        string? Exceedance = null);
 
     private sealed record RecordResponse(
         Guid Id, Guid FacilityId, DateOnly Date, IReadOnlyList<RecordValueResponse> Values);
@@ -311,6 +314,43 @@ public class MyOrgRecordEndpointsTests(RecordKeepingApiFactory factory)
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task Get_AnnotatesValues_WithExceedanceAgainstOrgLimits()
+    {
+        var seeded = await SeedOrgWithUserAsync();
+        await SeedLimitAsync(seeded.OrgId, "HotMix", low: 0m, high: 200m);
+        await SeedRecordAsync(seeded.OrgId, seeded.FacilityId, new DateOnly(2026, 5, 29), 300m); // above 200
+        await SeedRecordAsync(seeded.OrgId, seeded.FacilityId, new DateOnly(2026, 5, 28), 150m); // within
+        var client = await AuthenticatedClientAsync(seeded.Email);
+
+        var records = await client.GetFromJsonAsync<List<RecordResponse>>("/me/org/records");
+
+        records.ShouldNotBeNull();
+        HotMixOn(records!, new DateOnly(2026, 5, 29)).Exceedance.ShouldBe("Above");
+        HotMixOn(records!, new DateOnly(2026, 5, 28)).Exceedance.ShouldBe("Within");
+    }
+
+    [Fact]
+    [Trait("Invariant", "I-D03")]
+    public async Task Get_DoesNotApplyAnotherOrgsLimits_ToExceedance()
+    {
+        var orgA = await SeedOrgWithUserAsync();
+        var orgB = await SeedOrgWithUserAsync();
+        // Org B sets a tight limit; Org A sets none. Org A's value must not be classified by Org B's limit.
+        await SeedLimitAsync(orgB.OrgId, "HotMix", low: 0m, high: 1m);
+        await SeedRecordAsync(orgA.OrgId, orgA.FacilityId, Day, 300m);
+        var clientA = await AuthenticatedClientAsync(orgA.Email);
+
+        var records = await clientA.GetFromJsonAsync<List<RecordResponse>>("/me/org/records");
+
+        // I-D03: with no limit of its own, Org A's value is unannotated — Org B's limit never applies.
+        records.ShouldNotBeNull();
+        HotMixOn(records!, Day).Exceedance.ShouldBeNull();
+    }
+
+    private static RecordValueResponse HotMixOn(List<RecordResponse> records, DateOnly date) =>
+        records.Single(r => r.Date == date).Values.Single(v => v.PropertyName == "HotMix");
+
     private async Task<SeededOrg> SeedOrgWithUserAsync()
     {
         using var scope = factory.Services.CreateScope();
@@ -362,6 +402,15 @@ public class MyOrgRecordEndpointsTests(RecordKeepingApiFactory factory)
         await records.AddAsync(record, CancellationToken.None);
         await records.SaveChangesAsync(CancellationToken.None);
         return record.Id;
+    }
+
+    private async Task SeedLimitAsync(Guid orgId, string propertyName, decimal low, decimal high)
+    {
+        using var scope = factory.Services.CreateScope();
+        var limits = scope.ServiceProvider.GetRequiredService<IProductionFieldLimitRepository>();
+        var limit = ProductionFieldLimit.Create(orgId, propertyName, low, high, LimitUnit.Tons).Value;
+        await limits.AddAsync(limit, CancellationToken.None);
+        await limits.SaveChangesAsync(CancellationToken.None);
     }
 
     private async Task<HttpClient> AuthenticatedClientAsync(string email, string password = Password)

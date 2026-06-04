@@ -1,5 +1,7 @@
 using ErrorOr;
 using RecordKeeping.Application.Records;
+using RecordKeeping.Application.Tests.ProductionFieldLimits;
+using RecordKeeping.Domain.ProductionFieldLimits;
 using RecordKeeping.Domain.ProductionFields;
 using RecordKeeping.Domain.Records;
 using Shouldly;
@@ -22,7 +24,8 @@ public class GetRecordHandlerTests
         records.Seed(record);
 
         var result = await GetRecordHandler.Handle(
-            new GetRecordQuery(orgId, record.Id), records, CancellationToken.None);
+            new GetRecordQuery(orgId, record.Id), records, new FakeProductionFieldLimitRepository(),
+            CancellationToken.None);
 
         result.IsError.ShouldBeFalse();
         result.Value.Id.ShouldBe(record.Id);
@@ -36,7 +39,7 @@ public class GetRecordHandlerTests
     {
         var result = await GetRecordHandler.Handle(
             new GetRecordQuery(Guid.NewGuid(), Guid.NewGuid()), new FakeRecordRepository(),
-            CancellationToken.None);
+            new FakeProductionFieldLimitRepository(), CancellationToken.None);
 
         result.IsError.ShouldBeTrue();
         result.FirstError.Type.ShouldBe(ErrorType.NotFound);
@@ -54,9 +57,28 @@ public class GetRecordHandlerTests
 
         // I-D03: Org A asks for Org B's record by id; scoped to Org A, it is not found.
         var result = await GetRecordHandler.Handle(
-            new GetRecordQuery(orgA, orgBRecord.Id), records, CancellationToken.None);
+            new GetRecordQuery(orgA, orgBRecord.Id), records, new FakeProductionFieldLimitRepository(),
+            CancellationToken.None);
 
         result.IsError.ShouldBeTrue();
         result.FirstError.Type.ShouldBe(ErrorType.NotFound);
+    }
+
+    [Fact]
+    public async Task Handle_AnnotatesNumericValueWithExceedance()
+    {
+        var orgId = Guid.NewGuid();
+        var record = DomainRecord.Create(orgId, Guid.NewGuid(), Day).Value;
+        record.AddValue(RecordValue.Create("HotMix", ProductionFieldDataType.Decimal, 1240m).Value);
+        var records = new FakeRecordRepository();
+        records.Seed(record);
+        var limits = new FakeProductionFieldLimitRepository();
+        limits.Seed(ProductionFieldLimit.Create(orgId, "HotMix", 0m, 1000m, LimitUnit.Tons).Value);
+
+        var result = await GetRecordHandler.Handle(
+            new GetRecordQuery(orgId, record.Id), records, limits, CancellationToken.None);
+
+        result.Value.Values.Single(v => v.PropertyName == "HotMix")
+            .Exceedance.ShouldBe(ExceedanceStatus.Above);
     }
 }

@@ -106,4 +106,18 @@ public sealed class ProductionFieldLimit : AggregateRoot<Guid>
         Unit = unit;
         return Result.Success;
     }
+
+    /// <summary>
+    /// Classifies a recorded value against this limit's inclusive range: a value below
+    /// <see cref="LowLimit"/> is <see cref="ExceedanceStatus.Below"/>, above <see cref="HighLimit"/> is
+    /// <see cref="ExceedanceStatus.Above"/>, and anything in between (bounds included) is
+    /// <see cref="ExceedanceStatus.Within"/>. A <see cref="ExceedanceStatus.Below"/> or
+    /// <see cref="ExceedanceStatus.Above"/> result is an Exceedance.
+    /// </summary>
+    /// <param name="value">The recorded value to classify.</param>
+    /// <returns>Where the value falls relative to the acceptable range.</returns>
+    public ExceedanceStatus Classify(decimal value) =>
+        value < LowLimit ? ExceedanceStatus.Below
+        : value > HighLimit ? ExceedanceStatus.Above
+        : ExceedanceStatus.Within;
 }

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using RecordKeeping.Application.Facilities;
+using RecordKeeping.Application.ProductionFieldLimits;
 using RecordKeeping.Application.ProductionFields;
 using RecordKeeping.Application.Records;
 
@@ -30,6 +31,7 @@ public partial class MyOrgRecordEndpoints
     private static async Task<IResult> GetMyRecords(
         ClaimsPrincipal user,
         IRecordRepository records,
+        IProductionFieldLimitRepository limits,
         CancellationToken cancellationToken,
         Guid? facilityId = null,
         DateOnly? from = null,
@@ -42,7 +44,7 @@ public partial class MyOrgRecordEndpoints
 
         // I-D03: the Org id comes only from the caller's token; the filters narrow within it, never across.
         var result = await GetRecordsHandler.Handle(
-            new GetRecordsQuery(orgId, facilityId, from, to), records, cancellationToken);
+            new GetRecordsQuery(orgId, facilityId, from, to), records, limits, cancellationToken);
         return result.Match(Results.Ok);
     }
 
@@ -50,6 +52,7 @@ public partial class MyOrgRecordEndpoints
         Guid recordId,
         ClaimsPrincipal user,
         IRecordRepository records,
+        IProductionFieldLimitRepository limits,
         CancellationToken cancellationToken)
     {
         if (user.GetOrgId() is not Guid orgId)
@@ -58,7 +61,7 @@ public partial class MyOrgRecordEndpoints
         }
 
         var result = await GetRecordHandler.Handle(
-            new GetRecordQuery(orgId, recordId), records, cancellationToken);
+            new GetRecordQuery(orgId, recordId), records, limits, cancellationToken);
         return result.Match(Results.Ok);
     }
 

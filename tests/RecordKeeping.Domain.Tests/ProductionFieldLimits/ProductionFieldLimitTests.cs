@@ -105,4 +105,29 @@ public class ProductionFieldLimitTests
         limit.HighLimit.ShouldBe(2m);
         limit.Unit.ShouldBe(LimitUnit.Percentage);
     }
+
+    private static ProductionFieldLimit Limit(decimal low, decimal high) =>
+        ProductionFieldLimit.Create(Guid.NewGuid(), Property, low, high, LimitUnit.Percentage).Value;
+
+    [Fact]
+    public void Classify_ValueInsideRange_IsWithin() =>
+        Limit(0m, 2m).Classify(1m).ShouldBe(ExceedanceStatus.Within);
+
+    [Fact]
+    public void Classify_ValueAtLowBoundary_IsWithin() =>
+        // The range is inclusive: a value equal to the low bound is not below it.
+        Limit(0m, 2m).Classify(0m).ShouldBe(ExceedanceStatus.Within);
+
+    [Fact]
+    public void Classify_ValueAtHighBoundary_IsWithin() =>
+        // The range is inclusive: a value equal to the high bound is not above it.
+        Limit(0m, 2m).Classify(2m).ShouldBe(ExceedanceStatus.Within);
+
+    [Fact]
+    public void Classify_ValueBelowLowBound_IsBelow() =>
+        Limit(0m, 2m).Classify(-0.5m).ShouldBe(ExceedanceStatus.Below);
+
+    [Fact]
+    public void Classify_ValueAboveHighBound_IsAbove() =>
+        Limit(0m, 2m).Classify(2.5m).ShouldBe(ExceedanceStatus.Above);
 }

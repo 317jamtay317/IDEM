@@ -1,6 +1,8 @@
+using System.Collections.ObjectModel;
 using ErrorOr;
 using RecordKeeping.Application.Facilities;
 using RecordKeeping.Application.ProductionFields;
+using RecordKeeping.Domain.ProductionFieldLimits;
 using RecordKeeping.Domain.Records;
 
 namespace RecordKeeping.Application.Records;
@@ -108,6 +110,8 @@ public static class LogRecordHandler
 
         await records.AddAsync(record, cancellationToken);
         await records.SaveChangesAsync(cancellationToken);
-        return RecordResponse.FromRecord(record);
+
+        // The write path echoes back what was saved; Exceedance is computed on the read side (GetRecords).
+        return RecordResponse.FromRecord(record, ReadOnlyDictionary<string, ProductionFieldLimit>.Empty);
     }
 }

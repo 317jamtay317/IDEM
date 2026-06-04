@@ -1,4 +1,5 @@
 using ErrorOr;
+using RecordKeeping.Application.ProductionFieldLimits;
 
 namespace RecordKeeping.Application.Records;
 
@@ -17,6 +18,7 @@ public static class GetRecordHandler
     /// </summary>
     /// <param name="query">The query carrying the Org id and the Record id.</param>
     /// <param name="records">The Record repository.</param>
+    /// <param name="limits">The Production Field Limit repository, used to flag exceedances on each value.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>
     /// The Record as a <see cref="RecordResponse"/>, or <see cref="RecordErrors.NotFound"/> when no such
@@ -25,6 +27,7 @@ public static class GetRecordHandler
     public static async Task<ErrorOr<RecordResponse>> Handle(
         GetRecordQuery query,
         IRecordRepository records,
+        IProductionFieldLimitRepository limits,
         CancellationToken cancellationToken)
     {
         var record = await records.GetByIdAsync(query.OrgId, query.RecordId, cancellationToken);
@@ -33,6 +36,10 @@ public static class GetRecordHandler
             return RecordErrors.NotFound(query.RecordId);
         }
 
-        return RecordResponse.FromRecord(record);
+        // Only the caller's own Org limits are loaded, so exceedance never leaks across Orgs (I-D03).
+        var limitsByProperty = await RecordExceedance.LoadOrgLimitsAsync(
+            query.OrgId, limits, cancellationToken);
+
+        return RecordResponse.FromRecord(record, limitsByProperty);
     }
 }

@@ -140,7 +140,7 @@ Unlike the **Production Field** catalog (which is platform-global and SiteAdmin-
 How a **Production Field Limit**'s bounds are expressed: **Percentage** or **Tons** (an absolute quantity). Tentative — the real unit set is pending domain-owner confirmation.
 
 ### Exceedance 🟡
-A recorded value that falls outside its Production Field's configured range for the Org — below the **low limit** or above the **high limit** of the applicable **Production Field Limit**. Surfacing exceedances on the records views (and feeding them into Reports) is the next increment.
+A recorded value that falls outside its Production Field's configured range for the Org — below the **low limit** or above the **high limit** of the applicable **Production Field Limit**. The range is inclusive, so a value equal to a bound is not an exceedance. The records read model now carries each numeric value's status (`Within`/`Below`/`Above`, computed against the caller's own Org limits per I-D03; `null` when no limit is configured); surfacing it on the client records views and feeding it into Reports remain.
 
 ### (Record subtypes) ❓
 Concrete Record types cannot be named until the dominant compliance burden is identified with the domain owner. Candidates that may apply (do not adopt until confirmed):
