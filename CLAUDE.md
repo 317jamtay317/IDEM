@@ -157,6 +157,14 @@ Test projects mirror their production counterparts 1:1. Integration tests for th
 
 - **"Run it" / "run the stack" means the full Docker stack** — `docker compose up -d --build`, bringing up every service (sql-server, api, mcp). It does **not** mean a host `dotnet run`.
 - Endpoints: app + login + OAuth at **https://localhost:8443**, MCP at **https://localhost:8444/mcp**. The dev cert is self-signed, so browsers warn — proceed past it, or trust it once with `dotnet dev-certs https -ep certs/recordkeeping.pfx -p DevCert!123 --trust`.
+- **After bringing the stack up, always show the seeded logins** so the user can sign in without hunting for them. The seeder ([`AuthSeeder.cs`](src/RecordKeeping.Infrastructure/Identity/AuthSeeder.cs)) prints them to the API container console (`[AuthSeeder] Seeded …`) on first seed; surface this table every time:
+
+  | Role | Email | Password |
+  |---|---|---|
+  | **SiteAdmin** | `admin@recordkeeping.local` | `ChangeMe!OnFirstLogin1` |
+  | **Org User** (Development only) | `user@recordkeeping.local` | `ChangeMe!OnFirstLogin1` |
+
+  Both are local dev bootstrap credentials defined in `AuthSeeder.cs` (the Org User seeds only in the Development environment). If they ever change there, update this table to match.
 - Stop with `docker compose down` (add `-v` to drop the SQL data volume).
 - A host `dotnet run` against a DB-only container (`docker compose up -d sql-server`) is acceptable only as a quick inner loop **when explicitly asked** — never as the default for "run it".
 
