@@ -31,12 +31,23 @@ export interface LogRecordInput {
   values: RecordValueInput[]
 }
 
+/**
+ * Where a recorded numeric value falls relative to the Org's configured limit for the field.
+ * `Below`/`Above` are exceedances; mirrors the server `ExceedanceStatus`.
+ */
+export type ExceedanceStatus = 'Within' | 'Below' | 'Above'
+
 /** A single recorded value as returned by the API. */
 export interface RecordValueResult {
   propertyName: string
   numericValue: number | null
   booleanValue: boolean | null
   dateValue: string | null
+  /**
+   * The numeric value's status against the Org's limit, or `null` when the field is non-numeric or
+   * the Org has set no limit for it. Computed server-side against the caller's own Org limits (I-D03).
+   */
+  exceedance?: ExceedanceStatus | null
 }
 
 /** A Record as returned by the API after logging. */

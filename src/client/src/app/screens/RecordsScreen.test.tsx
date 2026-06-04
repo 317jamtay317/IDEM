@@ -145,6 +145,60 @@ describe('RecordsScreen — facility list (desktop)', () => {
     expect(within(grid).getByText('—')).toBeInTheDocument() // ColdMix missing on this Record
   })
 
+  it('flags values that exceed the Org limit and leaves in-range values plain', async () => {
+    const user = userEvent.setup()
+    const facilitiesApi = {
+      list: vi.fn(() => Promise.resolve([{ id: 'goshen', name: 'Goshen Asphalt Plant' }])),
+    } as unknown as MyFacilitiesApi
+    const fieldsApi = {
+      list: vi.fn(() =>
+        Promise.resolve([
+          field({ propertyName: 'HotMix', friendlyName: 'Hot Mix', dataType: 'Decimal', displayOrder: 0 }),
+        ]),
+      ),
+    } as unknown as ProductionFieldsApi
+    const recordsApi = {
+      list: vi.fn(() =>
+        Promise.resolve([
+          {
+            id: 'a', facilityId: 'goshen', date: '2026-05-29',
+            values: [{ propertyName: 'HotMix', numericValue: 1240, booleanValue: null, dateValue: null, exceedance: 'Above' }],
+          },
+          {
+            id: 'b', facilityId: 'goshen', date: '2026-05-28',
+            values: [{ propertyName: 'HotMix', numericValue: 2, booleanValue: null, dateValue: null, exceedance: 'Below' }],
+          },
+          {
+            id: 'c', facilityId: 'goshen', date: '2026-05-27',
+            values: [{ propertyName: 'HotMix', numericValue: 50, booleanValue: null, dateValue: null, exceedance: 'Within' }],
+          },
+        ]),
+      ),
+    } as unknown as RecordsApi
+
+    render(
+      <RecordsScreen
+        accessToken="tok"
+        facilitiesApi={facilitiesApi}
+        fieldsApi={fieldsApi}
+        recordsApi={recordsApi}
+      />,
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Goshen Asphalt Plant' }))
+    const grid = await screen.findByRole('table', { name: /records/i })
+
+    const above = within(grid).getByTitle('Above the configured limit')
+    expect(above).toHaveTextContent('1,240')
+    expect(above).toHaveClass('cell-exceedance')
+
+    const below = within(grid).getByTitle('Below the configured limit')
+    expect(below).toHaveTextContent('2')
+
+    // The in-range value is shown without any exceedance flag.
+    expect(within(grid).getByText('50')).not.toHaveClass('cell-exceedance')
+  })
+
   it('filters the Records by a date range', async () => {
     const apis = makeApis()
     const user = userEvent.setup()

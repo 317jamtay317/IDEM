@@ -45,6 +45,37 @@ function formatValue(field: ProductionField, record: LoggedRecord): string {
 }
 
 /**
+ * The Exceedance direction for a field's value on a Record, or `null` when the value is within the
+ * Org's configured range, has no limit, or is non-numeric. Only `Below`/`Above` are exceedances.
+ */
+function exceedanceOf(field: ProductionField, record: LoggedRecord): 'Below' | 'Above' | null {
+  const ex = record.values.find((v) => v.propertyName === field.propertyName)?.exceedance
+  return ex === 'Below' || ex === 'Above' ? ex : null
+}
+
+/**
+ * A single drill-down cell. A value outside the Org's configured limit is shown in the danger colour
+ * with a direction arrow (▲ above / ▼ below) and an accessible description; in-range and unlimited
+ * values render as plain text.
+ */
+function ValueCell({ field, record }: { field: ProductionField; record: LoggedRecord }) {
+  const text = formatValue(field, record)
+  const exceedance = exceedanceOf(field, record)
+  if (!exceedance) return <span>{text}</span>
+
+  const label = exceedance === 'Above' ? 'Above the configured limit' : 'Below the configured limit'
+  return (
+    <span className={`cell-exceedance cell-exceedance-${exceedance.toLowerCase()}`} title={label}>
+      {text}
+      <span className="exceedance-arrow" aria-hidden="true">
+        {exceedance === 'Above' ? '▲' : '▼'}
+      </span>
+      <span className="visually-hidden"> — {label}</span>
+    </span>
+  )
+}
+
+/**
  * Records screen. Level one lists the Org's Facilities (a {@link GridControl} table on desktop,
  * tappable cards on mobile/tablet); selecting one drills into that Facility's Records — a date plus a
  * column per catalog <em>Summary</em> field — filterable by a date range. Every read is scoped to the
@@ -128,7 +159,7 @@ export function RecordsScreen({
         key: field.propertyName,
         header: field.friendlyName,
         align: field.dataType === 'Decimal' || field.dataType === 'Integer' ? 'right' : undefined,
-        render: (r) => <span>{formatValue(field, r)}</span>,
+        render: (r) => <ValueCell field={field} record={r} />,
       })),
     ]
 

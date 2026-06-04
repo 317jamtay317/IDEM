@@ -1269,6 +1269,31 @@
   color: var(--color-text);
 }
 
+/* Records drill-down: a recorded value outside the Org's configured range (an Exceedance). */
+.cell-exceedance {
+  font-weight: 600;
+  color: var(--color-danger-text);
+}
+
+.exceedance-arrow {
+  margin-inline-start: 0.25rem;
+  font-size: 0.8em;
+  vertical-align: 0.05em;
+}
+
+/* Accessible-only text: present for screen readers, removed from the visual flow. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Urgency text colours (e.g. the Records "Monthly due" date). */
 .text-danger {
   color: var(--color-danger-text);
