@@ -7,7 +7,7 @@ namespace RecordKeeping.Domain.Tests.ProductionFields;
 public class ProductionFieldTests
 {
     [Fact]
-    [Trait("Invariant", "I-D19")]
+    [Trait("Invariant", "I-D21")]
     public void Create_WithValidValues_ReturnsProductionField()
     {
         var result = ProductionField.Create("HotMix", "Hot Mix", ProductionFieldDataType.Decimal);
@@ -65,7 +65,7 @@ public class ProductionFieldTests
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    [Trait("Invariant", "I-D19")]
+    [Trait("Invariant", "I-D21")]
     public void Create_WithEmptyOrWhitespacePropertyName_ReturnsValidationError(string propertyName)
     {
         var result = ProductionField.Create(propertyName, "Hot Mix", ProductionFieldDataType.Decimal);
@@ -86,7 +86,7 @@ public class ProductionFieldTests
     }
 
     [Fact]
-    [Trait("Invariant", "I-D19")]
+    [Trait("Invariant", "I-D21")]
     public void Create_WithPropertyNameExceedingMaxLength_ReturnsValidationError()
     {
         var tooLong = new string('a', ProductionField.MaxPropertyNameLength + 1);
@@ -167,14 +167,14 @@ public class ProductionFieldTests
     }
 
     [Fact]
-    [Trait("Invariant", "I-D19")]
+    [Trait("Invariant", "I-D21")]
     public void Update_DoesNotChangePropertyName()
     {
         var field = ProductionField.Create("HotMix", "Hot Mix", ProductionFieldDataType.Decimal).Value;
 
         field.Update("Renamed", ProductionFieldDataType.Integer, null, null, true, 9);
 
-        // I-D19: PropertyName is the immutable key; editing the field never touches it.
+        // I-D21: PropertyName is the immutable key; editing the field never touches it.
         field.PropertyName.ShouldBe("HotMix");
     }
 

@@ -22,7 +22,7 @@ public interface IProductionFieldRepository
 
     /// <summary>
     /// Loads the field with the given <paramref name="propertyName"/> (case-insensitive), or
-    /// <c>null</c> if none exists. Used to enforce PropertyName uniqueness (I-D19).
+    /// <c>null</c> if none exists. Used to enforce PropertyName uniqueness (I-D21).
     /// </summary>
     /// <param name="propertyName">The machine key to look up.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
@@ -32,7 +32,7 @@ public interface IProductionFieldRepository
     /// <summary>
     /// Loads the <em>active</em> field with the given <paramref name="friendlyName"/>
     /// (case-insensitive), or <c>null</c> if none exists. Used to enforce FriendlyName uniqueness
-    /// among active fields (I-D20).
+    /// among active fields (I-D22).
     /// </summary>
     /// <param name="friendlyName">The display label to look up.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>

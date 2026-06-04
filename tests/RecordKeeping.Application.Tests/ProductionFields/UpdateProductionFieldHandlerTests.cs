@@ -68,7 +68,7 @@ public class UpdateProductionFieldHandlerTests
     }
 
     [Fact]
-    [Trait("Invariant", "I-D20")]
+    [Trait("Invariant", "I-D22")]
     public async Task Handle_RenamingToAnotherActiveFieldsName_ReturnsConflict()
     {
         var repository = new FakeProductionFieldRepository();
@@ -89,7 +89,7 @@ public class UpdateProductionFieldHandlerTests
     }
 
     [Fact]
-    [Trait("Invariant", "I-D20")]
+    [Trait("Invariant", "I-D22")]
     public async Task Handle_KeepingItsOwnFriendlyName_Succeeds()
     {
         var repository = new FakeProductionFieldRepository();
@@ -108,7 +108,7 @@ public class UpdateProductionFieldHandlerTests
     }
 
     [Fact]
-    [Trait("Invariant", "I-D19")]
+    [Trait("Invariant", "I-D21")]
     public async Task Handle_DoesNotChangePropertyName()
     {
         var repository = new FakeProductionFieldRepository();

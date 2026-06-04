@@ -15,18 +15,18 @@ public static class ProductionFieldErrors
         Error.NotFound("ProductionField.NotFound", $"No Production Field exists with id '{id}'.");
 
     /// <summary>
-    /// I-D19: another Production Field already uses the given <paramref name="propertyName"/>.
+    /// I-D21: another Production Field already uses the given <paramref name="propertyName"/>.
     /// </summary>
     /// <param name="propertyName">The conflicting machine key.</param>
     /// <returns>A conflict error.</returns>
     public static Error DuplicatePropertyName(string propertyName) =>
-        Error.Conflict("I-D19", $"A Production Field with PropertyName '{propertyName}' already exists.");
+        Error.Conflict("I-D21", $"A Production Field with PropertyName '{propertyName}' already exists.");
 
     /// <summary>
-    /// I-D20: another active Production Field already uses the given <paramref name="friendlyName"/>.
+    /// I-D22: another active Production Field already uses the given <paramref name="friendlyName"/>.
     /// </summary>
     /// <param name="friendlyName">The conflicting display label.</param>
     /// <returns>A conflict error.</returns>
     public static Error DuplicateFriendlyName(string friendlyName) =>
-        Error.Conflict("I-D20", $"An active Production Field with FriendlyName '{friendlyName}' already exists.");
+        Error.Conflict("I-D22", $"An active Production Field with FriendlyName '{friendlyName}' already exists.");
 }

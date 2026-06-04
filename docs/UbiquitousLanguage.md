@@ -108,8 +108,8 @@ The regulated facility type for v1 customers. Produces hot mix asphalt (HMA). Su
 One entry in the platform-wide **catalog** of data points that can be captured on a Record — e.g. *Hot Mix*, *Waste Oil*, *Baghouse Pressure Drop*. The catalog is the source of truth for *which* fields exist; Record values (a later slice) are stored sparsely, keyed by a field's immutable `PropertyName`.
 
 Each Production Field carries:
-- **PropertyName** — the stable, machine-facing key (e.g. `HotMix`). Required, **immutable**, and unique (I-D19). Record values are stored against it, so it must never change.
-- **FriendlyName** — the human-facing label shown wherever a user picks or searches for a field (e.g. "Hot Mix"). Editable; unique among active fields so a search result is unambiguous (I-D20).
+- **PropertyName** — the stable, machine-facing key (e.g. `HotMix`). Required, **immutable**, and unique (I-D21). Record values are stored against it, so it must never change.
+- **FriendlyName** — the human-facing label shown wherever a user picks or searches for a field (e.g. "Hot Mix"). Editable; unique among active fields so a search result is unambiguous (I-D22).
 - **Description** — optional help text explaining what the field captures.
 - **DataType** — `Decimal`, `Integer`, `Boolean`, or `Date` (the value kinds carried over from the legacy plant-pollution record).
 - **Category** — optional grouping for the field picker (e.g. *Mixes*, *Fuels & Burners*, *Oil Heaters*, *RAP*, *Baghouse*).

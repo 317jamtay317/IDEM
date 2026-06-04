@@ -37,7 +37,7 @@ public class ReactivateProductionFieldHandlerTests
     }
 
     [Fact]
-    [Trait("Invariant", "I-D20")]
+    [Trait("Invariant", "I-D22")]
     public async Task Handle_WhenFriendlyNameClashesWithActiveField_ReturnsConflict()
     {
         var repository = new FakeProductionFieldRepository();

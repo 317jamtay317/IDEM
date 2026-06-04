@@ -15,7 +15,7 @@ public static class ReactivateProductionFieldHandler
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>
     /// The reactivated field; <see cref="ProductionFieldErrors.NotFound"/> when it does not exist; or
-    /// <see cref="ProductionFieldErrors.DuplicateFriendlyName"/> (I-D20) when an active field already uses
+    /// <see cref="ProductionFieldErrors.DuplicateFriendlyName"/> (I-D22) when an active field already uses
     /// its FriendlyName.
     /// </returns>
     public static async Task<ErrorOr<ProductionFieldResponse>> Handle(
@@ -29,7 +29,7 @@ public static class ReactivateProductionFieldHandler
             return ProductionFieldErrors.NotFound(command.Id);
         }
 
-        // I-D20: cannot reactivate into a clash with an already-active field's FriendlyName.
+        // I-D22: cannot reactivate into a clash with an already-active field's FriendlyName.
         var clash = await repository.GetActiveByFriendlyNameAsync(field.FriendlyName, cancellationToken);
         if (clash is not null && clash.Id != field.Id)
         {

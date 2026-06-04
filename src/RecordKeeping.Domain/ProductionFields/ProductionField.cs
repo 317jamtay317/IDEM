@@ -10,7 +10,7 @@ namespace RecordKeeping.Domain.ProductionFields;
 /// </summary>
 /// <remarks>
 /// Aggregate root, managed by SiteAdmins and shared across every Org — it is not Org-scoped, so
-/// I-D03 does not apply to it. Constructed only via <see cref="Create"/>. Per I-D19,
+/// I-D03 does not apply to it. Constructed only via <see cref="Create"/>. Per I-D21,
 /// <see cref="PropertyName"/> is assigned once at creation and never changes.
 /// </remarks>
 public sealed class ProductionField : AggregateRoot<Guid>
@@ -23,14 +23,14 @@ public sealed class ProductionField : AggregateRoot<Guid>
 
     /// <summary>
     /// The stable, machine-facing key for the field (e.g. <c>HotMix</c>). Required, immutable, and
-    /// unique across the catalog (I-D19); Record values are stored keyed by it, so it never changes.
+    /// unique across the catalog (I-D21); Record values are stored keyed by it, so it never changes.
     /// </summary>
     public string PropertyName { get; }
 
     /// <summary>
     /// The human-facing label shown wherever a user picks or searches for the field (e.g. "Hot Mix").
     /// Editable via <see cref="Rename"/>, and unique among active fields so a search result is
-    /// unambiguous (I-D20).
+    /// unambiguous (I-D22).
     /// </summary>
     public string FriendlyName { get; private set; }
 
@@ -84,7 +84,7 @@ public sealed class ProductionField : AggregateRoot<Guid>
     /// <summary>
     /// Creates a new Production Field.
     /// </summary>
-    /// <param name="propertyName">The immutable machine key, e.g. <c>HotMix</c> (I-D19); required, trimmed.</param>
+    /// <param name="propertyName">The immutable machine key, e.g. <c>HotMix</c> (I-D21); required, trimmed.</param>
     /// <param name="friendlyName">The human-facing label, e.g. "Hot Mix"; required, trimmed.</param>
     /// <param name="dataType">The kind of value the field captures.</param>
     /// <param name="description">Optional help text; blank is stored as <see langword="null"/>.</param>
@@ -126,7 +126,7 @@ public sealed class ProductionField : AggregateRoot<Guid>
 
     /// <summary>
     /// Updates the editable attributes of the field. The immutable <see cref="PropertyName"/> is never
-    /// touched (I-D19); blank <paramref name="description"/> or <paramref name="category"/> is stored as
+    /// touched (I-D21); blank <paramref name="description"/> or <paramref name="category"/> is stored as
     /// <see langword="null"/>.
     /// </summary>
     /// <param name="friendlyName">The new human-facing label; required, trimmed.</param>
@@ -150,7 +150,7 @@ public sealed class ProductionField : AggregateRoot<Guid>
             return validatedFriendlyName.Errors;
         }
 
-        // I-D19: PropertyName is intentionally never assigned here — it is immutable.
+        // I-D21: PropertyName is intentionally never assigned here — it is immutable.
         FriendlyName = validatedFriendlyName.Value;
         DataType = dataType;
         Description = Normalize(description);
@@ -173,8 +173,8 @@ public sealed class ProductionField : AggregateRoot<Guid>
     {
         if (string.IsNullOrWhiteSpace(propertyName))
         {
-            // I-D19: a Production Field's PropertyName is required.
-            return Error.Validation("I-D19", "PropertyName is required for a Production Field.");
+            // I-D21: a Production Field's PropertyName is required.
+            return Error.Validation("I-D21", "PropertyName is required for a Production Field.");
         }
 
         var trimmed = propertyName.Trim();

@@ -52,7 +52,7 @@ public class CreateProductionFieldHandlerTests
     }
 
     [Fact]
-    [Trait("Invariant", "I-D19")]
+    [Trait("Invariant", "I-D21")]
     public async Task Handle_WithDuplicatePropertyName_ReturnsConflictAndDoesNotPersist()
     {
         var repository = new FakeProductionFieldRepository();
@@ -70,7 +70,7 @@ public class CreateProductionFieldHandlerTests
     }
 
     [Fact]
-    [Trait("Invariant", "I-D20")]
+    [Trait("Invariant", "I-D22")]
     public async Task Handle_WithDuplicateActiveFriendlyName_ReturnsConflictAndDoesNotPersist()
     {
         var repository = new FakeProductionFieldRepository();
@@ -88,7 +88,7 @@ public class CreateProductionFieldHandlerTests
     }
 
     [Fact]
-    [Trait("Invariant", "I-D20")]
+    [Trait("Invariant", "I-D22")]
     public async Task Handle_WithFriendlyNameMatchingRetiredField_IsAllowed()
     {
         var repository = new FakeProductionFieldRepository();

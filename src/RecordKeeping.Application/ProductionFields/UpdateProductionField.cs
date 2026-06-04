@@ -29,7 +29,7 @@ public static class UpdateProductionFieldHandler
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>
     /// The updated field; <see cref="ProductionFieldErrors.NotFound"/> when it does not exist;
-    /// <see cref="ProductionFieldErrors.DuplicateFriendlyName"/> (I-D20) when the new label collides with
+    /// <see cref="ProductionFieldErrors.DuplicateFriendlyName"/> (I-D22) when the new label collides with
     /// another active field; or a validation error when the FriendlyName is invalid.
     /// </returns>
     public static async Task<ErrorOr<ProductionFieldResponse>> Handle(
@@ -43,7 +43,7 @@ public static class UpdateProductionFieldHandler
             return ProductionFieldErrors.NotFound(command.Id);
         }
 
-        // I-D20: a rename must not collide with another active field's FriendlyName.
+        // I-D22: a rename must not collide with another active field's FriendlyName.
         var candidate = command.FriendlyName?.Trim() ?? string.Empty;
         var clash = await repository.GetActiveByFriendlyNameAsync(candidate, cancellationToken);
         if (clash is not null && clash.Id != field.Id)

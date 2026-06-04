@@ -6,7 +6,7 @@ namespace RecordKeeping.Application.ProductionFields;
 /// Read model returned to API callers for a <see cref="ProductionField"/>.
 /// </summary>
 /// <param name="Id">The field's unique identifier.</param>
-/// <param name="PropertyName">The immutable machine key (I-D19).</param>
+/// <param name="PropertyName">The immutable machine key (I-D21).</param>
 /// <param name="FriendlyName">The human-facing label.</param>
 /// <param name="Description">Optional help text, or <c>null</c>.</param>
 /// <param name="DataType">The kind of value the field captures.</param>

@@ -4,7 +4,7 @@ using RecordKeeping.Domain.ProductionFields;
 namespace RecordKeeping.Application.ProductionFields;
 
 /// <summary>Command to add a new Production Field to the catalog.</summary>
-/// <param name="PropertyName">The immutable machine key, e.g. <c>HotMix</c> (I-D19).</param>
+/// <param name="PropertyName">The immutable machine key, e.g. <c>HotMix</c> (I-D21).</param>
 /// <param name="FriendlyName">The human-facing label, e.g. "Hot Mix".</param>
 /// <param name="DataType">The kind of value the field captures.</param>
 /// <param name="Description">Optional help text.</param>
@@ -29,8 +29,8 @@ public static class CreateProductionFieldHandler
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>
     /// The created field as a <see cref="ProductionFieldResponse"/>; a validation error when a value is
-    /// invalid; <see cref="ProductionFieldErrors.DuplicatePropertyName"/> (I-D19) when the PropertyName is
-    /// taken; or <see cref="ProductionFieldErrors.DuplicateFriendlyName"/> (I-D20) when an active field
+    /// invalid; <see cref="ProductionFieldErrors.DuplicatePropertyName"/> (I-D21) when the PropertyName is
+    /// taken; or <see cref="ProductionFieldErrors.DuplicateFriendlyName"/> (I-D22) when an active field
     /// already uses the FriendlyName.
     /// </returns>
     public static async Task<ErrorOr<ProductionFieldResponse>> Handle(
@@ -53,13 +53,13 @@ public static class CreateProductionFieldHandler
 
         var field = result.Value;
 
-        // I-D19: PropertyName is the unique key across the whole catalog.
+        // I-D21: PropertyName is the unique key across the whole catalog.
         if (await repository.GetByPropertyNameAsync(field.PropertyName, cancellationToken) is not null)
         {
             return ProductionFieldErrors.DuplicatePropertyName(field.PropertyName);
         }
 
-        // I-D20: FriendlyName is unique among active fields.
+        // I-D22: FriendlyName is unique among active fields.
         if (await repository.GetActiveByFriendlyNameAsync(field.FriendlyName, cancellationToken) is not null)
         {
             return ProductionFieldErrors.DuplicateFriendlyName(field.FriendlyName);
