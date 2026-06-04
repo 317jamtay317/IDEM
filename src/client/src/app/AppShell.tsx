@@ -10,6 +10,7 @@ import { ReportsScreen } from './screens/ReportsScreen'
 import { OrgsScreen } from './screens/OrgsScreen'
 import { FacilitiesScreen } from './screens/FacilitiesScreen'
 import { LogRecordScreen } from './screens/LogRecordScreen'
+import { ProductionFieldsScreen } from './screens/ProductionFieldsScreen'
 import './app.css'
 
 /** Props for {@link AppShell}. */
@@ -63,10 +64,13 @@ export function AppShell({ email, isSiteAdmin, accessToken = null, onSignOut }: 
         <div className="app-content">
           <main className="app-main">
             {effectiveScreen === 'home' && <DashboardScreen onLogRecord={() => navigate('log')} />}
-            {effectiveScreen === 'log' && <LogRecordScreen />}
+            {effectiveScreen === 'log' && <LogRecordScreen accessToken={accessToken} />}
             {effectiveScreen === 'records' && <RecordsScreen />}
             {effectiveScreen === 'reports' && <ReportsScreen />}
             {effectiveScreen === 'orgs' && <OrgsScreen accessToken={accessToken} />}
+            {effectiveScreen === 'productionFields' && (
+              <ProductionFieldsScreen accessToken={accessToken} />
+            )}
             {effectiveScreen === 'facilities' && <FacilitiesScreen accessToken={accessToken} />}
           </main>
 

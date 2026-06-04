@@ -1,26 +1,55 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   facilities,
-  fieldOptions,
+  fieldOptions as defaultFieldOptions,
   productionEntries,
   type ProductionEntry,
 } from '../data'
+import { productionFieldsApi as defaultApi, type ProductionFieldsApi } from '../productionFieldsApi'
 import { TopBar } from '../components/TopBar'
 import { SearchableSelect } from '../components/SearchableSelect'
 import { ChevronDownIcon, CloseIcon, PlusIcon } from '../components/icons'
 
 let nextId = 100
 
+/** Props for {@link LogRecordScreen}. */
+export interface LogRecordScreenProps {
+  /** Bearer token; when present the field picker loads the live Production Field catalog. */
+  accessToken?: string | null
+  /** Catalog client; injectable for tests. Defaults to the live `fetch` client. */
+  api?: ProductionFieldsApi
+}
+
 /**
  * Log a Record screen: choose a Facility and date, then enter production
  * tonnage per field. Entries can be added, edited and removed. On tablet and
- * desktop the form is presented as a centred card. Saving is a no-op in the
- * prototype.
+ * desktop the form is presented as a centred card. The field picker offers the
+ * live, SiteAdmin-managed Production Field catalog when authenticated, falling
+ * back to a static sample list otherwise. Saving is a no-op in the prototype.
  */
-export function LogRecordScreen() {
+export function LogRecordScreen({ accessToken = null, api = defaultApi }: LogRecordScreenProps = {}) {
   const [entries, setEntries] = useState<ProductionEntry[]>(() =>
     productionEntries.map((e) => ({ ...e })),
   )
+
+  // Live catalog field labels when authenticated; the static sample list otherwise (prototype/tests).
+  const [fieldOptions, setFieldOptions] = useState<string[]>(defaultFieldOptions)
+
+  useEffect(() => {
+    if (!accessToken) return
+    let cancelled = false
+    api
+      .list(accessToken)
+      .then((fields) => {
+        if (!cancelled && fields.length > 0) setFieldOptions(fields.map((f) => f.friendlyName))
+      })
+      .catch(() => {
+        // Keep the static fallback if the catalog can't be loaded.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [accessToken, api])
 
   function updateTons(id: string, value: number) {
     setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, tons: value } : e)))
