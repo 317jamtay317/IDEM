@@ -170,6 +170,25 @@
   min-width: 0;
 }
 
+/* Title row: an optional leading control (e.g. a back button) beside the title. */
+.topbar-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* Back affordance shown beside a detail-screen title. */
+.topbar-back {
+  margin-left: -0.5rem;
+  color: var(--color-text-muted);
+}
+
+.topbar-back svg {
+  width: 22px;
+  height: 22px;
+}
+
 .topbar-title {
   font-size: 1.375rem;
   font-weight: 700;
@@ -1348,6 +1367,16 @@
   text-align: center;
 }
 
+/* Header cells must honour the column's alignment too; `.record-table th` forces
+   every header left, which would misalign a right/centred header from its cells. */
+.grid-control-table th.grid-control-align-right {
+  text-align: right;
+}
+
+.grid-control-table th.grid-control-align-center {
+  text-align: center;
+}
+
 /* Full-width status / empty-state message cell. */
 .grid-control-message {
   text-align: center;
@@ -1469,3 +1498,157 @@
   width: 22px;
   height: 22px;
 }
+
+/* --- Tabs ------------------------------------------------------------------ */
+.tablist {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 1rem;
+}
+
+.tab {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 0.625rem 0.9rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.tab-active {
+  color: var(--color-text);
+  border-bottom-color: var(--color-primary);
+}
+
+/* --- DatePicker (custom calendar) ----------------------------------------- */
+.date-picker {
+  position: relative;
+}
+
+/* Trigger styled like a text input: value on the left, calendar glyph on the right. */
+.date-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.date-picker-placeholder {
+  color: var(--color-text-muted);
+}
+
+.date-picker-trigger-invalid {
+  border-color: var(--color-danger-text);
+}
+
+.date-picker-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.date-picker-popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  width: 17rem;
+  padding: 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+}
+
+.date-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.date-picker-nav {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+}
+
+.date-picker-nav:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.date-picker-month {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.date-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.15rem;
+}
+
+.date-picker-weekday {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.date-picker-blank {
+  height: 2rem;
+}
+
+.date-picker-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.date-picker-day:hover {
+  background: var(--color-surface-muted);
+}
+
+.date-picker-day-selected,
+.date-picker-day-selected:hover {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 700;
+}
+
+.date-picker-day:focus-visible,
+.date-picker-nav:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+

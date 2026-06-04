@@ -28,6 +28,9 @@ public class MyOrgFacilityEndpointsTests(RecordKeepingApiFactory factory)
     private sealed record SeededOrg(Guid OrgId, Guid FacilityId, string FacilityName, string Email);
     private sealed record PermitRequest(DateOnly ExpirationDate, string Value);
     private sealed record PermitResponse(Guid Id, DateOnly ExpirationDate, string Value);
+    private sealed record LimitRequest(string EmissionType, double Value);
+    private sealed record UpdateLimitRequest(double Value);
+    private sealed record LimitResponse(string EmissionType, double Value);
 
     [Fact]
     public async Task Get_WithoutToken_Returns401()
@@ -234,6 +237,122 @@ public class MyOrgFacilityEndpointsTests(RecordKeepingApiFactory factory)
             new PermitRequest(DateOnly.FromDateTime(DateTime.Today.AddDays(365)), "Hijack"));
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task PostLimit_AsOrgUser_AddsLimitToOwnFacility()
+    {
+        var seeded = await SeedOrgWithUserAsync("Goshen Plant");
+        var client = await AuthenticatedClientAsync(seeded.Email);
+
+        var response = await client.PostAsJsonAsync(
+            $"/me/org/facilities/{seeded.FacilityId}/limits", new LimitRequest("VOC", 12.5));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var created = await response.Content.ReadFromJsonAsync<LimitResponse>();
+        created.ShouldNotBeNull();
+        created!.EmissionType.ShouldBe("VOC");
+        created.Value.ShouldBe(12.5);
+
+        // It round-trips through SQL: a fresh GET sees the persisted limit.
+        var list = await client.GetFromJsonAsync<List<LimitResponse>>(
+            $"/me/org/facilities/{seeded.FacilityId}/limits");
+        list!.ShouldContain(l => l.EmissionType == "VOC" && l.Value == 12.5);
+    }
+
+    [Fact]
+    public async Task PutLimit_UpdatesValue()
+    {
+        var seeded = await SeedOrgWithUserAsync("Goshen Plant");
+        var client = await AuthenticatedClientAsync(seeded.Email);
+        await AddLimitAsync(client, seeded.FacilityId, "VOC", 5);
+
+        var response = await client.PutAsJsonAsync(
+            $"/me/org/facilities/{seeded.FacilityId}/limits/VOC", new UpdateLimitRequest(8.25));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var list = await client.GetFromJsonAsync<List<LimitResponse>>(
+            $"/me/org/facilities/{seeded.FacilityId}/limits");
+        list!.ShouldContain(l => l.EmissionType == "VOC" && l.Value == 8.25);
+    }
+
+    [Fact]
+    public async Task DeleteLimit_RemovesIt()
+    {
+        var seeded = await SeedOrgWithUserAsync("Goshen Plant");
+        var client = await AuthenticatedClientAsync(seeded.Email);
+        await AddLimitAsync(client, seeded.FacilityId, "VOC", 5);
+        await AddLimitAsync(client, seeded.FacilityId, "NOx", 7);
+
+        var response = await client.DeleteAsync($"/me/org/facilities/{seeded.FacilityId}/limits/VOC");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var list = await client.GetFromJsonAsync<List<LimitResponse>>(
+            $"/me/org/facilities/{seeded.FacilityId}/limits");
+        list!.ShouldNotContain(l => l.EmissionType == "VOC");
+        list!.ShouldContain(l => l.EmissionType == "NOx");
+    }
+
+    [Fact]
+    [Trait("Invariant", "I-D19")]
+    public async Task PostLimit_DuplicateEmissionType_Returns400()
+    {
+        var seeded = await SeedOrgWithUserAsync("Goshen Plant");
+        var client = await AuthenticatedClientAsync(seeded.Email);
+        await AddLimitAsync(client, seeded.FacilityId, "VOC", 5);
+
+        var response = await client.PostAsJsonAsync(
+            $"/me/org/facilities/{seeded.FacilityId}/limits", new LimitRequest("VOC", 9));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PostLimit_UnknownEmissionType_Returns400()
+    {
+        var seeded = await SeedOrgWithUserAsync("Goshen Plant");
+        var client = await AuthenticatedClientAsync(seeded.Email);
+
+        var response = await client.PostAsJsonAsync(
+            $"/me/org/facilities/{seeded.FacilityId}/limits", new LimitRequest("NotAPollutant", 5));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Invariant", "I-D20")]
+    public async Task PostLimit_NonPositiveValue_Returns400()
+    {
+        var seeded = await SeedOrgWithUserAsync("Goshen Plant");
+        var client = await AuthenticatedClientAsync(seeded.Email);
+
+        var response = await client.PostAsJsonAsync(
+            $"/me/org/facilities/{seeded.FacilityId}/limits", new LimitRequest("VOC", 0));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Invariant", "I-D03")]
+    public async Task PostLimit_ToAnotherOrgsFacility_Returns404()
+    {
+        var orgA = await SeedOrgWithUserAsync("Org A Plant");
+        var orgB = await SeedOrgWithUserAsync("Org B Plant");
+        var clientA = await AuthenticatedClientAsync(orgA.Email);
+
+        // I-D03: Org A's user targets Org B's facility id; scoped to Org A, it is not found.
+        var response = await clientA.PostAsJsonAsync(
+            $"/me/org/facilities/{orgB.FacilityId}/limits", new LimitRequest("VOC", 5));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    private static async Task AddLimitAsync(
+        HttpClient client, Guid facilityId, string emissionType, double value)
+    {
+        var response = await client.PostAsJsonAsync(
+            $"/me/org/facilities/{facilityId}/limits", new LimitRequest(emissionType, value));
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     private static async Task<PermitResponse> AddPermitAsync(
