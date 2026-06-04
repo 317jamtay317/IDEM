@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { FacilityDetailScreen } from './FacilityDetailScreen'
 import type { MyFacilitiesApi, MyFacility, Permit, MonthlyLimit } from '../myFacilitiesApi'
@@ -8,7 +8,7 @@ const GOSHEN: MyFacility = { id: 'f1', name: 'Goshen Plant' }
 
 /** In-memory MyFacilitiesApi with call spies, seeded with optional permits/limits. */
 function makeApi(opts?: { facilities?: MyFacility[]; permits?: Permit[]; limits?: MonthlyLimit[] }) {
-  let facilities = (opts?.facilities ?? [GOSHEN]).map((f) => ({ ...f }))
+  const facilities = (opts?.facilities ?? [GOSHEN]).map((f) => ({ ...f }))
   let permits = (opts?.permits ?? []).map((p) => ({ ...p }))
   let limits = (opts?.limits ?? []).map((l) => ({ ...l }))
   return {
@@ -42,9 +42,18 @@ function makeApi(opts?: { facilities?: MyFacility[]; permits?: Permit[]; limits?
   } satisfies MyFacilitiesApi
 }
 
+/** Renders the screen and waits for the facility to resolve, then switches to the Limits tab. */
+async function renderOnLimitsTab(api: MyFacilitiesApi) {
+  const user = userEvent.setup()
+  render(<FacilityDetailScreen facilityId="f1" accessToken="tok" api={api} onBack={vi.fn()} />)
+  await screen.findByRole('heading', { name: 'Goshen Plant' })
+  await user.click(screen.getByRole('tab', { name: 'Monthly Limits' }))
+  return { user, table: screen.getByRole('table', { name: 'Monthly limits' }) }
+}
+
 afterEach(() => vi.clearAllMocks())
 
-describe('FacilityDetailScreen — loading', () => {
+describe('FacilityDetailScreen — loading & chrome', () => {
   it('shows the facility name once loaded', async () => {
     render(<FacilityDetailScreen facilityId="f1" accessToken="t" api={makeApi()} onBack={vi.fn()} />)
 
@@ -59,51 +68,69 @@ describe('FacilityDetailScreen — loading', () => {
     expect(await screen.findByText(/facility not found/i)).toBeInTheDocument()
   })
 
-  it('calls onBack from the back control', async () => {
+  it('renders the back control as an icon and calls onBack', async () => {
     const onBack = vi.fn()
     const user = userEvent.setup()
     render(<FacilityDetailScreen facilityId="f1" accessToken="t" api={makeApi()} onBack={onBack} />)
 
     await screen.findByRole('heading', { name: 'Goshen Plant' })
-    await user.click(screen.getByRole('button', { name: /back to facilities/i }))
+    const back = screen.getByRole('button', { name: /back to facilities/i })
+    // Icon-only affordance beside the title — not a full-width text button.
+    expect(back.querySelector('svg')).toBeInTheDocument()
+    expect(back).not.toHaveTextContent(/facilities/i)
 
+    await user.click(back)
     expect(onBack).toHaveBeenCalledOnce()
+  })
+
+  it('organizes Permits and Monthly Limits into tabs, Permits first', async () => {
+    render(<FacilityDetailScreen facilityId="f1" accessToken="t" api={makeApi()} onBack={vi.fn()} />)
+
+    await screen.findByRole('heading', { name: 'Goshen Plant' })
+    expect(screen.getByRole('tab', { name: 'Permits' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Monthly Limits' })).toHaveAttribute('aria-selected', 'false')
+    expect(screen.getByRole('table', { name: 'Permits' })).toBeInTheDocument()
   })
 })
 
-describe('FacilityDetailScreen — permits', () => {
-  it('renders the facility permits', async () => {
+describe('FacilityDetailScreen — permits tab', () => {
+  it('renders the facility permits in the grid', async () => {
     const api = makeApi({ permits: [{ id: 'p1', expirationDate: '2027-01-01', value: 'PERMIT-1' }] })
     render(<FacilityDetailScreen facilityId="f1" accessToken="t" api={api} onBack={vi.fn()} />)
 
     expect(await screen.findByText('PERMIT-1')).toBeInTheDocument()
   })
 
-  it('adds a permit', async () => {
+  it('adds a permit via the grid inline add row', async () => {
     const api = makeApi()
     const user = userEvent.setup()
     render(<FacilityDetailScreen facilityId="f1" accessToken="tok" api={api} onBack={vi.fn()} />)
 
     await screen.findByRole('heading', { name: 'Goshen Plant' })
-    fireEvent.change(screen.getByLabelText(/permit expiration date/i), {
-      target: { value: '2027-01-01' },
-    })
-    await user.type(screen.getByLabelText(/permit number/i), 'PERMIT-9')
+    // No add-form card — the "+" opens a blank editable row inside the grid.
     await user.click(screen.getByRole('button', { name: /add permit/i }))
+    await user.type(screen.getByLabelText(/permit number/i), 'PERMIT-9')
+    // Expiration uses the custom calendar: open it and pick the 15th of the shown month.
+    await user.click(screen.getByRole('button', { name: /permit expiration date/i }))
+    await user.click(within(screen.getByRole('dialog')).getByText('15'))
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
 
     expect(api.addPermit).toHaveBeenCalledWith('tok', 'f1', {
-      expirationDate: '2027-01-01',
+      expirationDate: expect.stringMatching(/^\d{4}-\d{2}-15$/),
       value: 'PERMIT-9',
     })
     expect(await screen.findByText('PERMIT-9')).toBeInTheDocument()
   })
 
-  it('deletes a permit', async () => {
+  it('deletes a permit (permits are not editable in place)', async () => {
     const api = makeApi({ permits: [{ id: 'p1', expirationDate: '2027-01-01', value: 'PERMIT-1' }] })
     const user = userEvent.setup()
     render(<FacilityDetailScreen facilityId="f1" accessToken="tok" api={api} onBack={vi.fn()} />)
 
     await screen.findByText('PERMIT-1')
+    const grid = screen.getByRole('table', { name: 'Permits' })
+    // Permits have no inline Edit — only Delete.
+    expect(within(grid).queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /delete permit PERMIT-1/i }))
 
     expect(api.removePermit).toHaveBeenCalledWith('tok', 'f1', 'p1')
@@ -111,55 +138,74 @@ describe('FacilityDetailScreen — permits', () => {
   })
 })
 
-describe('FacilityDetailScreen — monthly limits', () => {
-  // The add-form <select> renders every Emission Type as an <option>, so a plain
-  // text query for a type name (e.g. "VOC") is ambiguous. These tests target the
-  // unique per-limit value text ("5 tons/month") and the per-limit action buttons.
-  it('renders the facility limits in tons per month', async () => {
-    const api = makeApi({ limits: [{ emissionType: 'VOC', value: 5 }] })
-    render(<FacilityDetailScreen facilityId="f1" accessToken="t" api={api} onBack={vi.fn()} />)
+describe('FacilityDetailScreen — monthly limits tab', () => {
+  it('renders the facility limits in the grid', async () => {
+    const { table } = await renderOnLimitsTab(makeApi({ limits: [{ emissionType: 'VOC', value: 5 }] }))
 
-    expect(await screen.findByText(/5 tons\/month/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /edit VOC limit/i })).toBeInTheDocument()
+    expect(await within(table).findByText('VOC')).toBeInTheDocument()
+    expect(within(table).getByText('5')).toBeInTheDocument()
   })
 
-  it('adds a monthly limit', async () => {
-    const api = makeApi()
-    const user = userEvent.setup()
-    render(<FacilityDetailScreen facilityId="f1" accessToken="tok" api={api} onBack={vi.fn()} />)
+  it('formats limit values with thousands separators', async () => {
+    const { table } = await renderOnLimitsTab(
+      makeApi({ limits: [{ emissionType: 'VOC', value: 152000 }] }),
+    )
 
-    await screen.findByRole('heading', { name: 'Monthly Limits' })
-    await user.selectOptions(screen.getByLabelText(/emission type/i), 'NOx')
-    await user.type(screen.getByLabelText(/limit value/i), '7')
+    expect(await within(table).findByText('152,000')).toBeInTheDocument()
+  })
+
+  it('adds a monthly limit via the grid inline add row', async () => {
+    const api = makeApi()
+    const { user, table } = await renderOnLimitsTab(api)
+
+    // No add-form card — the "+" opens a blank editable row inside the grid.
     await user.click(screen.getByRole('button', { name: /add limit/i }))
+    await user.selectOptions(screen.getByLabelText(/emission type/i), 'NOx')
+    await user.type(screen.getByLabelText('Tons / month'), '7')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
 
     expect(api.addLimit).toHaveBeenCalledWith('tok', 'f1', { emissionType: 'NOx', value: 7 })
-    expect(await screen.findByText(/7 tons\/month/i)).toBeInTheDocument()
+    expect(await within(table).findByText('NOx')).toBeInTheDocument()
   })
 
-  it('edits a limit value', async () => {
+  it('offers only unused emission types in the inline add row', async () => {
     const api = makeApi({ limits: [{ emissionType: 'VOC', value: 5 }] })
-    const user = userEvent.setup()
-    render(<FacilityDetailScreen facilityId="f1" accessToken="tok" api={api} onBack={vi.fn()} />)
+    const { user } = await renderOnLimitsTab(api)
 
-    await user.click(await screen.findByRole('button', { name: /edit VOC limit/i }))
-    const input = screen.getByLabelText(/new value for VOC/i)
+    await user.click(screen.getByRole('button', { name: /add limit/i }))
+    const select = screen.getByLabelText(/emission type/i)
+    const options = within(select)
+      .getAllByRole('option')
+      .map((o) => o.textContent)
+    expect(options).not.toContain('VOC')
+    expect(options).toContain('NOx')
+  })
+
+  it('edits a limit value inline, with the emission type fixed', async () => {
+    const api = makeApi({ limits: [{ emissionType: 'VOC', value: 5 }] })
+    const { user, table } = await renderOnLimitsTab(api)
+
+    await within(table).findByText('VOC')
+    await user.click(within(table).getByRole('button', { name: /^edit$/i }))
+    // Emission Type is the limit's identity — never a select on an existing row.
+    expect(within(table).queryByLabelText(/emission type/i)).not.toBeInTheDocument()
+    const input = screen.getByLabelText('Tons / month')
     await user.clear(input)
     await user.type(input, '8')
-    await user.click(screen.getByRole('button', { name: /save VOC limit/i }))
+    await user.click(within(table).getByRole('button', { name: /^save$/i }))
 
     expect(api.updateLimit).toHaveBeenCalledWith('tok', 'f1', 'VOC', 8)
-    expect(await screen.findByText(/8 tons\/month/i)).toBeInTheDocument()
+    expect(await within(table).findByText('8')).toBeInTheDocument()
   })
 
   it('deletes a limit', async () => {
     const api = makeApi({ limits: [{ emissionType: 'VOC', value: 5 }] })
-    const user = userEvent.setup()
-    render(<FacilityDetailScreen facilityId="f1" accessToken="tok" api={api} onBack={vi.fn()} />)
+    const { user, table } = await renderOnLimitsTab(api)
 
-    await user.click(await screen.findByRole('button', { name: /delete VOC limit/i }))
+    await within(table).findByText('VOC')
+    await user.click(within(table).getByRole('button', { name: /delete VOC limit/i }))
 
     expect(api.removeLimit).toHaveBeenCalledWith('tok', 'f1', 'VOC')
-    await waitFor(() => expect(screen.queryByText(/5 tons\/month/i)).not.toBeInTheDocument())
+    await waitFor(() => expect(within(table).queryByText('VOC')).not.toBeInTheDocument())
   })
 })

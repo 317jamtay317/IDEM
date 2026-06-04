@@ -9,6 +9,16 @@ import {
   type Permit,
 } from '../myFacilitiesApi'
 import { TopBar } from '../components/TopBar'
+import { Tabs } from '../components/Tabs'
+import { GridControl, type GridColumn } from '../components/GridControl'
+import { DatePicker } from '../components/DatePicker'
+import { ArrowLeftIcon } from '../components/icons'
+
+/** Sentinel id for the unsaved "new" row opened by a grid's inline add ("+"). */
+const NEW_ROW_ID = '__new__'
+
+/** Thousands-grouped display of a tons/month value (e.g. 152000 → "152,000"). */
+const TONS_FORMAT = new Intl.NumberFormat('en-US')
 
 /** Props for {@link FacilityDetailScreen}. */
 export interface FacilityDetailScreenProps {
@@ -28,9 +38,10 @@ export interface FacilityDetailScreenProps {
 
 /**
  * Facility details — an Org User manages a single Facility's Permits and Monthly
- * Limits (I-D06). Every call is scoped server-side to the caller's Org via the
- * `org_id` claim (I-D03); the screen never sends an Org id. Mobile-first: rendered
- * as stacked cards on every breakpoint. The Facility itself is resolved from the
+ * Limits (I-D06), organized into tabs. Every call is scoped server-side to the
+ * caller's Org via the `org_id` claim (I-D03); the screen never sends an Org id.
+ * Each tab lists its records in a {@link GridControl}, where the "+" affordance
+ * opens a blank editable row inline. The Facility itself is resolved from the
  * Org's Facility list (no dedicated single-Facility endpoint).
  */
 export function FacilityDetailScreen({
@@ -109,55 +120,78 @@ export function FacilityDetailScreen({
       <TopBar
         title={facility?.name ?? 'Facility'}
         subtitle="Manage permits and monthly limits"
+        leading={
+          <button
+            type="button"
+            className="icon-button topbar-back"
+            aria-label="Back to facilities"
+            onClick={onBack}
+          >
+            <ArrowLeftIcon />
+          </button>
+        }
       />
 
       <div className="screen">
-        <button
-          type="button"
-          className="button button-secondary button-sm"
-          aria-label="Back to facilities"
-          onClick={onBack}
-        >
-          ← Facilities
-        </button>
-
         {error && <div className="auth-alert">Error: {error}</div>}
 
         {facility === undefined && <p className="muted">Loading facility…</p>}
         {facility === null && <p className="muted">Facility not found.</p>}
 
         {facility && (
-          <>
-            <PermitsSection
-              permits={permits}
-              onAdd={(permit) =>
-                run(() => api.addPermit(accessToken, facilityId, permit), reloadPermits)
-              }
-              onDelete={(permit) =>
-                run(() => api.removePermit(accessToken, facilityId, permit.id), reloadPermits)
-              }
-            />
-            <LimitsSection
-              limits={limits}
-              onAdd={(limit) =>
-                run(() => api.addLimit(accessToken, facilityId, limit), reloadLimits)
-              }
-              onUpdate={(emissionType, value) =>
-                run(() => api.updateLimit(accessToken, facilityId, emissionType, value), reloadLimits)
-              }
-              onDelete={(limit) =>
-                run(() => api.removeLimit(accessToken, facilityId, limit.emissionType), reloadLimits)
-              }
-            />
-          </>
+          <Tabs
+            ariaLabel="Facility sections"
+            tabs={[
+              {
+                id: 'permits',
+                label: 'Permits',
+                content: (
+                  <PermitsPanel
+                    permits={permits}
+                    onAdd={(permit) =>
+                      run(() => api.addPermit(accessToken, facilityId, permit), reloadPermits)
+                    }
+                    onDelete={(permit) =>
+                      run(() => api.removePermit(accessToken, facilityId, permit.id), reloadPermits)
+                    }
+                  />
+                ),
+              },
+              {
+                id: 'limits',
+                label: 'Monthly Limits',
+                content: (
+                  <LimitsPanel
+                    limits={limits}
+                    onAdd={(limit) =>
+                      run(() => api.addLimit(accessToken, facilityId, limit), reloadLimits)
+                    }
+                    onUpdate={(emissionType, value) =>
+                      run(
+                        () => api.updateLimit(accessToken, facilityId, emissionType, value),
+                        reloadLimits,
+                      )
+                    }
+                    onDelete={(emissionType) =>
+                      run(() => api.removeLimit(accessToken, facilityId, emissionType), reloadLimits)
+                    }
+                  />
+                ),
+              },
+            ]}
+          />
         )}
       </div>
     </>
   )
 }
 
-/** Permits section: list + add form + per-permit delete. Permits have no in-place edit. */
-function PermitsSection({
+/**
+ * Permits tab. A {@link GridControl} listing permits; the "+" opens a blank,
+ * editable row inline (add). Permits are add/delete only — existing rows show no
+ * Edit (only Delete); to change a permit, delete and re-add.
+ */
+function PermitsPanel({
   permits,
   onAdd,
   onDelete,
@@ -166,57 +200,57 @@ function PermitsSection({
   onAdd: (permit: { expirationDate: string; value: string }) => void
   onDelete: (permit: Permit) => void
 }) {
-  const [expirationDate, setExpirationDate] = useState('')
-  const [value, setValue] = useState('')
-  const canAdd = expirationDate.trim() !== '' && value.trim() !== ''
+  const columns: GridColumn<Permit>[] = [
+    {
+      key: 'value',
+      header: 'Permit number',
+      editable: true,
+      validate: (v) => (String(v ?? '').trim() === '' ? 'Permit number is required' : undefined),
+      editor: ({ draft, error, onChange }) => (
+        <input
+          type="text"
+          className="grid-control-editor"
+          aria-label="Permit number"
+          aria-invalid={error ? true : undefined}
+          placeholder="e.g. 123-45678"
+          value={String(draft ?? '')}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      ),
+    },
+    {
+      key: 'expirationDate',
+      header: 'Expiration',
+      editable: true,
+      validate: (v) =>
+        String(v ?? '').trim() === '' ? 'Expiration date is required' : undefined,
+      editor: ({ draft, error, onChange }) => (
+        <DatePicker
+          value={String(draft ?? '')}
+          onChange={(iso) => onChange(iso)}
+          ariaLabel="Permit expiration date"
+          invalid={!!error}
+        />
+      ),
+    },
+  ]
 
   return (
-    <section className="card-list">
-      <h2 className="section-title">Permits</h2>
-
-      <div className="card">
-        <label className="field">
-          <span className="field-label">Expiration date</span>
-          <input
-            type="date"
-            aria-label="Permit expiration date"
-            value={expirationDate}
-            onChange={(e) => setExpirationDate(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span className="field-label">Permit number</span>
-          <input
-            type="text"
-            aria-label="Permit number"
-            placeholder="e.g. 123-45678"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-          />
-        </label>
-        <button
-          type="button"
-          className="button button-primary button-block"
-          disabled={!canAdd}
-          onClick={() => {
-            onAdd({ expirationDate, value: value.trim() })
-            setExpirationDate('')
-            setValue('')
-          }}
-        >
-          Add permit
-        </button>
-      </div>
-
-      {permits === null && <p className="muted">Loading permits…</p>}
-      {permits !== null && permits.length === 0 && <p className="muted">No permits yet.</p>}
-      {permits?.map((permit) => (
-        <div className="card" key={permit.id}>
-          <div className="record-head">
-            <span className="card-title">{permit.value}</span>
-          </div>
-          <p className="muted">Expires {permit.expirationDate}</p>
-          <div className="row-actions">
+    <GridControl
+      columns={columns}
+      rows={permits ?? []}
+      rowKey={(p) => p.id}
+      loading={permits === null}
+      ariaLabel="Permits"
+      emptyText="No permits yet."
+      editing={{
+        onRowSave: (row) => onAdd({ expirationDate: row.expirationDate, value: row.value.trim() }),
+        newRow: () => ({ id: NEW_ROW_ID, expirationDate: '', value: '' }),
+        addLabel: 'Add permit',
+        // Existing permits are never edited in place — only the "+" new row is editable.
+        rowEditable: () => false,
+        rowActions: (permit) =>
+          permit.id === NEW_ROW_ID ? null : (
             <button
               type="button"
               className="button button-danger button-sm"
@@ -225,15 +259,29 @@ function PermitsSection({
             >
               Delete
             </button>
-          </div>
-        </div>
-      ))}
-    </section>
+          ),
+      }}
+    />
   )
 }
 
-/** Monthly Limits section: list + add form + per-limit edit-value and delete. */
-function LimitsSection({
+/** Grid view-model for a Monthly Limit, plus the unsaved-row marker. */
+interface LimitRow {
+  /** The pollutant; chosen on the new row, fixed (identity) on existing rows. */
+  emissionType: EmissionType
+  /** Tons/month cap; held as an empty string on the new row until entered. */
+  value: number | ''
+  /** True only for the unsaved row opened by the grid's "+". */
+  isNew?: boolean
+}
+
+/**
+ * Monthly Limits tab. A {@link GridControl} listing limits with inline value
+ * edit + delete; the "+" opens a blank row whose Emission Type is a `<select>`
+ * of the still-unused types (one limit per type, I-D19). On an existing row the
+ * Emission Type is fixed — only its value is editable.
+ */
+function LimitsPanel({
   limits,
   onAdd,
   onUpdate,
@@ -242,148 +290,94 @@ function LimitsSection({
   limits: MonthlyLimit[] | null
   onAdd: (limit: { emissionType: EmissionType; value: number }) => void
   onUpdate: (emissionType: EmissionType, value: number) => void
-  onDelete: (limit: MonthlyLimit) => void
+  onDelete: (emissionType: EmissionType) => void
 }) {
-  const [emissionType, setEmissionType] = useState<EmissionType>(EMISSION_TYPES[0])
-  const [value, setValue] = useState('')
-  const canAdd = value.trim() !== '' && Number(value) > 0
+  const used = new Set((limits ?? []).map((l) => l.emissionType))
+  const available = EMISSION_TYPES.filter((type) => !used.has(type))
+  const firstAvailable = available[0]
 
-  return (
-    <section className="card-list">
-      <h2 className="section-title">Monthly Limits</h2>
-
-      <div className="card">
-        <label className="field">
-          <span className="field-label">Emission type</span>
+  const columns: GridColumn<LimitRow>[] = [
+    {
+      key: 'emissionType',
+      header: 'Emission Type',
+      editable: true,
+      validate: (v) => (v ? undefined : 'Select an emission type'),
+      editor: ({ row, draft, error, onChange }) => {
+        // Emission Type is the limit's identity: a select on the new row, fixed text otherwise.
+        if (!(row as LimitRow).isNew) return <span>{String(draft ?? '')}</span>
+        return (
           <select
+            className="grid-control-editor"
             aria-label="Emission type"
-            value={emissionType}
-            onChange={(e) => setEmissionType(e.target.value as EmissionType)}
+            aria-invalid={error ? true : undefined}
+            value={String(draft ?? '')}
+            onChange={(e) => onChange(e.target.value)}
           >
-            {EMISSION_TYPES.map((type) => (
+            {available.map((type) => (
               <option key={type} value={type}>
                 {type}
               </option>
             ))}
           </select>
-        </label>
-        <label className="field">
-          <span className="field-label">Limit value (tons per month)</span>
-          <input
-            type="number"
-            min="0"
-            step="any"
-            aria-label="Limit value (tons per month)"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-          />
-        </label>
-        <button
-          type="button"
-          className="button button-primary button-block"
-          disabled={!canAdd}
-          onClick={() => {
-            onAdd({ emissionType, value: Number(value) })
-            setValue('')
-          }}
-        >
-          Add limit
-        </button>
-      </div>
-
-      {limits === null && <p className="muted">Loading limits…</p>}
-      {limits !== null && limits.length === 0 && <p className="muted">No monthly limits yet.</p>}
-      {limits?.map((limit) => (
-        <LimitCard
-          key={limit.emissionType}
-          limit={limit}
-          onUpdate={onUpdate}
-          onDelete={onDelete}
+        )
+      },
+    },
+    {
+      key: 'value',
+      header: 'Tons / month',
+      align: 'right',
+      accessor: (l) => (typeof l.value === 'number' ? TONS_FORMAT.format(l.value) : ''),
+      editable: true,
+      validate: (v) => (Number(v) > 0 ? undefined : 'Must be greater than 0'),
+      editor: ({ draft, error, onChange }) => (
+        <input
+          type="number"
+          min="0"
+          step="any"
+          className="grid-control-editor"
+          aria-label="Tons / month"
+          aria-invalid={error ? true : undefined}
+          value={String(draft ?? '')}
+          onChange={(e) => onChange(e.target.value)}
         />
-      ))}
-    </section>
-  )
-}
+      ),
+    },
+  ]
 
-/** A single Monthly Limit card with inline value editing and delete. */
-function LimitCard({
-  limit,
-  onUpdate,
-  onDelete,
-}: {
-  limit: MonthlyLimit
-  onUpdate: (emissionType: EmissionType, value: number) => void
-  onDelete: (limit: MonthlyLimit) => void
-}) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(String(limit.value))
-  const canSave = draft.trim() !== '' && Number(draft) > 0
+  const rows: LimitRow[] = (limits ?? []).map((l) => ({ ...l }))
 
   return (
-    <div className="card">
-      <div className="record-head">
-        <span className="card-title">{limit.emissionType}</span>
-        <span className="muted">{limit.value} tons/month</span>
-      </div>
-
-      {editing ? (
-        <>
-          <label className="field">
-            <span className="field-label">New value (tons per month)</span>
-            <input
-              type="number"
-              min="0"
-              step="any"
-              aria-label={`New value for ${limit.emissionType}`}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-            />
-          </label>
-          <div className="row-actions">
+    <GridControl
+      columns={columns}
+      rows={rows}
+      rowKey={(l) => (l.isNew ? NEW_ROW_ID : l.emissionType)}
+      loading={limits === null}
+      ariaLabel="Monthly limits"
+      emptyText="No monthly limits yet."
+      editing={{
+        onRowSave: (row) => {
+          if (row.isNew) onAdd({ emissionType: row.emissionType, value: Number(row.value) })
+          else onUpdate(row.emissionType, Number(row.value))
+        },
+        rowActions: (limit) =>
+          limit.isNew ? null : (
             <button
               type="button"
-              className="button button-primary button-sm"
-              disabled={!canSave}
-              aria-label={`Save ${limit.emissionType} limit`}
-              onClick={() => {
-                onUpdate(limit.emissionType, Number(draft))
-                setEditing(false)
-              }}
+              className="button button-danger button-sm"
+              aria-label={`Delete ${limit.emissionType} limit`}
+              onClick={() => onDelete(limit.emissionType)}
             >
-              Save
+              Delete
             </button>
-            <button
-              type="button"
-              className="button button-secondary button-sm"
-              onClick={() => {
-                setDraft(String(limit.value))
-                setEditing(false)
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </>
-      ) : (
-        <div className="row-actions">
-          <button
-            type="button"
-            className="button button-secondary button-sm"
-            aria-label={`Edit ${limit.emissionType} limit`}
-            onClick={() => setEditing(true)}
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            className="button button-danger button-sm"
-            aria-label={`Delete ${limit.emissionType} limit`}
-            onClick={() => onDelete(limit)}
-          >
-            Delete
-          </button>
-        </div>
-      )}
-    </div>
+          ),
+        // Offer the inline "+" only while some Emission Type is still unused.
+        ...(firstAvailable
+          ? {
+              newRow: (): LimitRow => ({ emissionType: firstAvailable, value: '', isNew: true }),
+              addLabel: 'Add limit',
+            }
+          : {}),
+      }}
+    />
   )
 }

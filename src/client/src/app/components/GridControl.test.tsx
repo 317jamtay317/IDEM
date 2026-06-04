@@ -355,4 +355,24 @@ describe('GridControl — inline editing & validation', () => {
     )
     expect(screen.queryByRole('button', { name: /add/i })).not.toBeInTheDocument()
   })
+
+  it('hides the per-row Edit button when rowEditable returns false, keeping rowActions', () => {
+    render(
+      <GridControl
+        columns={editColumns}
+        rows={entries}
+        rowKey={rowKey}
+        editing={{
+          onRowSave: vi.fn(),
+          rowEditable: () => false,
+          rowActions: (entry) => <button type="button">Delete {entry.field}</button>,
+        }}
+      />,
+    )
+
+    // No Edit button anywhere, but the per-row action (Delete) still renders.
+    expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete Hot Mix' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete Cold Mix' })).toBeInTheDocument()
+  })
 })

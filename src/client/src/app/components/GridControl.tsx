@@ -111,6 +111,13 @@ export interface GridEditing<TRow> {
    * edited (e.g. a Delete button). Return `null` to render none for a given row.
    */
   rowActions?: (row: TRow) => ReactNode
+  /**
+   * When provided and it returns `false` for a row, that row's Edit button is
+   * hidden, making the row display-only; any {@link GridEditing.rowActions} still
+   * render. Defaults to every row being editable. Use for grids whose rows can be
+   * added and removed but not edited in place.
+   */
+  rowEditable?: (row: TRow) => boolean
 }
 
 /**
@@ -358,13 +365,15 @@ export function GridControl<TRow>({
                         </>
                       ) : (
                         <>
-                          <button
-                            type="button"
-                            className="button button-secondary"
-                            onClick={() => beginEdit(row)}
-                          >
-                            {editing.editLabel ? editing.editLabel(row) : 'Edit'}
-                          </button>
+                          {(editing.rowEditable?.(row) ?? true) && (
+                            <button
+                              type="button"
+                              className="button button-secondary"
+                              onClick={() => beginEdit(row)}
+                            >
+                              {editing.editLabel ? editing.editLabel(row) : 'Edit'}
+                            </button>
+                          )}
                           {editing.rowActions?.(row)}
                         </>
                       )}
