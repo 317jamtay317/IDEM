@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RecordKeeping.Application.Facilities;
 using RecordKeeping.Application.Orgs;
+using RecordKeeping.Application.ProductionFields;
 
 namespace RecordKeeping.Infrastructure.Persistence;
 
@@ -26,6 +27,7 @@ public static class PersistenceServiceCollectionExtensions
 
         services.AddScoped<IOrgRepository, OrgRepository>();
         services.AddScoped<IFacilityRepository, FacilityRepository>();
+        services.AddScoped<IProductionFieldRepository, ProductionFieldRepository>();
 
         return services;
     }

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using RecordKeeping.Domain.Facilities;
 using RecordKeeping.Domain.Orgs;
+using RecordKeeping.Domain.ProductionFields;
 
 namespace RecordKeeping.Infrastructure.Persistence;
 
@@ -17,11 +18,15 @@ public sealed class RecordKeepingDbContext(DbContextOptions<RecordKeepingDbConte
     /// <summary>The Facility aggregate roots (I-D06).</summary>
     public DbSet<Facility> Facilities => Set<Facility>();
 
+    /// <summary>The platform-global Production Field catalog (not Org-scoped).</summary>
+    public DbSet<ProductionField> ProductionFields => Set<ProductionField>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfiguration(new OrgConfiguration());
         modelBuilder.ApplyConfiguration(new FacilityConfiguration());
+        modelBuilder.ApplyConfiguration(new ProductionFieldConfiguration());
     }
 }
