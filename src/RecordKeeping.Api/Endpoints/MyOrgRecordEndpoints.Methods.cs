@@ -27,6 +27,41 @@ public partial class MyOrgRecordEndpoints
         DateOnly Date,
         IReadOnlyList<RecordValueRequest> Values);
 
+    private static async Task<IResult> GetMyRecords(
+        ClaimsPrincipal user,
+        IRecordRepository records,
+        CancellationToken cancellationToken,
+        Guid? facilityId = null,
+        DateOnly? from = null,
+        DateOnly? to = null)
+    {
+        if (user.GetOrgId() is not Guid orgId)
+        {
+            return NoOrg();
+        }
+
+        // I-D03: the Org id comes only from the caller's token; the filters narrow within it, never across.
+        var result = await GetRecordsHandler.Handle(
+            new GetRecordsQuery(orgId, facilityId, from, to), records, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> GetMyRecord(
+        Guid recordId,
+        ClaimsPrincipal user,
+        IRecordRepository records,
+        CancellationToken cancellationToken)
+    {
+        if (user.GetOrgId() is not Guid orgId)
+        {
+            return NoOrg();
+        }
+
+        var result = await GetRecordHandler.Handle(
+            new GetRecordQuery(orgId, recordId), records, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
     private static async Task<IResult> LogMyRecord(
         RecordRequest request,
         ClaimsPrincipal user,

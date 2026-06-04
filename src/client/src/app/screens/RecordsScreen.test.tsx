@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
+import { render, screen, within, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RecordsScreen } from './RecordsScreen'
+import type { MyFacilitiesApi } from '../myFacilitiesApi'
+import type { ProductionField, ProductionFieldsApi } from '../productionFieldsApi'
+import type { RecordsApi } from '../recordsApi'
 
 /**
  * Stub `window.matchMedia` so `useBreakpoint` resolves to a chosen tier. jsdom
@@ -20,201 +23,221 @@ function stubBreakpoint(matches: boolean) {
   }))
 }
 
+function field(
+  overrides: Partial<ProductionField> & Pick<ProductionField, 'propertyName' | 'friendlyName'>,
+): ProductionField {
+  return {
+    id: overrides.propertyName,
+    description: null,
+    dataType: 'Decimal',
+    category: null,
+    isSummary: true,
+    displayOrder: 0,
+    isActive: true,
+    ...overrides,
+  }
+}
+
+function makeApis() {
+  const facilitiesApi = {
+    list: vi.fn(() =>
+      Promise.resolve([
+        { id: 'goshen', name: 'Goshen Asphalt Plant' },
+        { id: 'fort-wayne', name: 'Fort Wayne Plant' },
+      ]),
+    ),
+  } as unknown as MyFacilitiesApi
+
+  const fieldsApi = {
+    list: vi.fn(() =>
+      Promise.resolve([
+        field({ propertyName: 'HotMix', friendlyName: 'Hot Mix', dataType: 'Decimal', displayOrder: 0 }),
+        field({ propertyName: 'ColdMix', friendlyName: 'Cold Mix', dataType: 'Decimal', displayOrder: 1 }),
+        field({ propertyName: 'IsOperated', friendlyName: 'Plant Ran', dataType: 'Boolean', displayOrder: 2 }),
+        // A non-summary field must NOT become a column.
+        field({ propertyName: 'Secret', friendlyName: 'Secret', isSummary: false, displayOrder: 3 }),
+      ]),
+    ),
+  } as unknown as ProductionFieldsApi
+
+  const recordsApi = {
+    list: vi.fn(() =>
+      Promise.resolve([
+        {
+          id: 'r1',
+          facilityId: 'goshen',
+          date: '2026-05-29',
+          values: [
+            { propertyName: 'HotMix', numericValue: 1240, booleanValue: null, dateValue: null },
+            { propertyName: 'IsOperated', numericValue: null, booleanValue: true, dateValue: null },
+            // ColdMix deliberately absent → rendered as a dash.
+          ],
+        },
+      ]),
+    ),
+  } as unknown as RecordsApi
+
+  return { facilitiesApi, fieldsApi, recordsApi }
+}
+
+function renderRecords(apis: ReturnType<typeof makeApis>) {
+  return render(
+    <RecordsScreen
+      accessToken="tok"
+      facilitiesApi={apis.facilitiesApi}
+      fieldsApi={apis.fieldsApi}
+      recordsApi={apis.recordsApi}
+    />,
+  )
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('RecordsScreen — desktop facility summary table', () => {
-  beforeEach(() => {
-    stubBreakpoint(true)
-  })
+describe('RecordsScreen — facility list (desktop)', () => {
+  beforeEach(() => stubBreakpoint(true))
 
-  it('renders the facility summaries as a labelled data grid', () => {
-    const { container } = render(<RecordsScreen />)
+  it("lists the Org's facilities loaded from the API", async () => {
+    const apis = makeApis()
+    renderRecords(apis)
 
-    expect(screen.getByRole('table', { name: 'Records' })).toBeInTheDocument()
-    // Rendered through the reusable GridControl (its wrapper class).
-    expect(container.querySelector('.grid-control')).toBeInTheDocument()
-  })
+    await waitFor(() => expect(apis.facilitiesApi.list).toHaveBeenCalledWith('tok'))
 
-  it('renders the facility-summary column headers from the design', () => {
-    render(<RecordsScreen />)
-
-    const grid = screen.getByRole('table', { name: 'Records' })
-    for (const header of [
-      'Facility',
-      'Last ran',
-      'Last record',
-      'Monthly due',
-      'Quarterly due',
-      'Status',
-    ]) {
-      expect(within(grid).getByRole('columnheader', { name: header })).toBeInTheDocument()
-    }
-  })
-
-  it('renders a facility row with its summary data', () => {
-    render(<RecordsScreen />)
-
-    const grid = screen.getByRole('table', { name: 'Records' })
+    const grid = await screen.findByRole('table', { name: 'Records' })
     expect(within(grid).getByText('Goshen Asphalt Plant')).toBeInTheDocument()
-    expect(within(grid).getByText('Jun 15, 2026')).toBeInTheDocument()
+    expect(within(grid).getByText('Fort Wayne Plant')).toBeInTheDocument()
   })
 
-  it('renders a status pill for each facility', () => {
-    render(<RecordsScreen />)
-
-    const grid = screen.getByRole('table', { name: 'Records' })
-    expect(within(grid).getByText('On track')).toBeInTheDocument()
-    expect(within(grid).getByText('Overdue')).toBeInTheDocument()
-    expect(within(grid).getByText('Due soon')).toBeInTheDocument()
-  })
-
-  it('emphasises the monthly due date by urgency', () => {
-    render(<RecordsScreen />)
-
-    // Overdue → danger tone; due-soon → warning tone.
-    expect(screen.getByText('May 15, 2026').className).toContain('text-danger')
-    expect(screen.getByText('Jun 1, 2026').className).toContain('text-warning')
-  })
-
-  it('shows the facility count in the subtitle', () => {
-    render(<RecordsScreen />)
-
-    expect(screen.getByText('Active facilities · 3 plants')).toBeInTheDocument()
-  })
-
-  it('is read-only and unpaged, matching the design', () => {
-    render(<RecordsScreen />)
-
-    expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument()
-  })
-
-  it('drops the old category filter chips', () => {
-    render(<RecordsScreen />)
-
-    expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: 'Production' })).not.toBeInTheDocument()
-  })
-})
-
-describe('RecordsScreen — mobile facility cards', () => {
-  beforeEach(() => {
-    stubBreakpoint(false)
-  })
-
-  it('renders facility cards instead of a table', () => {
-    render(<RecordsScreen />)
-
-    expect(screen.queryByRole('table')).not.toBeInTheDocument()
-    expect(screen.getByText('Goshen Asphalt Plant')).toBeInTheDocument()
-  })
-
-  it('shows the region line and field labels on each card', () => {
-    render(<RecordsScreen />)
-
-    expect(screen.getAllByText('Indiana · IDEM')).toHaveLength(3)
-    expect(screen.getAllByText('Last ran').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Quarterly due').length).toBeGreaterThan(0)
-  })
-
-  it('renders a status pill on each facility card', () => {
-    render(<RecordsScreen />)
-
-    expect(screen.getByText('On track')).toBeInTheDocument()
-    expect(screen.getByText('Overdue')).toBeInTheDocument()
-    expect(screen.getByText('Due soon')).toBeInTheDocument()
-  })
-})
-
-describe('RecordsScreen — production drill-down', () => {
-  const PRODUCTION_HEADERS = [
-    'Date',
-    'Hot Mix',
-    'Cold Mix',
-    'Plant Ran',
-    'Steel Slag',
-    'Blast Furnace',
-  ]
-
-  it('opens the production grid when a facility name is clicked (desktop)', async () => {
-    stubBreakpoint(true)
+  it("drills into a facility's live Records, with a Date column plus one per Summary field", async () => {
+    const apis = makeApis()
     const user = userEvent.setup()
-    render(<RecordsScreen />)
+    renderRecords(apis)
 
-    await user.click(screen.getByRole('button', { name: 'Goshen Asphalt Plant' }))
+    await user.click(await screen.findByRole('button', { name: 'Goshen Asphalt Plant' }))
 
-    // The facility list is gone; the drill-down grid is shown.
-    expect(screen.queryByText('Active facilities')).not.toBeInTheDocument()
-    const grid = screen.getByRole('table')
-    for (const header of PRODUCTION_HEADERS) {
+    await waitFor(() =>
+      expect(apis.recordsApi.list).toHaveBeenCalledWith(
+        'tok',
+        expect.objectContaining({ facilityId: 'goshen' }),
+      ),
+    )
+
+    const grid = await screen.findByRole('table', { name: /records/i })
+    for (const header of ['Date', 'Hot Mix', 'Cold Mix', 'Plant Ran']) {
       expect(within(grid).getByRole('columnheader', { name: header })).toBeInTheDocument()
     }
+    // A non-summary field is not surfaced as a column.
+    expect(within(grid).queryByRole('columnheader', { name: 'Secret' })).not.toBeInTheDocument()
   })
 
-  it('renders the production columns in the requested order', async () => {
-    stubBreakpoint(true)
+  it('formats record values by data type, with a missing value shown as a dash', async () => {
+    const apis = makeApis()
     const user = userEvent.setup()
-    render(<RecordsScreen />)
+    renderRecords(apis)
 
-    await user.click(screen.getByRole('button', { name: 'Goshen Asphalt Plant' }))
+    await user.click(await screen.findByRole('button', { name: 'Goshen Asphalt Plant' }))
 
-    const headers = screen.getAllByRole('columnheader').map((h) => h.textContent)
-    expect(headers).toEqual(PRODUCTION_HEADERS)
+    const grid = await screen.findByRole('table', { name: /records/i })
+    expect(within(grid).getByText('2026-05-29')).toBeInTheDocument() // Date
+    expect(within(grid).getByText('1,240')).toBeInTheDocument() // Decimal, thousands-separated
+    expect(within(grid).getByText('Yes')).toBeInTheDocument() // Boolean true
+    expect(within(grid).getByText('—')).toBeInTheDocument() // ColdMix missing on this Record
   })
 
-  it('pages the last 10 days, 5 per page', async () => {
-    stubBreakpoint(true)
+  it('filters the Records by a date range', async () => {
+    const apis = makeApis()
     const user = userEvent.setup()
-    render(<RecordsScreen />)
+    renderRecords(apis)
 
-    await user.click(screen.getByRole('button', { name: 'Goshen Asphalt Plant' }))
+    await user.click(await screen.findByRole('button', { name: 'Goshen Asphalt Plant' }))
+    await screen.findByRole('table', { name: /records/i })
 
-    expect(screen.getByText(/page 1 of 2/i)).toBeInTheDocument()
-    // First page = the 5 newest days.
-    expect(within(screen.getByRole('table')).getByText('May 31')).toBeInTheDocument()
-    expect(within(screen.getByRole('table')).queryByText('May 26')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-05-01' } })
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-05-31' } })
 
-    await user.click(screen.getByRole('button', { name: /next/i }))
-
-    expect(screen.getByText(/page 2 of 2/i)).toBeInTheDocument()
-    expect(within(screen.getByRole('table')).getByText('May 26')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(apis.recordsApi.list).toHaveBeenCalledWith(
+        'tok',
+        expect.objectContaining({ facilityId: 'goshen', from: '2026-05-01', to: '2026-05-31' }),
+      ),
+    )
   })
 
-  it('renders the Plant Ran column as hours, with idle days showing 0 h', async () => {
-    stubBreakpoint(true)
+  it('renders a boolean-false value as "No" and a Date field as its date', async () => {
     const user = userEvent.setup()
-    render(<RecordsScreen />)
+    const facilitiesApi = {
+      list: vi.fn(() => Promise.resolve([{ id: 'goshen', name: 'Goshen Asphalt Plant' }])),
+    } as unknown as MyFacilitiesApi
+    const fieldsApi = {
+      list: vi.fn(() =>
+        Promise.resolve([
+          field({ propertyName: 'IsOperated', friendlyName: 'Plant Ran', dataType: 'Boolean', displayOrder: 0 }),
+          field({ propertyName: 'InspectionDate', friendlyName: 'Inspection', dataType: 'Date', displayOrder: 1 }),
+        ]),
+      ),
+    } as unknown as ProductionFieldsApi
+    const recordsApi = {
+      list: vi.fn(() =>
+        Promise.resolve([
+          {
+            id: 'r9',
+            facilityId: 'goshen',
+            date: '2026-05-29',
+            values: [
+              { propertyName: 'IsOperated', numericValue: null, booleanValue: false, dateValue: null },
+              { propertyName: 'InspectionDate', numericValue: null, booleanValue: null, dateValue: '2026-06-01' },
+            ],
+          },
+        ]),
+      ),
+    } as unknown as RecordsApi
 
-    await user.click(screen.getByRole('button', { name: 'Goshen Asphalt Plant' }))
+    render(
+      <RecordsScreen
+        accessToken="tok"
+        facilitiesApi={facilitiesApi}
+        fieldsApi={fieldsApi}
+        recordsApi={recordsApi}
+      />,
+    )
 
-    const grid = screen.getByRole('table')
-    // Goshen's first page runs 8 / 8.5 / 9 / 9.5 hours, then one idle day at 0 h.
-    expect(within(grid).getByText('8.5 h')).toBeInTheDocument()
-    expect(within(grid).getByText('0 h')).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: 'Goshen Asphalt Plant' }))
+
+    const grid = await screen.findByRole('table', { name: /records/i })
+    expect(within(grid).getByText('No')).toBeInTheDocument()
+    expect(within(grid).getByText('2026-06-01')).toBeInTheDocument()
   })
 
   it('returns to the facility list when Back is clicked', async () => {
-    stubBreakpoint(true)
+    const apis = makeApis()
     const user = userEvent.setup()
-    render(<RecordsScreen />)
+    renderRecords(apis)
 
-    await user.click(screen.getByRole('button', { name: 'Goshen Asphalt Plant' }))
+    await user.click(await screen.findByRole('button', { name: 'Goshen Asphalt Plant' }))
+    await screen.findByRole('table', { name: /records/i })
+
     await user.click(screen.getByRole('button', { name: /back/i }))
 
-    expect(screen.getByText('Active facilities')).toBeInTheDocument()
-    expect(screen.getByRole('table', { name: 'Records' })).toBeInTheDocument()
+    const grid = await screen.findByRole('table', { name: 'Records' })
+    expect(within(grid).getByText('Goshen Asphalt Plant')).toBeInTheDocument()
   })
+})
 
-  it('opens the drill-down from a facility card (mobile)', async () => {
-    stubBreakpoint(false)
+describe('RecordsScreen — facility cards (mobile)', () => {
+  beforeEach(() => stubBreakpoint(false))
+
+  it('renders facility cards and drills into live Records', async () => {
+    const apis = makeApis()
     const user = userEvent.setup()
-    render(<RecordsScreen />)
+    renderRecords(apis)
 
-    await user.click(screen.getByRole('button', { name: /Goshen Asphalt Plant/ }))
+    // No desktop table on mobile; the facility list is cards.
+    expect(screen.queryByRole('table', { name: 'Records' })).not.toBeInTheDocument()
 
-    const grid = screen.getByRole('table')
+    await user.click(await screen.findByRole('button', { name: /Goshen Asphalt Plant/ }))
+
+    const grid = await screen.findByRole('table', { name: /records/i })
     expect(within(grid).getByRole('columnheader', { name: 'Hot Mix' })).toBeInTheDocument()
   })
 })

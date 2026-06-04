@@ -36,6 +36,8 @@ No query, report, export, API call, background job, or admin operation may retur
 > **SiteAdmin exemption**: SiteAdmins legitimately access data across Orgs for support and billing. Every cross-Org access by a SiteAdmin must be audit-logged with actor, target Org, and operation (see I-D13).
 >
 > **Enforced (Org User facilities)**: the Org User self-service Facility endpoints (`/me/org/facilities`) scope every read and write to the caller's `org_id` claim, never to client input. Proven by `MyOrgFacilityEndpointsTests` — an Org A user cannot see, rename, or delete an Org B Facility, and a SiteAdmin (who has no Org) is rejected.
+>
+> **Enforced (Org User records)**: the Org User self-service Record endpoints (`/me/org/records`) scope every read and write to the caller's `org_id` claim. The read side (`GET /me/org/records`, with optional Facility and date-range filters, and `GET /me/org/records/{id}`) filters by `OrgId` at the query level and reports another Org's Record id as `404`, never disclosing it. Proven by `MyOrgRecordEndpointsTests` — an Org A user sees only their own Org's Records (list and by-id), and a SiteAdmin (who has no Org) is rejected.
 
 ### I-D04 — Email uniqueness scope 🟡
 Email uniqueness depends on the User type:

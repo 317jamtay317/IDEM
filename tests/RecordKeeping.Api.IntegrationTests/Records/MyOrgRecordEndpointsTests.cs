@@ -7,18 +7,22 @@ using RecordKeeping.Api.IntegrationTests.Auth;
 using RecordKeeping.Application.Facilities;
 using RecordKeeping.Application.Orgs;
 using RecordKeeping.Application.Records;
+using RecordKeeping.Domain.ProductionFields;
 using RecordKeeping.Infrastructure.Identity;
 using Shouldly;
 using DomainOrg = RecordKeeping.Domain.Orgs.Org;
 using DomainFacility = RecordKeeping.Domain.Facilities.Facility;
+using DomainRecord = RecordKeeping.Domain.Records.Record;
+using DomainRecordValue = RecordKeeping.Domain.Records.RecordValue;
 
 namespace RecordKeeping.Api.IntegrationTests.Records;
 
 /// <summary>
-/// Verifies the Org User self-service Record endpoint (<c>POST /me/org/records</c>): an Org User logs
-/// a Record for one of their own Org's Facilities, scoped to the caller's <c>org_id</c> claim. Covers
-/// the one-Record-per-Facility-per-date rule (I-D23), value/catalog validation, and the Org isolation
-/// case (I-D03) that an Org User can never log against another Org's Facility.
+/// Verifies the Org User self-service Record endpoints (<c>/me/org/records</c>): an Org User logs and
+/// reads Records for their own Org's Facilities, scoped to the caller's <c>org_id</c> claim. Covers the
+/// one-Record-per-Facility-per-date rule (I-D23), value/catalog validation, the read/search filters,
+/// and — for every read — the Org isolation case (I-D03) that an Org User can never see, log against,
+/// or fetch another Org's Records.
 /// </summary>
 [Collection(nameof(IntegrationTestCollection))]
 public class MyOrgRecordEndpointsTests(RecordKeepingApiFactory factory)
@@ -166,6 +170,147 @@ public class MyOrgRecordEndpointsTests(RecordKeepingApiFactory factory)
         leaked.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task Get_WithoutToken_Returns401()
+    {
+        var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/me/org/records");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Get_AsOrgUser_ReturnsOwnOrgsRecords_NewestFirst()
+    {
+        var seeded = await SeedOrgWithUserAsync();
+        await SeedRecordAsync(seeded.OrgId, seeded.FacilityId, new DateOnly(2026, 5, 27), 100m);
+        await SeedRecordAsync(seeded.OrgId, seeded.FacilityId, new DateOnly(2026, 5, 29), 300m);
+        await SeedRecordAsync(seeded.OrgId, seeded.FacilityId, new DateOnly(2026, 5, 28), 200m);
+        var client = await AuthenticatedClientAsync(seeded.Email);
+
+        var records = await client.GetFromJsonAsync<List<RecordResponse>>("/me/org/records");
+
+        records.ShouldNotBeNull();
+        records!.Count.ShouldBe(3);
+        records.Select(r => r.Date).ShouldBe(new[]
+        {
+            new DateOnly(2026, 5, 29),
+            new DateOnly(2026, 5, 28),
+            new DateOnly(2026, 5, 27),
+        });
+        records[0].Values.ShouldContain(v => v.PropertyName == "HotMix" && v.NumericValue == 300m);
+    }
+
+    [Fact]
+    public async Task Get_FilteredByFacility_ReturnsOnlyThatFacilitysRecords()
+    {
+        var seeded = await SeedOrgWithUserAsync();
+        var otherFacilityId = await SeedFacilityAsync(seeded.OrgId, "Fort Wayne Plant");
+        await SeedRecordAsync(seeded.OrgId, seeded.FacilityId, Day, 1m);
+        await SeedRecordAsync(seeded.OrgId, otherFacilityId, Day, 2m);
+        var client = await AuthenticatedClientAsync(seeded.Email);
+
+        var records = await client.GetFromJsonAsync<List<RecordResponse>>(
+            $"/me/org/records?facilityId={seeded.FacilityId}");
+
+        records.ShouldNotBeNull();
+        records!.ShouldHaveSingleItem().FacilityId.ShouldBe(seeded.FacilityId);
+    }
+
+    [Fact]
+    public async Task Get_FilteredByDateRange_ReturnsOnlyRecordsInRange()
+    {
+        var seeded = await SeedOrgWithUserAsync();
+        await SeedRecordAsync(seeded.OrgId, seeded.FacilityId, new DateOnly(2026, 5, 1), 1m);
+        await SeedRecordAsync(seeded.OrgId, seeded.FacilityId, new DateOnly(2026, 5, 10), 2m);
+        await SeedRecordAsync(seeded.OrgId, seeded.FacilityId, new DateOnly(2026, 5, 20), 3m);
+        await SeedRecordAsync(seeded.OrgId, seeded.FacilityId, new DateOnly(2026, 5, 31), 4m);
+        var client = await AuthenticatedClientAsync(seeded.Email);
+
+        var records = await client.GetFromJsonAsync<List<RecordResponse>>(
+            "/me/org/records?from=2026-05-10&to=2026-05-20");
+
+        records.ShouldNotBeNull();
+        records!.Select(r => r.Date).ShouldBe(new[]
+        {
+            new DateOnly(2026, 5, 20),
+            new DateOnly(2026, 5, 10),
+        });
+    }
+
+    [Fact]
+    [Trait("Invariant", "I-D03")]
+    public async Task Get_DoesNotReturnAnotherOrgsRecords()
+    {
+        var orgA = await SeedOrgWithUserAsync();
+        var orgB = await SeedOrgWithUserAsync();
+        await SeedRecordAsync(orgA.OrgId, orgA.FacilityId, Day, 1m);
+        await SeedRecordAsync(orgB.OrgId, orgB.FacilityId, Day, 2m);
+        var clientA = await AuthenticatedClientAsync(orgA.Email);
+
+        var records = await clientA.GetFromJsonAsync<List<RecordResponse>>("/me/org/records");
+
+        // I-D03: Org A sees only its own Facility's Records, never Org B's.
+        records.ShouldNotBeNull();
+        records!.ShouldAllBe(r => r.FacilityId == orgA.FacilityId);
+        records.ShouldNotContain(r => r.FacilityId == orgB.FacilityId);
+    }
+
+    [Fact]
+    [Trait("Invariant", "I-D13")]
+    public async Task Get_AsSiteAdmin_Returns403()
+    {
+        var client = await AuthenticatedClientAsync(
+            AuthSeeder.BootstrapSiteAdminEmail, AuthSeeder.BootstrapSiteAdminPassword);
+
+        var response = await client.GetAsync("/me/org/records");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task GetById_AsOrgUser_ReturnsTheRecord()
+    {
+        var seeded = await SeedOrgWithUserAsync();
+        var recordId = await SeedRecordAsync(seeded.OrgId, seeded.FacilityId, Day, 1240.5m);
+        var client = await AuthenticatedClientAsync(seeded.Email);
+
+        var record = await client.GetFromJsonAsync<RecordResponse>($"/me/org/records/{recordId}");
+
+        record.ShouldNotBeNull();
+        record!.Id.ShouldBe(recordId);
+        record.FacilityId.ShouldBe(seeded.FacilityId);
+        record.Date.ShouldBe(Day);
+        record.Values.ShouldContain(v => v.PropertyName == "HotMix" && v.NumericValue == 1240.5m);
+    }
+
+    [Fact]
+    public async Task GetById_Unknown_Returns404()
+    {
+        var seeded = await SeedOrgWithUserAsync();
+        var client = await AuthenticatedClientAsync(seeded.Email);
+
+        var response = await client.GetAsync($"/me/org/records/{Guid.NewGuid()}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    [Trait("Invariant", "I-D03")]
+    public async Task GetById_ForAnotherOrgsRecord_Returns404()
+    {
+        var orgA = await SeedOrgWithUserAsync();
+        var orgB = await SeedOrgWithUserAsync();
+        var orgBRecordId = await SeedRecordAsync(orgB.OrgId, orgB.FacilityId, Day, 1m);
+        var clientA = await AuthenticatedClientAsync(orgA.Email);
+
+        // I-D03: Org A asks for Org B's Record by id; scoped to Org A, it is not found.
+        var response = await clientA.GetAsync($"/me/org/records/{orgBRecordId}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
     private async Task<SeededOrg> SeedOrgWithUserAsync()
     {
         using var scope = factory.Services.CreateScope();
@@ -195,6 +340,28 @@ public class MyOrgRecordEndpointsTests(RecordKeepingApiFactory factory)
         (await users.CreateAsync(user, Password)).Succeeded.ShouldBeTrue();
 
         return new SeededOrg(org.Id, facility.Id, email);
+    }
+
+    private async Task<Guid> SeedFacilityAsync(Guid orgId, string name)
+    {
+        using var scope = factory.Services.CreateScope();
+        var facilities = scope.ServiceProvider.GetRequiredService<IFacilityRepository>();
+        var facility = DomainFacility.Create(orgId, name).Value;
+        await facilities.AddAsync(facility, CancellationToken.None);
+        await facilities.SaveChangesAsync(CancellationToken.None);
+        return facility.Id;
+    }
+
+    private async Task<Guid> SeedRecordAsync(Guid orgId, Guid facilityId, DateOnly date, decimal hotMix)
+    {
+        using var scope = factory.Services.CreateScope();
+        var records = scope.ServiceProvider.GetRequiredService<IRecordRepository>();
+        var record = DomainRecord.Create(orgId, facilityId, date).Value;
+        record.AddValue(
+            DomainRecordValue.Create("HotMix", ProductionFieldDataType.Decimal, hotMix).Value);
+        await records.AddAsync(record, CancellationToken.None);
+        await records.SaveChangesAsync(CancellationToken.None);
+        return record.Id;
     }
 
     private async Task<HttpClient> AuthenticatedClientAsync(string email, string password = Password)

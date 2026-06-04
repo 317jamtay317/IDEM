@@ -9,6 +9,15 @@ namespace RecordKeeping.Application.Records;
 public static class RecordErrors
 {
     /// <summary>
+    /// No Record with the given id exists within the caller's Org. Returned both when the id is unknown
+    /// and when it belongs to another Org, so a caller cannot probe for Records outside their Org (I-D03).
+    /// </summary>
+    /// <param name="recordId">The Record id that could not be found in the caller's Org.</param>
+    /// <returns>A not-found error.</returns>
+    public static Error NotFound(Guid recordId) =>
+        Error.NotFound("Record.NotFound", $"No Record with id '{recordId}' exists in this Org.");
+
+    /// <summary>
     /// I-D23: the Facility already has a Record for the given date, and there may be at most one.
     /// </summary>
     /// <param name="facilityId">The Facility that already has a Record on the date.</param>

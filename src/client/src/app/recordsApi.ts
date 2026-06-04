@@ -5,7 +5,8 @@
  * with the HTTP status so callers can surface a message.
  *
  * Mirrors the server contract:
- *  - POST /me/org/records   log a Record for one of the caller's Org's Facilities
+ *  - GET  /me/org/records[?facilityId=&from=&to=]   list the caller's Org's Records (filtered)
+ *  - POST /me/org/records                           log a Record for one of the caller's Org's Facilities
  */
 
 /** A single field value submitted when logging a Record (exactly one typed value per field). */
@@ -50,8 +51,23 @@ export interface LoggedRecord {
   values: RecordValueResult[]
 }
 
-/** Operations the Log a Record screen depends on. */
+/** Optional filters for {@link RecordsApi.list}; the server scopes to the caller's Org regardless. */
+export interface RecordsFilter {
+  /** Restrict to a single Facility of the caller's Org. */
+  facilityId?: string
+  /** Include only Records on or after this date, as `yyyy-MM-dd` (inclusive). */
+  from?: string
+  /** Include only Records on or before this date, as `yyyy-MM-dd` (inclusive). */
+  to?: string
+}
+
+/** Operations the Records and Log a Record screens depend on. */
 export interface RecordsApi {
+  /**
+   * Lists the caller's Org's Records, newest date first, optionally narrowed by Facility and date
+   * range. Org scope is enforced server-side from the token (I-D03).
+   */
+  list: (accessToken: string | null, filter?: RecordsFilter) => Promise<LoggedRecord[]>
   /** Logs a Record for one of the caller's Org's Facilities. */
   create: (accessToken: string | null, input: LogRecordInput) => Promise<LoggedRecord>
 }
@@ -65,6 +81,19 @@ function authHeaders(accessToken: string | null, json = false): HeadersInit {
 
 /** Default {@link RecordsApi} backed by `fetch` against the live endpoint. */
 export const recordsApi: RecordsApi = {
+  async list(accessToken, filter = {}) {
+    const params = new URLSearchParams()
+    if (filter.facilityId) params.set('facilityId', filter.facilityId)
+    if (filter.from) params.set('from', filter.from)
+    if (filter.to) params.set('to', filter.to)
+    const query = params.toString()
+    const res = await fetch(`/me/org/records${query ? `?${query}` : ''}`, {
+      headers: authHeaders(accessToken),
+    })
+    if (!res.ok) throw new Error(`/me/org/records returned ${res.status}`)
+    return (await res.json()) as LoggedRecord[]
+  },
+
   async create(accessToken, input) {
     const res = await fetch('/me/org/records', {
       method: 'POST',

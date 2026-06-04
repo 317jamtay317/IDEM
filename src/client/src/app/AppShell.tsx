@@ -65,7 +65,7 @@ export function AppShell({ email, isSiteAdmin, accessToken = null, onSignOut }: 
           <main className="app-main">
             {effectiveScreen === 'home' && <DashboardScreen onLogRecord={() => navigate('log')} />}
             {effectiveScreen === 'log' && <LogRecordScreen accessToken={accessToken} />}
-            {effectiveScreen === 'records' && <RecordsScreen />}
+            {effectiveScreen === 'records' && <RecordsScreen accessToken={accessToken} />}
             {effectiveScreen === 'reports' && <ReportsScreen />}
             {effectiveScreen === 'orgs' && <OrgsScreen accessToken={accessToken} />}
             {effectiveScreen === 'productionFields' && (

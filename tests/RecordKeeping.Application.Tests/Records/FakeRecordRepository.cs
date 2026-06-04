@@ -29,6 +29,23 @@ internal sealed class FakeRecordRepository : IRecordRepository
         Task.FromResult(_records.FirstOrDefault(r =>
             r.OrgId == orgId && r.FacilityId == facilityId && r.Date == date));
 
+    public Task<DomainRecord?> GetByIdAsync(
+        Guid orgId, Guid recordId, CancellationToken cancellationToken) =>
+        Task.FromResult(_records.FirstOrDefault(r => r.OrgId == orgId && r.Id == recordId));
+
+    public Task<IReadOnlyList<DomainRecord>> GetByOrgAsync(
+        Guid orgId, Guid? facilityId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<DomainRecord> result = _records
+            .Where(r => r.OrgId == orgId)
+            .Where(r => facilityId is null || r.FacilityId == facilityId)
+            .Where(r => from is null || r.Date >= from)
+            .Where(r => to is null || r.Date <= to)
+            .OrderByDescending(r => r.Date)
+            .ToList();
+        return Task.FromResult(result);
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken)
     {
         SaveChangesCount++;
