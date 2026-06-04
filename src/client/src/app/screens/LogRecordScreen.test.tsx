@@ -1,8 +1,23 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LogRecordScreen } from './LogRecordScreen'
 import type { ProductionField, ProductionFieldsApi } from '../productionFieldsApi'
+import type { MyFacilitiesApi } from '../myFacilitiesApi'
+import type { RecordsApi } from '../recordsApi'
+
+function field(overrides: Partial<ProductionField> & Pick<ProductionField, 'propertyName' | 'friendlyName'>): ProductionField {
+  return {
+    id: overrides.propertyName,
+    description: null,
+    dataType: 'Decimal',
+    category: null,
+    isSummary: true,
+    displayOrder: 0,
+    isActive: true,
+    ...overrides,
+  }
+}
 
 describe('LogRecordScreen production entries', () => {
   it('lets the user search and pick a Field for a production entry', async () => {
@@ -22,17 +37,7 @@ describe('LogRecordScreen production entries', () => {
 
   it('loads the live Production Field catalog into the picker when authenticated', async () => {
     const user = userEvent.setup()
-    const steelSlag: ProductionField = {
-      id: '1',
-      propertyName: 'SteelSlag',
-      friendlyName: 'Steel Slag',
-      description: null,
-      dataType: 'Decimal',
-      category: null,
-      isSummary: true,
-      displayOrder: 0,
-      isActive: true,
-    }
+    const steelSlag = field({ propertyName: 'SteelSlag', friendlyName: 'Steel Slag' })
     const api = {
       list: vi.fn(() => Promise.resolve([steelSlag])),
     } as unknown as ProductionFieldsApi
@@ -45,5 +50,83 @@ describe('LogRecordScreen production entries', () => {
     await user.type(screen.getByPlaceholderText('Search fields…'), 'steel')
 
     expect(await screen.findByRole('option', { name: 'Steel Slag' })).toBeInTheDocument()
+  })
+})
+
+describe('LogRecordScreen save', () => {
+  function authedApis() {
+    const catalogApi = {
+      list: vi.fn(() =>
+        Promise.resolve([
+          field({ propertyName: 'HotMix', friendlyName: 'Hot Mix' }),
+          field({ propertyName: 'ColdMix', friendlyName: 'Cold Mix' }),
+        ]),
+      ),
+    } as unknown as ProductionFieldsApi
+    const facilitiesApi = {
+      list: vi.fn(() => Promise.resolve([{ id: 'fac-1', name: 'Goshen Plant' }])),
+    } as unknown as MyFacilitiesApi
+    return { catalogApi, facilitiesApi }
+  }
+
+  it('posts a Record for the selected Facility and date when Save is clicked', async () => {
+    const user = userEvent.setup()
+    const { catalogApi, facilitiesApi } = authedApis()
+    const recordsApi = {
+      create: vi.fn(() =>
+        Promise.resolve({ id: 'r1', facilityId: 'fac-1', date: '2026-05-29', values: [] }),
+      ),
+    } as unknown as RecordsApi
+
+    render(
+      <LogRecordScreen
+        accessToken="tok"
+        api={catalogApi}
+        facilitiesApi={facilitiesApi}
+        recordsApi={recordsApi}
+      />,
+    )
+
+    // Wait for the live Facility to load and become the selection.
+    await waitFor(() => expect(screen.getByLabelText('Facility')).toHaveValue('fac-1'))
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-05-29' } })
+
+    await user.click(screen.getByRole('button', { name: 'Save record' }))
+
+    await waitFor(() =>
+      expect(recordsApi.create).toHaveBeenCalledWith(
+        'tok',
+        expect.objectContaining({
+          facilityId: 'fac-1',
+          date: '2026-05-29',
+          values: expect.arrayContaining([
+            expect.objectContaining({ propertyName: 'HotMix', numericValue: 1240 }),
+          ]),
+        }),
+      ),
+    )
+    expect(await screen.findByText('Record saved')).toBeInTheDocument()
+  })
+
+  it('shows an error message when saving fails', async () => {
+    const user = userEvent.setup()
+    const { catalogApi, facilitiesApi } = authedApis()
+    const recordsApi = {
+      create: vi.fn(() => Promise.reject(new Error('Save failed (409)'))),
+    } as unknown as RecordsApi
+
+    render(
+      <LogRecordScreen
+        accessToken="tok"
+        api={catalogApi}
+        facilitiesApi={facilitiesApi}
+        recordsApi={recordsApi}
+      />,
+    )
+
+    await waitFor(() => expect(screen.getByLabelText('Facility')).toHaveValue('fac-1'))
+    await user.click(screen.getByRole('button', { name: 'Save record' }))
+
+    expect(await screen.findByText(/save failed \(409\)/i)).toBeInTheDocument()
   })
 })
