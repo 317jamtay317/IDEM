@@ -64,6 +64,9 @@ desktop.ini
 
 # ----- Docker -----
 *.env.local
+# Local compose overrides (COMPOSE_PROJECT_NAME, SA_PASSWORD, CERT_PASSWORD, ports). Per
+# worktree; scripts/up.ps1 writes COMPOSE_PROJECT_NAME here.
+.env
 
 # ----- EF Core -----
 # Migrations themselves are committed; only ignore the bundle artifact.

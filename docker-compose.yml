@@ -2,8 +2,8 @@
 #
 # Services:
 #   sql-server  - SQL Server database.
-#   api         - RecordKeeping.Api (SPA + OAuth/OpenIddict authorization server).  https://localhost:8443
-#   mcp         - The MCP server for AI agents (Claude, ChatGPT, Copilot).          https://localhost:8444/mcp
+#   api         - RecordKeeping.Api (SPA + OAuth/OpenIddict authorization server).  https://localhost:8443 (default)
+#   mcp         - The MCP server for AI agents (Claude, ChatGPT, Copilot).          https://localhost:8444/mcp (default)
 #
 # TLS: Kestrel terminates HTTPS using a dev certificate at ./certs/recordkeeping.pfx.
 # The cert-init service below auto-generates this cert on `up` if it is missing, so the
@@ -21,6 +21,18 @@
 #   docker compose up sql-server     # DB only (run a host process with `dotnet run`)
 #   docker compose down              # stop; add -v to drop the SQL data volume
 #
+# Running more than one stack at once (e.g. one per git worktree):
+#   The api/mcp/sql host ports below FLOAT so concurrent stacks don't collide. The easy path
+#   is scripts/up.ps1 — it picks the first free port at/above each default, names the compose
+#   project per directory (so container names don't clash either), brings the stack up, and
+#   PRINTS the chosen app + MCP URLs. To pin ports by hand, set API_HOST_PORT / MCP_HOST_PORT /
+#   SQL_HOST_PORT (and COMPOSE_PROJECT_NAME) before `up`. Inspect a running stack's ports with
+#   `docker compose port api 8443`, `docker compose port mcp 8443`, or `docker compose ps`.
+#   Note: container_name is intentionally NOT set; the compose project name prefixes every
+#   container instead (<project>-api-1, etc.). scripts/up.ps1 writes COMPOSE_PROJECT_NAME to
+#   .env from the feature/branch name, so containers read as <feature>-api-1. Use
+#   `docker compose logs <service>` (e.g. `docker compose logs api`).
+#
 # Set SA_PASSWORD / CERT_PASSWORD in a local .env to override the dev defaults. The
 # defaults are for fresh local environments only — never use them in a deployment.
 
@@ -36,7 +48,6 @@ services:
   # yourself. Uses the .NET SDK image (already pulled for the api build) for dev-certs.
   cert-init:
     image: mcr.microsoft.com/dotnet/sdk:10.0
-    container_name: recordkeeping-cert-init
     environment:
       CERT_PASSWORD: "${CERT_PASSWORD:-DevCert!123}"
     volumes:
@@ -56,7 +67,6 @@ services:
 
   sql-server:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: recordkeeping-sql
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${SA_PASSWORD:-Devp@ssword!123}"
@@ -81,9 +91,10 @@ services:
     build:
       context: .
       dockerfile: src/RecordKeeping.Api/Dockerfile
-    # Tagged so the mcp service can reuse the exact same image without rebuilding.
-    image: recordkeeping-app:latest
-    container_name: recordkeeping-api
+    # Project-scoped tag: the mcp service reuses this exact image (no rebuild), and parallel
+    # stacks (one per worktree) get distinct tags instead of clobbering a shared :latest.
+    # COMPOSE_PROJECT_NAME is set per stack by scripts/up.ps1 (else the compose/dir name).
+    image: recordkeeping-app:${COMPOSE_PROJECT_NAME:-recordkeeping}
     depends_on:
       cert-init:
         condition: service_completed_successfully
@@ -97,7 +108,9 @@ services:
     volumes:
       - ./certs:/https:ro
     ports:
-      - "8443:8443"
+      # Floats so multiple stacks coexist; scripts/up.ps1 picks the first free port >= 8443.
+      # Override with API_HOST_PORT. The container always listens on 8443 internally.
+      - "${API_HOST_PORT:-8443}:8443"
     healthcheck:
       test: ["CMD", "curl", "-fsSk", "https://localhost:8443/.well-known/oauth-authorization-server"]
       interval: 10s
@@ -120,8 +133,7 @@ services:
   # Starts after `api` is healthy so the database schema + seed data exist before this
   # container boots (the seeder is idempotent, so this just avoids a first-boot race).
   mcp:
-    image: recordkeeping-app:latest
-    container_name: recordkeeping-mcp
+    image: recordkeeping-app:${COMPOSE_PROJECT_NAME:-recordkeeping}
     depends_on:
       cert-init:
         condition: service_completed_successfully
@@ -136,7 +148,9 @@ services:
     volumes:
       - ./certs:/https:ro
     ports:
-      - "8444:8443"
+      # Floats like the api port; scripts/up.ps1 picks the first free port >= 8444 and prints
+      # it (this is the URL agents connect to). Override with MCP_HOST_PORT.
+      - "${MCP_HOST_PORT:-8444}:8443"
     healthcheck:
       test: ["CMD", "curl", "-fsSk", "https://localhost:8443/.well-known/oauth-protected-resource/mcp"]
       interval: 10s

@@ -155,9 +155,10 @@ Test projects mirror their production counterparts 1:1. Integration tests for th
 
 ## 11. Running the app & the stack
 
-- **"Run it" / "run the stack" means the full Docker stack** — `docker compose up -d --build`, bringing up every service (sql-server, api, mcp). It does **not** mean a host `dotnet run`.
-- Endpoints: app + login + OAuth at **https://localhost:8443**, MCP at **https://localhost:8444/mcp**. The dev cert is self-signed, so browsers warn — proceed past it, or trust it once with `dotnet dev-certs https -ep certs/recordkeeping.pfx -p DevCert!123 --trust`.
-- Stop with `docker compose down` (add `-v` to drop the SQL data volume).
+- **"Run it" / "run the stack" means the full Docker stack** — bringing up every service (sql-server, api, mcp). It does **not** mean a host `dotnet run`. Launch it with **`scripts/up.ps1`** (preferred) or `docker compose up -d --build`.
+- **Host ports float so multiple stacks coexist** (e.g. one per git worktree). `scripts/up.ps1` picks the first free host port at/above each default — api **8443**, mcp **8444**, sql **14333** — exports `API_HOST_PORT` / `MCP_HOST_PORT` / `SQL_HOST_PORT`, brings the stack up, and **prints the chosen URLs**. A plain `docker compose up -d --build` still works on the defaults (fine for a single stack). The OAuth redirect-URI allow-list is seeded for the whole **8443–8462** band (see `AuthSeeder`), so SPA login works on whatever port a stack floats onto.
+- Endpoints (defaults): app + login + OAuth at **https://localhost:8443**, MCP at **https://localhost:8444/mcp** — the launcher prints the real ports if they floated, or find them with `docker compose port api 8443` / `docker compose port mcp 8443` / `docker compose ps`. The dev cert is self-signed, so browsers warn — proceed past it, or trust it once with `dotnet dev-certs https -ep certs/recordkeeping.pfx -p DevCert!123 --trust`.
+- Stop with **`scripts/down.ps1`** (or `docker compose down`); add `-v` to drop the SQL data volume. Each stack is named after the **feature** — `up.ps1 -Name <feature>`, else the git branch's last segment, else the directory — persisted to `.env` as `COMPOSE_PROJECT_NAME`, so containers read as `<feature>-api-1`, `<feature>-mcp-1`, etc. `container_name` is intentionally unset; read logs with `docker compose logs <service>` (e.g. `docker compose logs api`).
 - A host `dotnet run` against a DB-only container (`docker compose up -d sql-server`) is acceptable only as a quick inner loop **when explicitly asked** — never as the default for "run it".
 
 ---
