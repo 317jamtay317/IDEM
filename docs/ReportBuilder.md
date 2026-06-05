@@ -165,9 +165,30 @@ Foundational phases (0, 2–6) make the designer usable enough to exercise the s
 
 ### Milestone D — Close the loop
 
-- [ ] **Phase 12 — Undo/Redo + Save (emit RDL, #6 end-to-end) + Preview.** ⬜
-  History over edits; Save serializes to RDL (in-memory + download/stub for now); Preview = read-only paginated render using Phase 9 eval + Phase 10 pagination.
-  *Tests:* edit → undo → redo; Save emits expected RDL; Preview paginates and evaluates bindings.
+- [x] **Phase 12 — Undo/Redo + Save (emit RDL, #6 end-to-end) + Preview.** ✅
+  The four top-bar buttons are now live. **Undo/Redo**: pure `reportBuilder/history.ts` holds a
+  generic past/present/future stack (`initHistory`/`record`/`undo`/`redo`/`canUndo`/`canRedo`,
+  capped at `HISTORY_LIMIT`); the screen holds the working template in one and every edit goes
+  through a `commit` helper. Consecutive updates that share a tag are *coalesced* into one undo
+  step, so a whole drag / resize / page-resize / inline-text gesture (tagged by the element id)
+  collapses to a single step while discrete edits each get their own; an undo or redo resets the
+  tag so the next gesture starts fresh. **Save**: `reportBuilder/download.ts` `downloadText`
+  triggers a client-side file download (Blob → object URL → anchor click → revoke); the screen's
+  Save serializes the current template with `toRdl` and downloads it as `{name}.rdl`
+  (`application/xml`) — RDL end-to-end, no backend (Phase 13 swaps in `reportTemplatesApi`).
+  **Preview**: `reportBuilder/ReportPreview.tsx` is a modal that renders the template read-only
+  with bindings **resolved** (Phase 9 `evaluateExpression` against the sample data — the detail
+  band expands to one row per record) and paginated (Phase 10 `pageCount`), the footer page
+  number resolved per page from the Phase 11 options (start-at offset applied). Pure
+  `reportBuilder/preview.ts` (`resolveElementText`/`rowContext`/`bandAppearsOnPage`) backs it; the
+  canvas still shows tokens verbatim. Pagination is *logical* (report header + detail on the first
+  page, sub-report on the last, page header/footer on every page) — a data-driven paginator that
+  flows content is the Report Engine's job (Phase 13). Native, no new deps. 608 client tests green
+  (was 564); `reportBuilder` dir 100% stmts/funcs/lines; `tsc -b`, `eslint` and `vite build` clean.
+  *Tests:* `history` stack incl. coalescing + cap; edit → undo → redo and a delete undone on the
+  canvas; a drag collapses to one undo step; `downloadText` does the Blob/anchor dance; Save emits
+  the template's RDL named after it; Preview resolves bindings, expands detail rows, paginates and
+  numbers each page, and closes. ✅
 
 ---
 
@@ -189,4 +210,4 @@ Out of the current front-end scope; recorded so it isn't lost.
 - **RDL subset boundary** — exactly which RDL elements we support v1 (Tablix vs. simple list for Detail; which chart/barcode types).
 - ~~**Page setup defaults** — default page size (US Letter vs A4) and margins.~~ **Resolved (Phase 10):** US Letter portrait with one-inch margins (`createEmptyTemplate`); the editor offers Letter / Legal / A4 / Tabloid and Portrait/Landscape. Pages are driven by explicit Page Breaks (no automatic content flow at design time).
 - ~~**Page-number defaults** — default format (`Page {n} of {N}`) and whether footer page numbers are on by default.~~ **Resolved (Phase 11):** footer page numbers are **on by default**, `Page {n} of {N}`, starting at 1, right-aligned (`DEFAULT_PAGE_NUMBER_OPTIONS`); all four are editable in the Page Numbers section of the Page Setup panel.
-- **Pre-backend Save target** — does Phase 12 Save download a `.rdlc` file, hold it in memory, or POST to a stub endpoint?
+- ~~**Pre-backend Save target** — does Phase 12 Save download a `.rdlc` file, hold it in memory, or POST to a stub endpoint?~~ **Resolved (Phase 12):** Save **downloads a `.rdl` file** (`toRdl` → Blob, client-side; `downloadText`). Phase 13 adds `reportTemplatesApi` to persist to the backend.

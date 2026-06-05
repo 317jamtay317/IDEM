@@ -2,6 +2,9 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within, fireEvent, createEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ReportBuilderScreen } from './ReportBuilderScreen'
+import * as downloadModule from '../reportBuilder/download'
+import { toRdl } from '../reportBuilder/rdl'
+import { createSampleTemplate } from '../reportBuilder/sampleTemplate'
 
 /** A minimal stand-in for the browser DataTransfer used in drag events. */
 function makeDataTransfer() {
@@ -691,6 +694,137 @@ describe('ReportBuilderScreen — multiple pages & page setup (Phase 10)', () =>
     // Now 9.5in → 912px, and the size becomes Custom in the Page Setup panel.
     expect(container.querySelector('.rb-page')).toHaveStyle({ width: '912px' })
     expect(screen.getByRole('combobox', { name: 'Page size' })).toHaveValue('custom')
+  })
+})
+
+describe('ReportBuilderScreen — undo/redo (Phase 12)', () => {
+  /** Scopes a query to the canvas region. */
+  const canvas = () => within(screen.getByRole('region', { name: 'Report canvas' }))
+
+  it('disables Undo and Redo when there is no edit history', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Redo' })).toBeDisabled()
+  })
+
+  it('undoes an edit and then redoes it on the canvas', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.click(screen.getByText('Annual Emissions Inventory'))
+    fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'Quarterly Report' } })
+    expect(canvas().getByText('Quarterly Report')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(canvas().getByText('Annual Emissions Inventory')).toBeInTheDocument()
+    expect(canvas().queryByText('Quarterly Report')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Redo' }))
+    expect(canvas().getByText('Quarterly Report')).toBeInTheDocument()
+  })
+
+  it('undoes a delete, bringing the element back', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.click(screen.getByText('Annual Emissions Inventory'))
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(canvas().queryByText('Annual Emissions Inventory')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Undo' }))
+
+    expect(canvas().getByText('Annual Emissions Inventory')).toBeInTheDocument()
+  })
+
+  it('collapses one drag gesture into a single undo step', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Snap to grid' })) // raw (unsnapped) drag
+
+    const title = screen.getByText('Annual Emissions Inventory')
+    firePointer(title, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(title, 'pointerMove', { clientX: 48, clientY: 0 }) // +0.5in
+    firePointer(title, 'pointerMove', { clientX: 96, clientY: 0 }) // +1in total
+    firePointer(title, 'pointerUp', { clientX: 96, clientY: 0 })
+    expect(screen.getByText('Annual Emissions Inventory')).toHaveStyle({ left: '136.32px' })
+
+    // One undo reverts the whole gesture, not just the last move event.
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+
+    expect(screen.getByText('Annual Emissions Inventory')).toHaveStyle({ left: '40.32px' })
+  })
+})
+
+describe('ReportBuilderScreen — save (Phase 12)', () => {
+  it('saves the current template as RDL named after it', async () => {
+    const user = userEvent.setup()
+    const downloadSpy = vi.spyOn(downloadModule, 'downloadText').mockImplementation(() => {})
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(downloadSpy).toHaveBeenCalledWith(
+      'Annual Emissions Inventory.rdl',
+      toRdl(createSampleTemplate('annual-emissions')),
+      'application/xml',
+    )
+    downloadSpy.mockRestore()
+  })
+
+  it('saves the edited template, reflecting an on-canvas change', async () => {
+    const user = userEvent.setup()
+    const downloadSpy = vi.spyOn(downloadModule, 'downloadText').mockImplementation(() => {})
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.click(screen.getByText('Annual Emissions Inventory'))
+    fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'Quarterly Report' } })
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    const xml = downloadSpy.mock.calls[0][1]
+    expect(xml).toContain('Quarterly Report')
+    expect(xml).not.toContain('<Value>Annual Emissions Inventory</Value>')
+    downloadSpy.mockRestore()
+  })
+})
+
+describe('ReportBuilderScreen — preview (Phase 12)', () => {
+  it('opens a preview that resolves bindings and the page number', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    // The canvas shows binding tokens verbatim before previewing.
+    const canvas = within(screen.getByRole('region', { name: 'Report canvas' }))
+    expect(canvas.getByText('{Record.Field}')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Preview' }))
+
+    const dialog = within(screen.getByRole('dialog', { name: 'Report preview' }))
+    expect(dialog.getByText('Goshen Asphalt Plant')).toBeInTheDocument() // {Facility.Name} resolved
+    expect(dialog.getByText('Page 1 of 1')).toBeInTheDocument() // page-number tokens resolved
+  })
+
+  it('closes the preview', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(screen.getByRole('dialog', { name: 'Report preview' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+
+    expect(screen.queryByRole('dialog', { name: 'Report preview' })).not.toBeInTheDocument()
+  })
+
+  it('previews edits made on the canvas', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.click(screen.getByText('Annual Emissions Inventory'))
+    fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'Quarterly Report' } })
+    await user.click(screen.getByRole('button', { name: 'Preview' }))
+
+    const dialog = within(screen.getByRole('dialog', { name: 'Report preview' }))
+    expect(dialog.getByText('Quarterly Report')).toBeInTheDocument()
   })
 })
 

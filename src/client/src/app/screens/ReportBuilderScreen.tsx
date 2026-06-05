@@ -1,13 +1,25 @@
 import { useMemo, useState, type KeyboardEvent } from 'react'
 import { ReportCanvas } from '../reportBuilder/ReportCanvas'
+import { ReportPreview } from '../reportBuilder/ReportPreview'
 import { PropertiesPanel } from '../reportBuilder/PropertiesPanel'
 import { PageSetupEditor } from '../reportBuilder/PageSetupEditor'
 import { StatusBar } from '../reportBuilder/StatusBar'
 import { InsertPalette } from '../reportBuilder/InsertPalette'
 import { InsertSheet } from '../reportBuilder/InsertSheet'
 import { DEFAULT_ZOOM, zoomIn, zoomOut } from '../reportBuilder/geometry'
+import {
+  canRedo,
+  canUndo,
+  initHistory,
+  record,
+  redo,
+  undo,
+  type History,
+} from '../reportBuilder/history'
 import { pageCount } from '../reportBuilder/pageSetup'
 import { fromDisplayPx, toDisplayPx } from '../reportBuilder/elementDisplay'
+import { downloadText } from '../reportBuilder/download'
+import { toRdl } from '../reportBuilder/rdl'
 import {
   alignRects,
   distributeRects,
@@ -92,20 +104,33 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
   const documentTitle = templateId ?? 'Untitled report template'
   const templateArg = templateId && templateId !== 'new' ? templateId : undefined
 
-  // The working document is held in state so property edits persist. It's a
-  // stand-in sample until templates can be loaded from the backend (Phase 13).
-  const [template, setTemplate] = useState<ReportTemplate>(() => createSampleTemplate(templateArg))
+  // The working document is held in an undo/redo history so edits can be reversed
+  // (Phase 12). It's a stand-in sample until templates can be loaded from the
+  // backend (Phase 13).
+  const [history, setHistory] = useState<History<ReportTemplate>>(() =>
+    initHistory(createSampleTemplate(templateArg)),
+  )
+  const template = history.present
   const [zoom, setZoom] = useState(DEFAULT_ZOOM)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [insertSheetOpen, setInsertSheetOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+
+  // Commit an edit to the working document, recording it in history. A `tag`
+  // coalesces the many model updates of one live gesture (drag/resize/inline edit)
+  // into a single undo step; discrete edits are left untagged (one step each).
+  const commit = (
+    next: ReportTemplate | ((prev: ReportTemplate) => ReportTemplate),
+    tag?: string,
+  ) => setHistory((h) => record(h, typeof next === 'function' ? next(h.present) : next, tag))
 
   // Re-seed (and reset the selection and current page) if the route's template id
   // changes while the builder stays mounted — the "adjust state during render" form.
   const [loadedFor, setLoadedFor] = useState(templateId)
   if (templateId !== loadedFor) {
     setLoadedFor(templateId)
-    setTemplate(createSampleTemplate(templateArg))
+    setHistory(initHistory(createSampleTemplate(templateArg)))
     setSelectedIds([])
     setCurrentPage(1)
   }
@@ -139,7 +164,7 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
   // Merge a Properties-panel edit into the sole selected element.
   const handleEdit = (patch: Partial<ReportElement>) => {
     if (soleId !== null) {
-      setTemplate((current) => updateElement(current, soleId, (el) => ({ ...el, ...patch })))
+      commit((current) => updateElement(current, soleId, (el) => ({ ...el, ...patch })))
     }
   }
 
@@ -150,7 +175,7 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
       .map((id) => findElement(template, id))
       .filter((el): el is ReportElement => el !== null)
     const rects = transform(elements.map((el) => el.rect))
-    setTemplate(updateElementRects(template, new Map(elements.map((el, i) => [el.id, rects[i]]))))
+    commit(updateElementRects(template, new Map(elements.map((el, i) => [el.id, rects[i]]))))
   }
 
   const handleAlign = (edge: AlignEdge) => arrangeSelection((rects) => alignRects(rects, edge))
@@ -163,7 +188,7 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
   const handleInsert = (type: ElementType) => {
     const bandKind = bandKindOf(template, selectedIds[0] ?? null) ?? BAND_ORDER[0]
     const id = nextElementId(template, type)
-    setTemplate(addElement(template, bandKind, createElement(type, id)))
+    commit(addElement(template, bandKind, createElement(type, id)))
     setSelectedIds([id])
     setInsertSheetOpen(false)
   }
@@ -174,58 +199,69 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
     const id = nextElementId(template, type)
     const element = createElement(type, id)
     const placed = { ...element, rect: { ...element.rect, x: Math.max(0, pos.x), y: Math.max(0, pos.y) } }
-    setTemplate(addElement(template, bandKind, placed))
+    commit(addElement(template, bandKind, placed))
     setSelectedIds([id])
   }
 
-  // Reposition a placed element as it is dragged on the canvas.
+  // Reposition a placed element as it is dragged on the canvas. The whole drag
+  // coalesces into one undo step (tagged by the moved element's id).
   const handleMove = (id: string, pos: { x: number; y: number }) => {
-    setTemplate((current) => updateElement(current, id, (el) => ({ ...el, rect: { ...el.rect, x: pos.x, y: pos.y } })))
+    commit(
+      (current) => updateElement(current, id, (el) => ({ ...el, rect: { ...el.rect, x: pos.x, y: pos.y } })),
+      `move:${id}`,
+    )
   }
 
-  // Resize a placed element as a corner handle is dragged.
+  // Resize a placed element as a corner handle is dragged (one undo step per drag).
   const handleResize = (id: string, rect: Rect) => {
-    setTemplate((current) => updateElement(current, id, (el) => ({ ...el, rect })))
+    commit((current) => updateElement(current, id, (el) => ({ ...el, rect })), `resize:${id}`)
   }
 
-  // Commit an inline (on-canvas, double-click) text edit to the element.
+  // Commit an inline (on-canvas, double-click) text edit to the element. Typing
+  // coalesces into one undo step (tagged by the edited element's id).
   const handleEditText = (id: string, text: string) => {
-    setTemplate((current) => updateElement(current, id, (el) => ({ ...el, text })))
+    commit((current) => updateElement(current, id, (el) => ({ ...el, text })), `text:${id}`)
   }
 
   // Turn snap-to-grid on or off.
   const handleToggleSnap = () => {
-    setTemplate((current) => updateSettings(current, { snapToGrid: !current.settings.snapToGrid }))
+    commit((current) => updateSettings(current, { snapToGrid: !current.settings.snapToGrid }))
   }
 
   // Change the grid spacing (the select offers display pixels; the model is inches).
   const handleGridSize = (px: number) => {
-    setTemplate((current) => updateSettings(current, { gridSize: fromDisplayPx(px) }))
+    commit((current) => updateSettings(current, { gridSize: fromDisplayPx(px) }))
   }
 
   // Edit the page setup (size, orientation, margins) from the Page Setup panel.
   const handlePageChange = (patch: Partial<PageSetup>) => {
-    setTemplate((current) => updatePage(current, patch))
+    commit((current) => updatePage(current, patch))
   }
 
   // Edit the footer page-number options from the Page Setup panel (Phase 11).
   const handlePageNumbersChange = (patch: Partial<PageNumberOptions>) => {
-    setTemplate((current) => updatePageNumbers(current, patch))
+    commit((current) => updatePageNumbers(current, patch))
   }
 
-  // Resize the page by dragging its edge/corner grips on the canvas.
+  // Resize the page by dragging its edge/corner grips on the canvas (one undo step).
   const handleResizePage = (size: { width: number; height: number }) => {
-    setTemplate((current) => updatePage(current, size))
+    commit((current) => updatePage(current, size), 'resize-page')
   }
 
   // Step the page navigator within the available pages.
   const handlePrevPage = () => setCurrentPage((p) => Math.max(1, p - 1))
   const handleNextPage = () => setCurrentPage((p) => Math.min(pages, p + 1))
 
+  // Save the template by serializing it to RDL and downloading it. Until backend
+  // persistence exists (Phase 13), Save produces the RDL document end-to-end.
+  const handleSave = () => {
+    downloadText(`${template.name}.rdl`, toRdl(template), 'application/xml')
+  }
+
   // Delete the selected element(s) from the template and clear the selection.
   const handleDelete = () => {
     if (selectedIds.length === 0) return
-    setTemplate((current) => removeElements(current, selectedIds))
+    commit((current) => removeElements(current, selectedIds))
     setSelectedIds([])
   }
 
@@ -254,16 +290,30 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
         </div>
 
         <div className="rb-actions">
-          <button type="button" className="button button-secondary button-sm" disabled>
+          <button
+            type="button"
+            className="button button-secondary button-sm"
+            disabled={!canUndo(history)}
+            onClick={() => setHistory(undo)}
+          >
             Undo
           </button>
-          <button type="button" className="button button-secondary button-sm" disabled>
+          <button
+            type="button"
+            className="button button-secondary button-sm"
+            disabled={!canRedo(history)}
+            onClick={() => setHistory(redo)}
+          >
             Redo
           </button>
-          <button type="button" className="button button-secondary button-sm">
+          <button
+            type="button"
+            className="button button-secondary button-sm"
+            onClick={() => setPreviewOpen(true)}
+          >
             Preview
           </button>
-          <button type="button" className="button button-primary button-sm">
+          <button type="button" className="button button-primary button-sm" onClick={handleSave}>
             Save
           </button>
         </div>
@@ -445,6 +495,8 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
       {insertSheetOpen && (
         <InsertSheet onClose={() => setInsertSheetOpen(false)} onInsert={handleInsert} />
       )}
+
+      {previewOpen && <ReportPreview template={template} onClose={() => setPreviewOpen(false)} />}
     </div>
   )
 }
