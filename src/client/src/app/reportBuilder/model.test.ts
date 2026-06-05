@@ -8,6 +8,7 @@ import {
   createEmptyTemplate,
   findElement,
   nextElementId,
+  removeElements,
   updateElement,
   updateElementRects,
   updateSettings,
@@ -252,6 +253,48 @@ describe('addElement', () => {
     const t = addElement(createEmptyTemplate('t1', 'T1'), 'detail', createElement('label', 'label-1'))
 
     expect(t.bands.find((b) => b.kind === 'reportHeader')!.elements).toHaveLength(0)
+  })
+})
+
+describe('removeElements', () => {
+  /** A template with one element in each of three different bands. */
+  const populated = () =>
+    addElement(
+      addElement(
+        addElement(createEmptyTemplate('t', 'T'), 'reportHeader', createElement('label', 'a')),
+        'detail',
+        createElement('dataField', 'b'),
+      ),
+      'pageFooter',
+      createElement('line', 'c'),
+    )
+
+  it('removes the named elements from whichever band holds them', () => {
+    const next = removeElements(populated(), ['a', 'c'])
+
+    expect(findElement(next, 'a')).toBeNull()
+    expect(findElement(next, 'c')).toBeNull()
+    expect(findElement(next, 'b')).not.toBeNull() // untouched
+  })
+
+  it('does not mutate the original template', () => {
+    const t = populated()
+
+    removeElements(t, ['a'])
+
+    expect(findElement(t, 'a')).not.toBeNull()
+  })
+
+  it('ignores ids that are not in the template', () => {
+    const next = removeElements(populated(), ['nope'])
+
+    expect(next.bands.flatMap((band) => band.elements).map((el) => el.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('returns the same template unchanged when given no ids', () => {
+    const t = populated()
+
+    expect(removeElements(t, [])).toBe(t)
   })
 })
 

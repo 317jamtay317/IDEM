@@ -493,3 +493,81 @@ describe('ReportBuilderScreen — marquee select (Phase 8b)', () => {
     expect(screen.getByText('No selection')).toBeInTheDocument()
   })
 })
+
+describe('ReportBuilderScreen — delete element', () => {
+  /** Scopes a query to the canvas region (the Insert palette shares some names). */
+  const canvas = () => within(screen.getByRole('region', { name: 'Report canvas' }))
+
+  it('disables Delete when nothing is selected', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+  })
+
+  it('deletes the selected element from the canvas and clears the selection', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.click(screen.getByText('Annual Emissions Inventory'))
+    expect(screen.getByText(/Selected: Label/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    expect(canvas().queryByText('Annual Emissions Inventory')).not.toBeInTheDocument()
+    expect(screen.getByText('No selection')).toBeInTheDocument()
+  })
+
+  it('deletes every element in a multi-selection', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    firePointer(screen.getByText('{Record.Field}'), 'pointerDown')
+    firePointer(screen.getByText('{Record.Tons}'), 'pointerDown', { shiftKey: true })
+    expect(screen.getByText('Selected: 2 elements')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+    expect(canvas().queryByText('{Record.Field}')).not.toBeInTheDocument()
+    expect(canvas().queryByText('{Record.Tons}')).not.toBeInTheDocument()
+    expect(screen.getByText('No selection')).toBeInTheDocument()
+  })
+
+  it('deletes the selection with the Delete key', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.click(screen.getByText('Annual Emissions Inventory'))
+    fireEvent.keyDown(screen.getByText('Annual Emissions Inventory'), { key: 'Delete' })
+
+    expect(canvas().queryByText('Annual Emissions Inventory')).not.toBeInTheDocument()
+  })
+
+  it('does not delete while editing a property field (Backspace in an input)', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.click(screen.getByText('Annual Emissions Inventory'))
+    fireEvent.keyDown(screen.getByLabelText('Text'), { key: 'Backspace' })
+
+    // Backspace inside a form field must edit the text, not delete the element.
+    expect(canvas().getByText('Annual Emissions Inventory')).toBeInTheDocument()
+  })
+
+  it('leaves the selection alone for keys other than Delete/Backspace', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.click(screen.getByText('Annual Emissions Inventory'))
+    fireEvent.keyDown(screen.getByText('Annual Emissions Inventory'), { key: 'a' })
+
+    expect(canvas().getByText('Annual Emissions Inventory')).toBeInTheDocument()
+  })
+
+  it('does nothing on Delete when nothing is selected', () => {
+    const { container } = render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    fireEvent.keyDown(container.querySelector('.rb')!, { key: 'Delete' })
+
+    expect(screen.getByText('No selection')).toBeInTheDocument()
+    expect(canvas().getByText('Annual Emissions Inventory')).toBeInTheDocument()
+  })
+})

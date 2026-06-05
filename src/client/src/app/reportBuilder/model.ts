@@ -358,6 +358,28 @@ export function addElement(
 }
 
 /**
+ * Returns a new template with every element whose id is in `ids` removed from
+ * whichever band holds it. The original template is not mutated; ids not present
+ * are ignored, and passing no ids returns the same template unchanged. Used to
+ * delete the current selection (one element or many) in a single immutable update.
+ *
+ * @param template The template to remove from.
+ * @param ids The ids of the elements to remove.
+ * @returns A new {@link ReportTemplate} without the listed elements.
+ */
+export function removeElements(template: ReportTemplate, ids: Iterable<string>): ReportTemplate {
+  const remove = new Set(ids)
+  if (remove.size === 0) return template
+  return {
+    ...template,
+    bands: template.bands.map((band) => ({
+      ...band,
+      elements: band.elements.filter((el) => !remove.has(el.id)),
+    })),
+  }
+}
+
+/**
  * Finds which band holds the element with the given id.
  *
  * @param template The template to search.

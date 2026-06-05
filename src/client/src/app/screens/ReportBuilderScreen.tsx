@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type KeyboardEvent } from 'react'
 import { ReportCanvas } from '../reportBuilder/ReportCanvas'
 import { PropertiesPanel } from '../reportBuilder/PropertiesPanel'
 import { StatusBar } from '../reportBuilder/StatusBar'
@@ -19,6 +19,7 @@ import {
   createElement,
   findElement,
   nextElementId,
+  removeElements,
   updateElement,
   updateElementRects,
   updateSettings,
@@ -184,8 +185,28 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
     setTemplate((current) => updateSettings(current, { gridSize: fromDisplayPx(px) }))
   }
 
+  // Delete the selected element(s) from the template and clear the selection.
+  const handleDelete = () => {
+    if (selectedIds.length === 0) return
+    setTemplate((current) => removeElements(current, selectedIds))
+    setSelectedIds([])
+  }
+
+  // Delete / Backspace removes the selection — unless focus is in a form field,
+  // where those keys edit text rather than delete the element.
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return
+    const target = e.target as HTMLElement
+    if (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      return
+    }
+    if (selectedIds.length === 0) return
+    e.preventDefault()
+    handleDelete()
+  }
+
   return (
-    <div className="rb">
+    <div className="rb" onKeyDown={handleKeyDown}>
       <header className="rb-topbar">
         <div className="rb-breadcrumb">
           <button type="button" className="rb-crumb" aria-label="Back to Reports" onClick={onClose}>
@@ -289,6 +310,17 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
             </button>
           ))}
         </div>
+
+        {/* Delete the selected element(s); also bound to the Delete/Backspace key. */}
+        <button
+          type="button"
+          className="button button-secondary button-sm rb-delete"
+          title="Delete"
+          disabled={selectedIds.length === 0}
+          onClick={handleDelete}
+        >
+          Delete
+        </button>
 
         {/* Phone entry point to the Insert palette; the desktop sidebar replaces
             it at wider widths. */}
