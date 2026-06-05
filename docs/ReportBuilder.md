@@ -192,16 +192,44 @@ Foundational phases (0, 2–6) make the designer usable enough to exercise the s
 
 ---
 
-## Deferred — Backend (Phase 13, not "just the UI")
+## Phase 13 — Backend (Report Engine + preview)
 
-Out of the current front-end scope; recorded so it isn't lost.
+### Done — Report Engine + live preview ✅
 
-- **Domain `ReportTemplate`** — **platform-owned (no `OrgId`)**: templates are shared and SiteAdmin-authored. The produced *Report* instance is Org-scoped ([I-D10](./Invariants.md)); the template definition is not.
-- **Application** — commands/queries (create / update / get) returning `ErrorOr<T>`.
-- **Infrastructure** — EF persistence of the RDL blob + template `version` ([I-D08](./Invariants.md)).
-- **Security** — a real `SiteAdmin` authorization policy + cross-Org audit ([I-D13](./Invariants.md)). The API currently only has a TODO for this; it is a launch blocker.
-- **Client** — `reportTemplatesApi` wired to Save/Load (replacing the Phase 12 in-memory stub).
-- **Later** — the Report Engine renders RDL → PDF for [I-D09](./Invariants.md) parity.
+The in-house **Report Engine** renders a Report Template (its RDL) to **PDF**, and a SiteAdmin-only
+preview endpoint exposes it. New project **`RecordKeeping.Reporting`** (peer to `RecordKeeping.Mcp`,
+references Application, `IReportRenderer` impl; see [Architecture.md](./Architecture.md) §In-house Reporting):
+
+- **`RdlReader`** — parses the exact RDL/RDLC `rdl.ts` emits (rk: namespace, bands, inch geometry,
+  `Style`, `rk:PageNumbers`), tolerant of foreign items; errors via `ErrorOr`.
+- **`ExpressionParser`/`Evaluator`** — the C# port of `expressions.ts` (`{Scope.Field}`, `{n}`/`{N}`,
+  `SUM/AVG/COUNT/MIN/MAX`) over a `ReportDataContext` (defined in Application).
+- **`ReportLayoutEngine`** — definition + data → pages of absolutely-placed primitives, mirroring the
+  front-end Preview (logical pagination from explicit page breaks, detail repeated per row, bands
+  stacked from the top, bindings resolved with a display-text fallback, footer page number per page).
+- **`QuestPdfReportRenderer`** (QuestPDF) — draws the primitives to PDF (styled text, rules, shape
+  outlines, image placeholders, page number). `PageNumberFormatter` ports `formatPageNumber`.
+- **`PreviewReportTemplateHandler`** (Application) + **`POST /api/report-templates/preview`** —
+  SiteAdmin-gated; renders the posted RDL against **`SampleReportData`** (SiteAdmins have no Org), returns
+  `application/pdf`.
+- **Security** — a real **`SiteAdmin` authorization policy** + `ClaimsPrincipalExtensions.IsSiteAdmin()`
+  (was only a TODO). I-D13.
+
+### Remaining
+
+- **Template persistence** — Domain `ReportTemplate` **platform-owned (no `OrgId`)**; Application
+  create/update/get returning `ErrorOr<T>`; Infrastructure EF persistence of the RDL blob + `version`
+  ([I-D08](./Invariants.md)); client **`reportTemplatesApi`** wired to Save/Load (replacing the Phase 12
+  download stub).
+- **Org-scoped report run** — produce a real Report for an Org from real Records (Org-isolated,
+  [I-D03](./Invariants.md)/[I-D10](./Invariants.md)); the produced *Report* instance is Org-scoped, the
+  template is not. Feeds [I-D09](./Invariants.md) parity.
+- **SiteAdmin cross-Org audit** ([I-D13](./Invariants.md)) once a SiteAdmin touches Org data.
+- **SignalR live preview** — push re-rendered previews to the builder as the SiteAdmin edits (next
+  session). The stateless preview render path above is exactly what the hub will call.
+- **Engine fidelity follow-ups** — precise ellipse/triangle vector shapes (QuestPDF's public Skia
+  canvas API was withdrawn; v1 draws their bounding outline); real data-driven (content-flow)
+  pagination; image/barcode/table/chart real rendering (placeholders today).
 
 ---
 

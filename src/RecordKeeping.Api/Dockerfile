@@ -36,6 +36,7 @@ COPY src/RecordKeeping.Domain/RecordKeeping.Domain.csproj            src/RecordK
 COPY src/RecordKeeping.Application/RecordKeeping.Application.csproj  src/RecordKeeping.Application/
 COPY src/RecordKeeping.Infrastructure/RecordKeeping.Infrastructure.csproj src/RecordKeeping.Infrastructure/
 COPY src/RecordKeeping.Mcp/RecordKeeping.Mcp.csproj                  src/RecordKeeping.Mcp/
+COPY src/RecordKeeping.Reporting/RecordKeeping.Reporting.csproj      src/RecordKeeping.Reporting/
 COPY src/RecordKeeping.Api/RecordKeeping.Api.csproj                  src/RecordKeeping.Api/
 RUN dotnet restore src/RecordKeeping.Api/RecordKeeping.Api.csproj
 
@@ -44,6 +45,7 @@ COPY src/RecordKeeping.Domain/         src/RecordKeeping.Domain/
 COPY src/RecordKeeping.Application/    src/RecordKeeping.Application/
 COPY src/RecordKeeping.Infrastructure/ src/RecordKeeping.Infrastructure/
 COPY src/RecordKeeping.Mcp/            src/RecordKeeping.Mcp/
+COPY src/RecordKeeping.Reporting/     src/RecordKeeping.Reporting/
 COPY src/RecordKeeping.Api/            src/RecordKeeping.Api/
 
 # Stage the pre-built client into wwwroot so publish picks it up via the
@@ -63,8 +65,10 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
 # curl is used by the docker-compose healthchecks (the base image ships without it).
+# libfontconfig1 + a base font (DejaVu) are required by the Report Engine's PDF renderer
+# (QuestPDF/SkiaSharp) to measure and draw text on Linux; without them, rendering throws.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl libfontconfig1 fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=api-build /app/publish ./
