@@ -265,6 +265,7 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
               type="button"
               className="rb-toggle"
               aria-label={label}
+              title={label}
               disabled={selectedIds.length < 2}
               onClick={() => handleAlign(edge)}
             >
@@ -277,6 +278,7 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
               type="button"
               className="rb-toggle"
               aria-label={label}
+              title={label}
               disabled={selectedIds.length < 3}
               onClick={() => handleDistribute(axis)}
             >

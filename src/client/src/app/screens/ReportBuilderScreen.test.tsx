@@ -442,4 +442,22 @@ describe('ReportBuilderScreen — multi-select & align (Phase 8)', () => {
     expect(screen.getByRole('button', { name: 'Align left' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Distribute horizontally' })).toBeDisabled()
   })
+
+  it('gives every Arrange button a hover tooltip matching its label', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    const arrangeLabels = [
+      'Align left',
+      'Align center',
+      'Align right',
+      'Align top',
+      'Align middle',
+      'Align bottom',
+      'Distribute horizontally',
+      'Distribute vertically',
+    ]
+    for (const label of arrangeLabels) {
+      expect(screen.getByRole('button', { name: label })).toHaveAttribute('title', label)
+    }
+  })
 })
