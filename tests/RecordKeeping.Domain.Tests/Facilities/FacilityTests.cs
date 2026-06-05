@@ -466,4 +466,173 @@ public class FacilityTests
         result.IsError.ShouldBeTrue();
         result.FirstError.ShouldBe(FacilityErrors.NoValidPermitForDate);
     }
+
+    [Fact]
+    public void AddLimit_WhenNoLimitForType_AddsLimit()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+
+        var result = facility.AddLimit(EmissionType.VOC, 12.5);
+
+        result.IsError.ShouldBeFalse();
+        facility.Limits.ShouldContain(l => l.EmissionType == EmissionType.VOC && l.Value == 12.5);
+    }
+
+    [Fact]
+    public void AddLimit_AllowsMultipleLimitsForDifferentTypes()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+
+        facility.AddLimit(EmissionType.VOC, 5);
+        var result = facility.AddLimit(EmissionType.NOx, 7);
+
+        result.IsError.ShouldBeFalse();
+        facility.Limits.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    [Trait("Invariant", "I-D19")]
+    public void AddLimit_WhenLimitForTypeAlreadyExists_ReturnsError()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        facility.AddLimit(EmissionType.VOC, 5);
+
+        var result = facility.AddLimit(EmissionType.VOC, 9);
+
+        result.IsError.ShouldBeTrue();
+        result.FirstError.ShouldBe(FacilityErrors.LimitAlreadyExistsForType);
+        // I-D19: the original limit is unchanged; no second VOC limit is added.
+        facility.Limits.Count.ShouldBe(1);
+        facility.Limits.ShouldContain(l => l.EmissionType == EmissionType.VOC && l.Value == 5);
+    }
+
+    [Fact]
+    [Trait("Invariant", "I-D20")]
+    public void AddLimit_WithNonPositiveValue_ReturnsError()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+
+        var result = facility.AddLimit(EmissionType.SO2, 0);
+
+        result.IsError.ShouldBeTrue();
+        result.FirstError.ShouldBe(FacilityErrors.LimitValueMustBePositive);
+        facility.Limits.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void AddLimit_WhenAdded_RaisesMonthlyLimitAddedEvent()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+
+        facility.AddLimit(EmissionType.VOC, 5);
+
+        var raised = facility.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<MonthlyLimitAdded>();
+        raised.FacilityId.ShouldBe(facility.Id);
+        raised.EmissionType.ShouldBe(EmissionType.VOC);
+    }
+
+    [Fact]
+    [Trait("Invariant", "I-D19")]
+    public void AddLimit_WhenDuplicateType_DoesNotRaiseEvent()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        facility.AddLimit(EmissionType.VOC, 5);
+        facility.ClearDomainEvents();
+
+        facility.AddLimit(EmissionType.VOC, 9);
+
+        facility.DomainEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void UpdateLimit_WhenLimitExists_ChangesValue()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        facility.AddLimit(EmissionType.VOC, 5);
+
+        var result = facility.UpdateLimit(EmissionType.VOC, 8.25);
+
+        result.IsError.ShouldBeFalse();
+        facility.Limits.Count.ShouldBe(1);
+        facility.Limits.ShouldContain(l => l.EmissionType == EmissionType.VOC && l.Value == 8.25);
+    }
+
+    [Fact]
+    public void UpdateLimit_WhenNoLimitForType_ReturnsError()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+
+        var result = facility.UpdateLimit(EmissionType.VOC, 8);
+
+        result.IsError.ShouldBeTrue();
+        result.FirstError.ShouldBe(FacilityErrors.LimitDoesntExistForType);
+    }
+
+    [Fact]
+    [Trait("Invariant", "I-D20")]
+    public void UpdateLimit_WithNonPositiveValue_ReturnsError()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        facility.AddLimit(EmissionType.VOC, 5);
+
+        var result = facility.UpdateLimit(EmissionType.VOC, -3);
+
+        result.IsError.ShouldBeTrue();
+        result.FirstError.ShouldBe(FacilityErrors.LimitValueMustBePositive);
+        // The original limit is left intact when the new value is invalid.
+        facility.Limits.ShouldContain(l => l.EmissionType == EmissionType.VOC && l.Value == 5);
+    }
+
+    [Fact]
+    public void UpdateLimit_WhenUpdated_RaisesMonthlyLimitUpdatedEvent()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        facility.AddLimit(EmissionType.VOC, 5);
+        facility.ClearDomainEvents();
+
+        facility.UpdateLimit(EmissionType.VOC, 8);
+
+        var raised = facility.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<MonthlyLimitUpdated>();
+        raised.FacilityId.ShouldBe(facility.Id);
+        raised.EmissionType.ShouldBe(EmissionType.VOC);
+    }
+
+    [Fact]
+    public void RemoveLimit_WhenLimitExists_RemovesIt()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        facility.AddLimit(EmissionType.VOC, 5);
+        facility.AddLimit(EmissionType.NOx, 7);
+
+        var result = facility.RemoveLimit(EmissionType.VOC);
+
+        result.IsError.ShouldBeFalse();
+        facility.Limits.ShouldNotContain(l => l.EmissionType == EmissionType.VOC);
+        facility.Limits.ShouldContain(l => l.EmissionType == EmissionType.NOx);
+    }
+
+    [Fact]
+    public void RemoveLimit_WhenNoLimitForType_ReturnsError()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+
+        var result = facility.RemoveLimit(EmissionType.VOC);
+
+        result.IsError.ShouldBeTrue();
+        result.FirstError.ShouldBe(FacilityErrors.LimitDoesntExistForType);
+    }
+
+    [Fact]
+    public void RemoveLimit_WhenRemoved_RaisesMonthlyLimitRemovedEvent()
+    {
+        var facility = Facility.Create(Guid.NewGuid(), "Goshen Plant").Value;
+        facility.AddLimit(EmissionType.VOC, 5);
+        facility.ClearDomainEvents();
+
+        facility.RemoveLimit(EmissionType.VOC);
+
+        var raised = facility.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<MonthlyLimitRemoved>();
+        raised.FacilityId.ShouldBe(facility.Id);
+        raised.EmissionType.ShouldBe(EmissionType.VOC);
+    }
 }

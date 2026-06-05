@@ -97,6 +97,25 @@ export function ChevronRightIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** Left-pointing arrow, used on back / return actions. */
+export function ArrowLeftIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M19 12H5" />
+      <path d="m12 19-7-7 7-7" />
+    </svg>
+  )
+}
+
+/** Left-pointing chevron, used to page backwards (e.g. previous month). */
+export function ChevronLeftIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="m15 6-6 6 6 6" />
+    </svg>
+  )
+}
+
 /** Down-pointing chevron, used on select/dropdown controls. */
 export function ChevronDownIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -124,6 +143,16 @@ export function CloseIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** Calendar glyph, used on date fields. */
+export function CalendarIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3" y="4.5" width="18" height="16" rx="2" />
+      <path d="M3 9h18M8 2.5v4M16 2.5v4" />
+    </svg>
+  )
+}
+
 /** Magnifying-glass glyph, used on search inputs. */
 export function SearchIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -139,25 +168,6 @@ export function CheckIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>
       <path d="m5 12 5 5L20 7" />
-    </svg>
-  )
-}
-
-/** Left-pointing chevron, used to page backwards (e.g. the previous month). */
-export function ChevronLeftIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...base} {...props}>
-      <path d="m15 6-6 6 6 6" />
-    </svg>
-  )
-}
-
-/** Calendar glyph, used on date fields. */
-export function CalendarIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...base} {...props}>
-      <rect x="3" y="4.5" width="18" height="16" rx="2" />
-      <path d="M3 9h18M8 2.5v4M16 2.5v4" />
     </svg>
   )
 }

@@ -41,21 +41,60 @@ export function hashFromScreen(screen: Screen): string {
 }
 
 /**
- * Tracks the active {@link Screen} in the URL hash so it survives a page
- * refresh and can be linked to directly. The initial screen is read from the
- * current hash; navigating mirrors the new screen into the hash, and external
- * hash changes (the browser back/forward buttons) flow back into state.
+ * Parses the selected Facility id out of a `#/facilities/{id}` detail hash. Any
+ * other hash — including the bare `#/facilities` list and a trailing-slash
+ * `#/facilities/` — has no selected Facility.
  *
- * @returns A tuple of the active screen and a `navigate(screen)` setter.
+ * @param hash The `window.location.hash` value, e.g. `#/facilities/abc`.
+ * @returns The Facility id the hash names, or `null` when it names none.
  */
-export function useHashScreen(): readonly [Screen, (screen: Screen) => void] {
+export function facilityIdFromHash(hash: string): string | null {
+  const segments = hash.replace(/^#\/?/, '').split('/')
+  if (segments[0] !== 'facilities') return null
+  const id = segments[1]?.trim()
+  return id ? id : null
+}
+
+/**
+ * Builds the location hash for a Facility's detail page.
+ *
+ * @param facilityId The Facility to encode.
+ * @returns The hash string, e.g. `#/facilities/abc`.
+ */
+export function hashForFacility(facilityId: string): string {
+  return `#/facilities/${facilityId}`
+}
+
+/**
+ * Tracks the active {@link Screen} — and, on the Facilities destination, the
+ * selected Facility id — in the URL hash, so both survive a page refresh and can
+ * be linked to directly. The initial state is read from the current hash;
+ * navigating mirrors it into the hash, and external hash changes (the browser
+ * back/forward buttons) flow back into state.
+ *
+ * @returns A tuple of: the active screen; a `navigate(screen)` setter (which
+ * clears any selected Facility); the selected Facility id (or `null`); and an
+ * `openFacility(id)` setter that opens a Facility's detail page.
+ */
+export function useHashScreen(): readonly [
+  Screen,
+  (screen: Screen) => void,
+  string | null,
+  (facilityId: string) => void,
+] {
   const [screen, setScreen] = useState<Screen>(() => screenFromHash(window.location.hash))
+  const [facilityId, setFacilityId] = useState<string | null>(
+    () => facilityIdFromHash(window.location.hash),
+  )
 
   useEffect(() => {
     // Subscribe to hash changes the app didn't initiate — chiefly the browser
-    // back/forward buttons. The initial screen is already set from the hash by
-    // the lazy state initializer above.
-    const sync = () => setScreen(screenFromHash(window.location.hash))
+    // back/forward buttons. The initial state is already set from the hash by
+    // the lazy state initializers above.
+    const sync = () => {
+      setScreen(screenFromHash(window.location.hash))
+      setFacilityId(facilityIdFromHash(window.location.hash))
+    }
     window.addEventListener('hashchange', sync)
     return () => window.removeEventListener('hashchange', sync)
   }, [])
@@ -64,12 +103,24 @@ export function useHashScreen(): readonly [Screen, (screen: Screen) => void] {
     // Switch immediately for a snappy transition, then mirror the screen into
     // the URL so a refresh or shared link lands on it. The resulting
     // `hashchange` re-runs `sync`, a no-op since state already matches.
+    // Leaving a Facility's detail page for any top-level screen clears the
+    // selected Facility.
     setScreen(next)
+    setFacilityId(null)
     const targetHash = hashFromScreen(next)
     if (window.location.hash !== targetHash) {
       window.location.hash = targetHash
     }
   }, [])
 
-  return [screen, navigate]
+  const openFacility = useCallback((id: string) => {
+    setScreen('facilities')
+    setFacilityId(id)
+    const targetHash = hashForFacility(id)
+    if (window.location.hash !== targetHash) {
+      window.location.hash = targetHash
+    }
+  }, [])
+
+  return [screen, navigate, facilityId, openFacility]
 }

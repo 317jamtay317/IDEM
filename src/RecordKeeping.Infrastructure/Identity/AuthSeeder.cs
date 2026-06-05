@@ -48,31 +48,44 @@ public static class AuthSeeder
     /// <summary>The SPA OIDC client's canonical post-logout redirect URI.</summary>
     public const string SpaPostLogoutRedirectUri = "https://localhost/";
 
+    // First host port in the docker-compose floating range. The launcher (scripts/up.ps1) and
+    // docker-compose.yml claim the first free host port at or above this value for each
+    // concurrently-running stack (one per git worktree), so the SPA can be served from any
+    // port in [Start, End]. Every such origin must be a registered redirect URI or the floated
+    // stack's login fails with ID2043 (invalid redirect_uri). The band of 20 ports covers ~10
+    // parallel stacks (each stack publishes an api + an mcp port).
+    private const int DockerComposePortBandStart = 8443;
+    private const int DockerComposePortBandEnd = 8462;
+
     /// <summary>
     /// Additional dev/local URIs registered alongside <see cref="SpaRedirectUri"/>
     /// so the SPA's <c>window.location.origin + "/callback"</c> resolves under
-    /// every reasonable local-run permutation (docker-compose, dotnet run http/https,
-    /// Vite dev server) without re-seeding.
+    /// every reasonable local-run permutation (docker-compose on any floated host port,
+    /// dotnet run http/https, Vite dev server) without re-seeding.
     /// </summary>
-    private static readonly Uri[] AdditionalSpaRedirectUris =
-    {
-        new("https://localhost:8443/callback"), // docker-compose, api (https)
-        new("https://localhost:8444/callback"), // docker-compose, mcp (https)
-        new("https://localhost:7099/callback"), // dotnet run, https profile
-        new("http://localhost:5182/callback"),  // dotnet run, http profile
-        new("http://localhost:8080/callback"),  // docker-compose (legacy http)
-        new("http://localhost:5173/callback"),  // Vite dev server
-    };
+    private static readonly Uri[] AdditionalSpaRedirectUris = BuildLocalDevUris("/callback");
 
-    private static readonly Uri[] AdditionalSpaPostLogoutRedirectUris =
+    private static readonly Uri[] AdditionalSpaPostLogoutRedirectUris = BuildLocalDevUris("/");
+
+    // Builds the docker-compose host-port band (https://localhost:{port}{path}) plus the fixed
+    // dotnet-run and Vite origins. The same shape serves redirect ("/callback") and post-logout
+    // ("/") URIs, so both lists stay in sync as the band grows.
+    private static Uri[] BuildLocalDevUris(string path)
     {
-        new("https://localhost:8443/"),
-        new("https://localhost:8444/"),
-        new("https://localhost:7099/"),
-        new("http://localhost:5182/"),
-        new("http://localhost:8080/"),
-        new("http://localhost:5173/"),
-    };
+        var dockerComposeBand = Enumerable
+            .Range(DockerComposePortBandStart, DockerComposePortBandEnd - DockerComposePortBandStart + 1)
+            .Select(port => new Uri($"https://localhost:{port}{path}"));
+
+        var fixedOrigins = new[]
+        {
+            new Uri($"https://localhost:7099{path}"), // dotnet run, https profile
+            new Uri($"http://localhost:5182{path}"),  // dotnet run, http profile
+            new Uri($"http://localhost:8080{path}"),  // docker-compose (legacy http)
+            new Uri($"http://localhost:5173{path}"),  // Vite dev server
+        };
+
+        return dockerComposeBand.Concat(fixedOrigins).ToArray();
+    }
 
     /// <summary>
     /// Seeds the SPA OIDC client and the bootstrap SiteAdmin if they don't exist.

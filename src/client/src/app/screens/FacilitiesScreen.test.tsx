@@ -177,6 +177,36 @@ describe('FacilitiesScreen — delete', () => {
   })
 })
 
+describe('FacilitiesScreen — open details', () => {
+  it('opens a facility’s details from the desktop grid', async () => {
+    stubBreakpoint(true)
+    const onOpenFacility = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <FacilitiesScreen accessToken="t" api={makeApi([GOSHEN])} onOpenFacility={onOpenFacility} />,
+    )
+
+    await screen.findByText('Goshen Plant')
+    await user.click(screen.getByRole('button', { name: /manage/i }))
+
+    expect(onOpenFacility).toHaveBeenCalledWith('f1')
+  })
+
+  it('opens a facility’s details from a mobile card', async () => {
+    stubBreakpoint(false)
+    const onOpenFacility = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <FacilitiesScreen accessToken="t" api={makeApi([GOSHEN])} onOpenFacility={onOpenFacility} />,
+    )
+
+    await screen.findByText('Goshen Plant')
+    await user.click(screen.getByRole('button', { name: /manage/i }))
+
+    expect(onOpenFacility).toHaveBeenCalledWith('f1')
+  })
+})
+
 describe('FacilitiesScreen — mobile cards', () => {
   beforeEach(() => stubBreakpoint(false))
 

@@ -11,6 +11,11 @@ export interface TopBarProps {
   subtitle?: string
   /** Optional right-aligned actions (e.g. a primary button) shown on desktop only. */
   actions?: ReactNode
+  /**
+   * Optional control rendered immediately before the title, inline with it —
+   * e.g. a back button on a detail screen.
+   */
+  leading?: ReactNode
 }
 
 /**
@@ -18,20 +23,23 @@ export interface TopBarProps {
  * On desktop it additionally shows a subtitle and any right-aligned actions,
  * while the brand and Facility move into {@link SideNav}.
  */
-export function TopBar({ title, mobileTitle, subtitle, actions }: TopBarProps) {
+export function TopBar({ title, mobileTitle, subtitle, actions, leading }: TopBarProps) {
   return (
     <header className="topbar">
       <div className="topbar-heading">
-        <h1 className="topbar-title">
-          {mobileTitle ? (
-            <>
-              <span className="topbar-title-mobile">{mobileTitle}</span>
-              <span className="topbar-title-desktop">{title}</span>
-            </>
-          ) : (
-            title
-          )}
-        </h1>
+        <div className="topbar-title-row">
+          {leading}
+          <h1 className="topbar-title">
+            {mobileTitle ? (
+              <>
+                <span className="topbar-title-mobile">{mobileTitle}</span>
+                <span className="topbar-title-desktop">{title}</span>
+              </>
+            ) : (
+              title
+            )}
+          </h1>
+        </div>
         {subtitle && <p className="topbar-subtitle">{subtitle}</p>}
       </div>
 

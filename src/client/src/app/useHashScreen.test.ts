@@ -1,6 +1,13 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { hashFromScreen, screenFromHash, useHashScreen, type Screen } from './useHashScreen'
+import {
+  facilityIdFromHash,
+  hashForFacility,
+  hashFromScreen,
+  screenFromHash,
+  useHashScreen,
+  type Screen,
+} from './useHashScreen'
 
 const ALL_SCREENS: Screen[] = ['home', 'records', 'reports', 'orgs', 'log', 'facilities']
 
@@ -123,5 +130,83 @@ describe('useHashScreen', () => {
     })
 
     expect(result.current[0]).toBe('reports')
+  })
+})
+
+describe('facilityIdFromHash', () => {
+  it('extracts the facility id from a facility detail hash', () => {
+    expect(facilityIdFromHash('#/facilities/f1')).toBe('f1')
+  })
+
+  it('returns null for the bare facilities list hash', () => {
+    expect(facilityIdFromHash('#/facilities')).toBeNull()
+    expect(facilityIdFromHash('#/facilities/')).toBeNull()
+  })
+
+  it('returns null for non-facility hashes', () => {
+    expect(facilityIdFromHash('#/records')).toBeNull()
+    expect(facilityIdFromHash('')).toBeNull()
+  })
+})
+
+describe('hashForFacility', () => {
+  it('builds the detail hash for a facility id', () => {
+    expect(hashForFacility('f1')).toBe('#/facilities/f1')
+  })
+})
+
+describe('useHashScreen — facility detail', () => {
+  it('derives the selected facility id from the current hash', () => {
+    window.location.hash = '#/facilities/f1'
+
+    const { result } = renderHook(() => useHashScreen())
+
+    expect(result.current[0]).toBe('facilities')
+    expect(result.current[2]).toBe('f1')
+  })
+
+  it('exposes a null facility id on the bare facilities list', () => {
+    window.location.hash = '#/facilities'
+
+    const { result } = renderHook(() => useHashScreen())
+
+    expect(result.current[2]).toBeNull()
+  })
+
+  it('opening a facility sets the screen, id, and detail hash', () => {
+    const { result } = renderHook(() => useHashScreen())
+
+    act(() => {
+      result.current[3]('f1')
+    })
+
+    expect(result.current[0]).toBe('facilities')
+    expect(result.current[2]).toBe('f1')
+    expect(window.location.hash).toBe('#/facilities/f1')
+  })
+
+  it('navigating to another screen clears the selected facility id', () => {
+    window.location.hash = '#/facilities/f1'
+    const { result } = renderHook(() => useHashScreen())
+    expect(result.current[2]).toBe('f1')
+
+    act(() => {
+      result.current[1]('records')
+    })
+
+    expect(result.current[2]).toBeNull()
+  })
+
+  it('reacts to an external hash change into a facility detail', () => {
+    window.location.hash = '#/facilities'
+    const { result } = renderHook(() => useHashScreen())
+    expect(result.current[2]).toBeNull()
+
+    act(() => {
+      window.location.hash = '#/facilities/f2'
+      window.dispatchEvent(new Event('hashchange'))
+    })
+
+    expect(result.current[2]).toBe('f2')
   })
 })

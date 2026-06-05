@@ -76,6 +76,18 @@ A Facility may hold more than one Permit over time — typically a current Permi
 
 ❓ — Open: (a) does a Facility require ≥ 1 Permit *at all times* (i.e. at creation), or only that its last Permit cannot be removed once it has one (see I-D18)? (b) Is the "expired on add" check (I-D17) compared against the server date or the Facility's local date? (c) Is `value` simply the permit number, or are issue-date / permit-type / Regulator fields needed for v1?
 
+### Monthly Limit 🟡
+A per-calendar-month cap, in **tons**, on a Facility's emission of a single `Emission Type`. A Facility may hold several Monthly Limits — **at most one per Emission Type** (I-D18 is for Permits; this rule is I-D19) — and the tons value of each is editable; the value must be positive (I-D20). A Monthly Limit is attached to its Facility (it is part of the Facility aggregate, like a Permit).
+
+> The unit is **always tons per calendar month**. The legacy sketch's unit-like entries ("Tons", "FUEL") are *not* Emission Types and have been dropped. **Monthly Limit** is the canonical term in code, API, and UI.
+
+❓ — Confirm the calendar-month vs. rolling-12-month basis, and the exact Emission Type set, with the domain owner.
+
+### Emission Type 🟡
+The pollutant a `Monthly Limit` constrains. The v1 set, carried over from the legacy app, is **VOC**, **HCl**, **SO2**, **NOx**, **CO2** (canonical casing). Modeled in code as the `EmissionType` enum.
+
+❓ — Confirm this is the complete, correct pollutant set for asphalt plants — e.g. whether **PM / PM10 / CO** belong here, and whether **CO2** is genuinely tracked as a monthly air-emission limit (it is unusual for a minor air source).
+
 ---
 
 ## Regulators

@@ -9,14 +9,17 @@ namespace RecordKeeping.Api.IntegrationTests.Auth;
 /// Guards the seeded SPA OIDC client's registered redirect URIs. The SPA derives its
 /// <c>redirect_uri</c> from <c>window.location.origin + "/callback"</c>, so every origin the
 /// app can be served from (docker-compose HTTPS, dotnet run, Vite) must be registered or
-/// OpenIddict rejects the login with ID2043 (invalid redirect_uri).
+/// OpenIddict rejects the login with ID2043 (invalid redirect_uri). Because multiple stacks
+/// (e.g. one per git worktree) float onto free host ports starting at the docker-compose
+/// default, a contiguous band of localhost ports must be registered, not just the defaults.
 /// </summary>
 [Collection(nameof(IntegrationTestCollection))]
 public class SpaClientSeedTests(RecordKeepingApiFactory factory)
 {
     [Theory]
-    [InlineData("https://localhost:8443/callback")] // docker-compose: api (HTTPS)
+    [InlineData("https://localhost:8443/callback")] // docker-compose: api (HTTPS), band start
     [InlineData("https://localhost:8444/callback")] // docker-compose: mcp (HTTPS)
+    [InlineData("https://localhost:8460/callback")] // a floated stack inside the host-port band
     [InlineData("https://localhost/callback")]       // canonical
     public async Task SpaClient_RegistersRedirectUri(string redirectUri)
     {

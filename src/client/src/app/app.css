@@ -170,6 +170,25 @@
   min-width: 0;
 }
 
+/* Title row: an optional leading control (e.g. a back button) beside the title. */
+.topbar-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* Back affordance shown beside a detail-screen title. */
+.topbar-back {
+  margin-left: -0.5rem;
+  color: var(--color-text-muted);
+}
+
+.topbar-back svg {
+  width: 22px;
+  height: 22px;
+}
+
 .topbar-title {
   font-size: 1.375rem;
   font-weight: 700;
@@ -810,6 +829,7 @@
   color: var(--color-text);
 }
 
+.date-picker-day:focus-visible,
 .date-picker-nav:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 1px;
@@ -1506,6 +1526,16 @@
   text-align: center;
 }
 
+/* Header cells must honour the column's alignment too; `.record-table th` forces
+   every header left, which would misalign a right/centred header from its cells. */
+.grid-control-table th.grid-control-align-right {
+  text-align: right;
+}
+
+.grid-control-table th.grid-control-align-center {
+  text-align: center;
+}
+
 /* Full-width status / empty-state message cell. */
 .grid-control-message {
   text-align: center;
@@ -1627,3 +1657,39 @@
   width: 22px;
   height: 22px;
 }
+
+/* --- Tabs ------------------------------------------------------------------ */
+.tablist {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 1rem;
+}
+
+.tab {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 0.625rem 0.9rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.tab-active {
+  color: var(--color-text);
+  border-bottom-color: var(--color-primary);
+}
+

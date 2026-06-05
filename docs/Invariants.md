@@ -78,6 +78,16 @@ A Facility that holds Permits must retain at least one; an attempt to remove the
 
 ❓ — Confirm whether the stronger rule is wanted instead: a Facility must have ≥ 1 Permit *at all times*, which would also require a Permit at creation.
 
+### I-D19 — A Facility holds at most one Monthly Limit per Emission Type 🟡
+A Facility may hold many Monthly Limits (see UbiquitousLanguage `Monthly Limit`), but **at most one per `Emission Type`**. Adding a second limit for an Emission Type that already has one is rejected; the existing limit's tons value is changed via `Facility.UpdateLimit` instead. Enforced by `Facility.AddLimit`.
+
+❓ — Confirm the v1 Emission Type set (currently VOC, HCl, SO2, NOx, CO2) with the domain owner.
+
+### I-D20 — A Monthly Limit's value must be positive 🟡
+A Monthly Limit's value is a number of **tons per calendar month** and must be **greater than zero**; a zero or negative value is rejected. Enforced by `MonthlyLimit.Create` (and therefore by `Facility.AddLimit` and `Facility.UpdateLimit`).
+
+❓ — Confirm whether a zero cap ("no emissions permitted") should ever be allowed, or remain rejected.
+
 ---
 
 ## Reporting

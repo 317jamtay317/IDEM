@@ -9,16 +9,18 @@ afterEach(() => vi.clearAllMocks())
 function setup(value = '2026-06-04') {
   const onChange = vi.fn()
   const user = userEvent.setup()
-  render(<DatePicker value={value} onChange={onChange} ariaLabel="Record date" />)
-  const trigger = screen.getByRole('button', { name: /record date/i })
+  render(<DatePicker value={value} onChange={onChange} ariaLabel="Permit expiration date" />)
+  const trigger = screen.getByRole('button', { name: /permit expiration date/i })
   return { onChange, user, trigger }
 }
 
 describe('DatePicker', () => {
   it('shows a placeholder when no date is selected', () => {
-    render(<DatePicker value="" onChange={vi.fn()} ariaLabel="Record date" />)
+    render(<DatePicker value="" onChange={vi.fn()} ariaLabel="Permit expiration date" />)
 
-    expect(screen.getByRole('button', { name: /record date/i })).toHaveTextContent(/select date/i)
+    expect(screen.getByRole('button', { name: /permit expiration date/i })).toHaveTextContent(
+      /select date/i,
+    )
   })
 
   it('shows the selected date, formatted', () => {
@@ -27,7 +29,7 @@ describe('DatePicker', () => {
     expect(trigger).toHaveTextContent('Jun 4, 2026')
   })
 
-  it('opens a calendar on the selected month', async () => {
+  it('opens a calendar on the selected date’s month', async () => {
     const { user, trigger } = setup()
 
     await user.click(trigger)
