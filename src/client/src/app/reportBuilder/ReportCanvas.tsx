@@ -12,7 +12,7 @@ import { BAND_LABELS } from './bandLabels'
 import { ELEMENT_DRAG_MIME, isElementType } from './dnd'
 import { ELEMENT_TYPE_LABELS } from './elementDisplay'
 import { elementTextCss } from './elementStyleCss'
-import { bandTops, draggedPosition, inchesToPx, pxToInches, resizedRect, type ResizeHandle } from './geometry'
+import { bandTops, draggedPosition, inchesToPx, pxToInches, resizedPageSize, resizedRect, type PageResizeHandle, type ResizeHandle } from './geometry'
 import { alignmentGuides, GUIDE_TOLERANCE_PX, type AlignmentGuide } from './guides'
 import { marqueeRect, marqueeSelect } from './marquee'
 import { type BandKind, type ElementType, type Rect, type ReportElement, type ReportTemplate } from './model'
@@ -95,7 +95,19 @@ export interface ReportCanvasProps {
    * the element's id and its new text. Omit to disable inline editing.
    */
   onEditText?: (id: string, text: string) => void
+  /**
+   * Called as the page is resized by dragging one of its edge/corner grips: the
+   * page's new size, in inches. Omit to hide the page resize handles.
+   */
+  onResizePage?: (size: { width: number; height: number }) => void
 }
+
+/** The page resize grips, with the accessible label shown for each. */
+const PAGE_RESIZE_HANDLES: { handle: PageResizeHandle; label: string }[] = [
+  { handle: 'e', label: 'Resize page width' },
+  { handle: 's', label: 'Resize page height' },
+  { handle: 'se', label: 'Resize page' },
+]
 
 /**
  * Renders a Report Template as a banded page at the given zoom. The page width
@@ -114,9 +126,16 @@ export function ReportCanvas({
   onMoveElement,
   onResize,
   onEditText,
+  onResizePage,
 }: ReportCanvasProps) {
   const px = (inches: number) => `${inchesToPx(inches, zoom)}px`
   const { snapToGrid, gridSize } = template.settings
+
+  // The page is drawn at least as tall as its page setup says, but never shorter
+  // than its band content (so a band is never clipped). Page-height drags resize
+  // from — and the bottom grips sit at — this rendered height.
+  const contentHeight = template.bands.reduce((sum, band) => sum + band.height, 0)
+  const renderHeight = Math.max(template.page.height, contentHeight)
 
   // Resize handles are a single-element affordance: shown only when exactly one
   // element is selected.
@@ -293,6 +312,37 @@ export function ReportCanvas({
     resize.current = null
   }
 
+  // The page resize in progress: the grip grabbed, the page size at drag start
+  // (its rendered height, so the bottom grips track the visible edge), and the
+  // pointer's start point.
+  const pageResize = useRef<{ handle: PageResizeHandle; startW: number; startH: number; pointerX: number; pointerY: number } | null>(null)
+
+  // Begin a page resize when an edge/corner grip is pressed.
+  const handlePageResizeDown = (handle: PageResizeHandle) => (e: PointerEvent) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    pageResize.current = { handle, startW: template.page.width, startH: renderHeight, pointerX: e.clientX, pointerY: e.clientY }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+  }
+
+  // While resizing the page, report its new size (live), clamped so it never
+  // shrinks below its content.
+  const handlePageResizeMove = (e: PointerEvent) => {
+    const r = pageResize.current
+    if (!r || !onResizePage) return
+    const delta = { x: pxToInches(e.clientX - r.pointerX, zoom), y: pxToInches(e.clientY - r.pointerY, zoom) }
+    onResizePage(
+      resizedPageSize({ width: r.startW, height: r.startH }, delta, r.handle, { width: 1, height: contentHeight }),
+    )
+  }
+
+  // End the page resize.
+  const handlePageResizeUp = (e: PointerEvent) => {
+    if (!pageResize.current) return
+    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    pageResize.current = null
+  }
+
   // Allow a drop only when the host accepts inserts; copy is the drop effect.
   const handleDragOver = (e: DragEvent) => {
     e.preventDefault()
@@ -323,6 +373,7 @@ export function ReportCanvas({
       className={`rb-page${showGrid ? ' rb-page-grid' : ''}`}
       style={{
         width: px(template.page.width),
+        minHeight: px(renderHeight),
         ...(showGrid ? { backgroundSize: `${gridPx}px ${gridPx}px` } : {}),
       }}
       onPointerDown={handlePagePointerDown}
@@ -437,6 +488,27 @@ export function ReportCanvas({
           })}
         </div>
       ))}
+
+      {/* Page resize grips at the right edge, bottom edge and bottom-right corner;
+          dragging them resizes the page (width / height / both). */}
+      {onResizePage &&
+        PAGE_RESIZE_HANDLES.map(({ handle, label }) => {
+          const left = handle === 's' ? template.page.width / 2 : template.page.width
+          const top = handle === 'e' ? renderHeight / 2 : renderHeight
+          return (
+            <button
+              key={handle}
+              type="button"
+              className={`rb-page-handle rb-page-handle-${handle}`}
+              aria-label={label}
+              style={{ left: px(left), top: px(top) }}
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={handlePageResizeDown(handle)}
+              onPointerMove={handlePageResizeMove}
+              onPointerUp={handlePageResizeUp}
+            />
+          )
+        })}
 
       {/* The marquee (rubber-band) rectangle, drawn while selecting on the canvas. */}
       {marquee && (

@@ -840,3 +840,83 @@ describe('ReportCanvas — inline text editing', () => {
     expect(container.querySelector('.rb-marquee')).not.toBeInTheDocument()
   })
 })
+
+describe('ReportCanvas — page resize (drag the page edge)', () => {
+  it('renders page resize handles when onResizePage is given', () => {
+    render(<ReportCanvas template={fixture()} zoom={100} onResizePage={vi.fn()} />)
+
+    expect(screen.getByRole('button', { name: 'Resize page width' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Resize page height' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Resize page' })).toBeInTheDocument()
+  })
+
+  it('hides the page resize handles when onResizePage is omitted', () => {
+    render(<ReportCanvas template={fixture()} zoom={100} />)
+
+    expect(screen.queryByRole('button', { name: 'Resize page width' })).not.toBeInTheDocument()
+  })
+
+  it('widens the page when the east handle is dragged (height unchanged)', () => {
+    const onResizePage = vi.fn()
+    // fixture() is US Letter (8.5x11); its bands sum to 3.5in, so the page renders 11in tall.
+    render(<ReportCanvas template={fixture()} zoom={100} onResizePage={onResizePage} />)
+
+    const handle = screen.getByRole('button', { name: 'Resize page width' })
+    firePointer(handle, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(handle, 'pointerMove', { clientX: 96, clientY: 0 }) // +1in
+
+    expect(onResizePage).toHaveBeenLastCalledWith({ width: 9.5, height: 11 })
+  })
+
+  it('grows the page height when the south handle is dragged (width unchanged)', () => {
+    const onResizePage = vi.fn()
+    render(<ReportCanvas template={fixture()} zoom={100} onResizePage={onResizePage} />)
+
+    const handle = screen.getByRole('button', { name: 'Resize page height' })
+    firePointer(handle, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(handle, 'pointerMove', { clientX: 0, clientY: 96 }) // +1in
+
+    expect(onResizePage).toHaveBeenLastCalledWith({ width: 8.5, height: 12 })
+  })
+
+  it('does not start a page resize with a non-primary button', () => {
+    const onResizePage = vi.fn()
+    render(<ReportCanvas template={fixture()} zoom={100} onResizePage={onResizePage} />)
+
+    const handle = screen.getByRole('button', { name: 'Resize page' })
+    firePointer(handle, 'pointerDown', { clientX: 0, clientY: 0, button: 2 })
+    firePointer(handle, 'pointerMove', { clientX: 96, clientY: 96 })
+
+    expect(onResizePage).not.toHaveBeenCalled()
+  })
+
+  it('ignores a page handle pointer up when no resize is in progress', () => {
+    const onResizePage = vi.fn()
+    render(<ReportCanvas template={fixture()} zoom={100} onResizePage={onResizePage} />)
+
+    expect(() => firePointer(screen.getByRole('button', { name: 'Resize page' }), 'pointerUp')).not.toThrow()
+    expect(onResizePage).not.toHaveBeenCalled()
+  })
+
+  it('stops resizing the page once the pointer is released', () => {
+    const onResizePage = vi.fn()
+    render(<ReportCanvas template={fixture()} zoom={100} onResizePage={onResizePage} />)
+
+    const handle = screen.getByRole('button', { name: 'Resize page width' })
+    firePointer(handle, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(handle, 'pointerUp', { clientX: 0, clientY: 0 })
+    onResizePage.mockClear()
+    firePointer(handle, 'pointerMove', { clientX: 96, clientY: 0 })
+
+    expect(onResizePage).not.toHaveBeenCalled()
+  })
+
+  it('swallows a click on a page handle (no select/deselect)', () => {
+    const onSelectElement = vi.fn()
+    render(<ReportCanvas template={fixture()} zoom={100} onSelectElement={onSelectElement} onResizePage={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resize page' }))
+
+    expect(onSelectElement).not.toHaveBeenCalled()
+  })
+})

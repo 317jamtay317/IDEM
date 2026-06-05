@@ -8,6 +8,7 @@ import {
   inchesToPx,
   pointsToPx,
   pxToInches,
+  resizedPageSize,
   resizedRect,
   snap,
   zoomIn,
@@ -189,5 +190,26 @@ describe('bandTops', () => {
 
   it('returns an empty array when there are no bands', () => {
     expect(bandTops([])).toEqual([])
+  })
+})
+
+describe('resizedPageSize', () => {
+  const start = { width: 8.5, height: 11 }
+  const min = { width: 1, height: 3.5 }
+
+  it('widens only the width from the east handle', () => {
+    expect(resizedPageSize(start, { x: 2, y: 5 }, 'e', min)).toEqual({ width: 10.5, height: 11 })
+  })
+
+  it('grows only the height from the south handle', () => {
+    expect(resizedPageSize(start, { x: 2, y: 3 }, 's', min)).toEqual({ width: 8.5, height: 14 })
+  })
+
+  it('changes both dimensions from the south-east handle', () => {
+    expect(resizedPageSize(start, { x: 2, y: 3 }, 'se', min)).toEqual({ width: 10.5, height: 14 })
+  })
+
+  it('clamps each dimension to the minimum', () => {
+    expect(resizedPageSize(start, { x: -20, y: -20 }, 'se', min)).toEqual({ width: 1, height: 3.5 })
   })
 })

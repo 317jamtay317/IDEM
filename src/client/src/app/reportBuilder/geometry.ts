@@ -9,6 +9,13 @@ import { type Rect } from './model'
 /** A corner resize handle on a selected element. */
 export type ResizeHandle = 'nw' | 'ne' | 'sw' | 'se'
 
+/**
+ * A page resize grip. The page's top-left is fixed at the origin, so only the
+ * right edge (`e`, width), bottom edge (`s`, height) and bottom-right corner
+ * (`se`, both) can be dragged.
+ */
+export type PageResizeHandle = 'e' | 's' | 'se'
+
 /** CSS reference resolution: 96 pixels per inch at 100% zoom. */
 export const PX_PER_INCH = 96
 
@@ -139,6 +146,32 @@ export function resizedRect(
   if (handle === 'ne' || handle === 'nw') top = Math.min(startBottom, Math.max(0, s(startTop + deltaInches.y)))
 
   return { x: left, y: top, w: right - left, h: bottom - top }
+}
+
+/**
+ * The new page size (inches) when dragging one of the page's resize grips. The
+ * page's top-left stays at the origin, so only the dragged edge(s) move: `e`
+ * changes width, `s` changes height, `se` changes both. Each changed dimension is
+ * clamped to its minimum so the page never collapses below its content.
+ *
+ * @param start The page size at drag start, in inches.
+ * @param deltaInches The pointer movement since drag start, in inches.
+ * @param handle The grip being dragged.
+ * @param min The smallest allowed width and height, in inches.
+ * @returns The new page size, in inches.
+ */
+export function resizedPageSize(
+  start: { width: number; height: number },
+  deltaInches: { x: number; y: number },
+  handle: PageResizeHandle,
+  min: { width: number; height: number },
+): { width: number; height: number } {
+  const widthChanges = handle === 'e' || handle === 'se'
+  const heightChanges = handle === 's' || handle === 'se'
+  return {
+    width: widthChanges ? Math.max(min.width, start.width + deltaInches.x) : start.width,
+    height: heightChanges ? Math.max(min.height, start.height + deltaInches.y) : start.height,
+  }
 }
 
 /**

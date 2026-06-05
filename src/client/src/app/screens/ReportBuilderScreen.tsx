@@ -206,6 +206,11 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
     setTemplate((current) => updatePage(current, patch))
   }
 
+  // Resize the page by dragging its edge/corner grips on the canvas.
+  const handleResizePage = (size: { width: number; height: number }) => {
+    setTemplate((current) => updatePage(current, size))
+  }
+
   // Step the page navigator within the available pages.
   const handlePrevPage = () => setCurrentPage((p) => Math.max(1, p - 1))
   const handleNextPage = () => setCurrentPage((p) => Math.min(pages, p + 1))
@@ -401,6 +406,7 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
               onMoveElement={handleMove}
               onResize={handleResize}
               onEditText={handleEditText}
+              onResizePage={handleResizePage}
             />
           </section>
         </div>

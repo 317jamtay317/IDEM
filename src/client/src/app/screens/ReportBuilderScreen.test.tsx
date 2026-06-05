@@ -677,4 +677,19 @@ describe('ReportBuilderScreen — multiple pages & page setup (Phase 10)', () =>
     // Landscape: 11in → 1056px wide.
     expect(container.querySelector('.rb-page')).toHaveStyle({ width: '1056px' })
   })
+
+  it('resizes the page by dragging its edge handle', () => {
+    const { container } = render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    // Sample is US Letter (8.5in → 816px wide at 100%).
+    expect(container.querySelector('.rb-page')).toHaveStyle({ width: '816px' })
+
+    const handle = screen.getByRole('button', { name: 'Resize page width' })
+    firePointer(handle, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(handle, 'pointerMove', { clientX: 96, clientY: 0 }) // drag the right edge +1in
+
+    // Now 9.5in → 912px, and the size becomes Custom in the Page Setup panel.
+    expect(container.querySelector('.rb-page')).toHaveStyle({ width: '912px' })
+    expect(screen.getByRole('combobox', { name: 'Page size' })).toHaveValue('custom')
+  })
 })

@@ -1820,6 +1820,39 @@
   outline-offset: 1px;
 }
 
+/* Page resize grips: at the page's right edge, bottom edge and bottom-right
+   corner; dragging them resizes the page itself (Phase 10). */
+.rb-page-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--color-primary);
+  border-radius: 2px;
+  background: var(--color-surface);
+  z-index: 4;
+  touch-action: none;
+}
+
+.rb-page-handle-e {
+  cursor: ew-resize;
+}
+
+.rb-page-handle-s {
+  cursor: ns-resize;
+}
+
+.rb-page-handle-se {
+  cursor: nwse-resize;
+}
+
+.rb-page-handle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
 /* Data fields and formulas read as binding tokens until preview resolves them. */
 .rb-el-dataField,
 .rb-el-formula {
