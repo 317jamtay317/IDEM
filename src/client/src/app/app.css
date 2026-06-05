@@ -1070,6 +1070,43 @@
   font-size: 0.8rem;
 }
 
+/* A Boolean field's Yes/No toggle, sitting where a numeric field shows its input. */
+.entry-boolean {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0 0.25rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.entry-boolean input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+/* A Date field's picker trigger in the entry row. */
+.entry-date {
+  width: 150px;
+}
+
+/* Placeholder shown in the entries card before any field is added. */
+.entries-empty {
+  padding: 1rem 0.875rem;
+  text-align: center;
+}
+
+/* The "add a Facility first" state shown when the Org has no Facility yet. */
+.form-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.875rem;
+}
+
 /* --- Account (More) -------------------------------------------------------- */
 
 .account-card {
