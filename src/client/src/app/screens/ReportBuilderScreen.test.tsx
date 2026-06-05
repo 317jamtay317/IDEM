@@ -571,3 +571,31 @@ describe('ReportBuilderScreen — delete element', () => {
     expect(canvas().getByText('Annual Emissions Inventory')).toBeInTheDocument()
   })
 })
+
+describe('ReportBuilderScreen — inline text editing', () => {
+  const canvas = () => within(screen.getByRole('region', { name: 'Report canvas' }))
+
+  it('edits an element text inline on the canvas via double-click', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.dblClick(screen.getByText('Annual Emissions Inventory'))
+    const editor = screen.getByRole('textbox', { name: 'Edit text' })
+    fireEvent.change(editor, { target: { value: 'Quarterly Report' } })
+    fireEvent.keyDown(editor, { key: 'Enter' })
+
+    expect(canvas().getByText('Quarterly Report')).toBeInTheDocument()
+    expect(canvas().queryByText('Annual Emissions Inventory')).not.toBeInTheDocument()
+  })
+
+  it('keeps the Properties Text field in sync with an inline edit', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.dblClick(screen.getByText('Annual Emissions Inventory'))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Edit text' }), { target: { value: 'Quarterly Report' } })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit text' }), { key: 'Enter' })
+
+    expect(screen.getByLabelText('Text')).toHaveValue('Quarterly Report')
+  })
+})

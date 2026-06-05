@@ -28,6 +28,9 @@ const RESIZE_HANDLES: { handle: ResizeHandle; label: string }[] = [
 /** Pointer travel (CSS px) before an empty-canvas press becomes a marquee drag rather than a click. */
 const MARQUEE_DRAG_THRESHOLD_PX = 3
 
+/** Element types whose text can be edited inline on the canvas (double-click). */
+const TEXT_EDITABLE_TYPES = new Set<ElementType>(['label', 'dataField', 'formula'])
+
 /** The text shown for an element on the read-only canvas. */
 function elementContent(el: ReportElement): string {
   switch (el.type) {
@@ -87,6 +90,11 @@ export interface ReportCanvasProps {
    * element's id and its new rect, in inches. Omit to hide the resize handles.
    */
   onResize?: (id: string, rect: Rect) => void
+  /**
+   * Called when a text element's content is edited inline (double-click to edit):
+   * the element's id and its new text. Omit to disable inline editing.
+   */
+  onEditText?: (id: string, text: string) => void
 }
 
 /**
@@ -105,6 +113,7 @@ export function ReportCanvas({
   onInsertAt,
   onMoveElement,
   onResize,
+  onEditText,
 }: ReportCanvasProps) {
   const px = (inches: number) => `${inchesToPx(inches, zoom)}px`
   const { snapToGrid, gridSize } = template.settings
@@ -127,6 +136,11 @@ export function ReportCanvas({
   // rubber-banding, and the alignment guides shown while an element is dragged.
   const [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const [guides, setGuides] = useState<AlignmentGuide[]>([])
+
+  // The element being edited inline (double-click), and its text when editing
+  // began, so Escape can restore it.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const editOriginal = useRef('')
 
   // The element being dragged: its id, start rect (for guide hit-testing), its
   // band's top offset, the other elements' page-absolute rects (frozen at drag
@@ -331,38 +345,76 @@ export function ReportCanvas({
 
           {band.elements.map((el) => {
             const content = elementContent(el)
+            const editing = editingId === el.id && onEditText != null
             return (
               <Fragment key={el.id}>
-                <button
-                  type="button"
-                  className={`rb-el rb-el-${el.type}${selectedIds.includes(el.id) ? ' rb-el-selected' : ''}`}
-                  data-element-id={el.id}
-                  aria-pressed={selectedIds.includes(el.id)}
-                  aria-label={content === '' ? ELEMENT_TYPE_LABELS[el.type] : undefined}
-                  style={{
-                    left: px(el.rect.x),
-                    top: px(el.rect.y),
-                    width: px(el.rect.w),
-                    height: px(el.rect.h),
-                    ...elementTextCss(el.style, zoom),
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation() // keep the click off the page (no marquee/deselect)
-                    // Mouse selection happens on pointer down; handle keyboard
-                    // activation (Enter/Space) here, which fires click with no
-                    // preceding pointer press (detail === 0).
-                    if (e.detail === 0) onSelectElement?.(el.id, e.shiftKey || e.metaKey || e.ctrlKey)
-                  }}
-                  onPointerDown={handlePointerDown(el, tops[bandIndex])}
-                  onPointerMove={onMoveElement ? handlePointerMove : undefined}
-                  onPointerUp={onMoveElement ? handlePointerUp : undefined}
-                >
-                  {content}
-                </button>
+                {editing ? (
+                  // Inline text editor: replaces the element while its text is edited.
+                  <input
+                    className="rb-el-edit"
+                    aria-label="Edit text"
+                    autoFocus
+                    value={el.text ?? ''}
+                    style={{
+                      left: px(el.rect.x),
+                      top: px(el.rect.y),
+                      width: px(el.rect.w),
+                      height: px(el.rect.h),
+                      ...elementTextCss(el.style, zoom),
+                    }}
+                    onChange={(e) => onEditText?.(el.id, e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        setEditingId(null) // commit (edits are applied live) and close
+                      } else if (e.key === 'Escape') {
+                        onEditText?.(el.id, editOriginal.current) // revert
+                        setEditingId(null)
+                      }
+                    }}
+                    onBlur={() => setEditingId(null)}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className={`rb-el rb-el-${el.type}${selectedIds.includes(el.id) ? ' rb-el-selected' : ''}`}
+                    data-element-id={el.id}
+                    aria-pressed={selectedIds.includes(el.id)}
+                    aria-label={content === '' ? ELEMENT_TYPE_LABELS[el.type] : undefined}
+                    style={{
+                      left: px(el.rect.x),
+                      top: px(el.rect.y),
+                      width: px(el.rect.w),
+                      height: px(el.rect.h),
+                      ...elementTextCss(el.style, zoom),
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation() // keep the click off the page (no marquee/deselect)
+                      // Mouse selection happens on pointer down; handle keyboard
+                      // activation (Enter/Space) here, which fires click with no
+                      // preceding pointer press (detail === 0).
+                      if (e.detail === 0) onSelectElement?.(el.id, e.shiftKey || e.metaKey || e.ctrlKey)
+                    }}
+                    onDoubleClick={() => {
+                      // Double-click a text element to edit its content in place.
+                      if (onEditText && TEXT_EDITABLE_TYPES.has(el.type)) {
+                        editOriginal.current = el.text ?? ''
+                        setEditingId(el.id)
+                      }
+                    }}
+                    onPointerDown={handlePointerDown(el, tops[bandIndex])}
+                    onPointerMove={onMoveElement ? handlePointerMove : undefined}
+                    onPointerUp={onMoveElement ? handlePointerUp : undefined}
+                  >
+                    {content}
+                  </button>
+                )}
 
-                {/* Corner resize handles, shown only on a lone selected element. */}
+                {/* Corner resize handles, shown only on a lone selected element (not while editing). */}
                 {onResize &&
                   el.id === soleSelectedId &&
+                  !editing &&
                   RESIZE_HANDLES.map(({ handle, label }) => {
                     const cornerX = handle === 'ne' || handle === 'se' ? el.rect.x + el.rect.w : el.rect.x
                     const cornerY = handle === 'sw' || handle === 'se' ? el.rect.y + el.rect.h : el.rect.y

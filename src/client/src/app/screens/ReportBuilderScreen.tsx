@@ -175,6 +175,11 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
     setTemplate((current) => updateElement(current, id, (el) => ({ ...el, rect })))
   }
 
+  // Commit an inline (on-canvas, double-click) text edit to the element.
+  const handleEditText = (id: string, text: string) => {
+    setTemplate((current) => updateElement(current, id, (el) => ({ ...el, text })))
+  }
+
   // Turn snap-to-grid on or off.
   const handleToggleSnap = () => {
     setTemplate((current) => updateSettings(current, { snapToGrid: !current.settings.snapToGrid }))
@@ -350,6 +355,7 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
               onInsertAt={handleInsertAt}
               onMoveElement={handleMove}
               onResize={handleResize}
+              onEditText={handleEditText}
             />
           </section>
         </div>

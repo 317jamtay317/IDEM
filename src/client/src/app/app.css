@@ -1747,6 +1747,24 @@
   outline-offset: 1px;
 }
 
+/* Inline text editor: an input that fills the element's box while its text is
+   edited in place (double-click). Font/size/colour come from the element style
+   (set inline), so the edited text matches its rendered appearance. */
+.rb-el-edit {
+  position: absolute;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 1px;
+  border: 1px solid var(--color-primary);
+  border-radius: 2px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.8125rem;
+  outline: none;
+  z-index: 3;
+}
+
 /* Corner resize handles on the selected element: small squares centred on each
    corner point (their left/top are set inline), above the selection outline. */
 .rb-handle {

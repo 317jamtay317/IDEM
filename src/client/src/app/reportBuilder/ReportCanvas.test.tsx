@@ -739,3 +739,104 @@ describe('ReportCanvas — smart guides', () => {
     expect(container.querySelector('.rb-guide-vertical')).not.toBeInTheDocument()
   })
 })
+
+describe('ReportCanvas — inline text editing', () => {
+  it('opens an inline editor on double-click, seeded with the element text', async () => {
+    const user = userEvent.setup()
+    render(<ReportCanvas template={fixture()} zoom={100} onSelectElement={vi.fn()} onEditText={vi.fn()} />)
+
+    await user.dblClick(screen.getByText('Hello Report'))
+
+    expect(screen.getByRole('textbox', { name: 'Edit text' })).toHaveValue('Hello Report')
+  })
+
+  it('reports inline edits through onEditText', async () => {
+    const user = userEvent.setup()
+    const onEditText = vi.fn()
+    render(<ReportCanvas template={fixture()} zoom={100} onSelectElement={vi.fn()} onEditText={onEditText} />)
+
+    await user.dblClick(screen.getByText('Hello Report'))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Edit text' }), { target: { value: 'Hello World' } })
+
+    expect(onEditText).toHaveBeenCalledWith('title', 'Hello World')
+  })
+
+  it('edits a data field token inline, too', async () => {
+    const user = userEvent.setup()
+    const onEditText = vi.fn()
+    render(<ReportCanvas template={fixture()} zoom={100} onSelectElement={vi.fn()} onEditText={onEditText} />)
+
+    await user.dblClick(screen.getByText('{Record.Tons}'))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Edit text' }), { target: { value: '{Record.HotMix}' } })
+
+    expect(onEditText).toHaveBeenCalledWith('tons', '{Record.HotMix}')
+  })
+
+  it('closes the inline editor on Enter, returning to the static element', async () => {
+    const user = userEvent.setup()
+    render(<ReportCanvas template={fixture()} zoom={100} onSelectElement={vi.fn()} onEditText={vi.fn()} />)
+
+    await user.dblClick(screen.getByText('Hello Report'))
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit text' }), { key: 'Enter' })
+
+    expect(screen.queryByRole('textbox', { name: 'Edit text' })).not.toBeInTheDocument()
+    expect(screen.getByText('Hello Report')).toBeInTheDocument()
+  })
+
+  it('closes the inline editor when it loses focus', async () => {
+    const user = userEvent.setup()
+    render(<ReportCanvas template={fixture()} zoom={100} onSelectElement={vi.fn()} onEditText={vi.fn()} />)
+
+    await user.dblClick(screen.getByText('Hello Report'))
+    fireEvent.blur(screen.getByRole('textbox', { name: 'Edit text' }))
+
+    expect(screen.queryByRole('textbox', { name: 'Edit text' })).not.toBeInTheDocument()
+  })
+
+  it('reverts to the original text and closes on Escape', async () => {
+    const user = userEvent.setup()
+    const onEditText = vi.fn()
+    render(<ReportCanvas template={fixture()} zoom={100} onSelectElement={vi.fn()} onEditText={onEditText} />)
+
+    await user.dblClick(screen.getByText('Hello Report'))
+    const input = screen.getByRole('textbox', { name: 'Edit text' })
+    fireEvent.change(input, { target: { value: 'changed' } })
+    fireEvent.keyDown(input, { key: 'Escape' })
+
+    expect(screen.queryByRole('textbox', { name: 'Edit text' })).not.toBeInTheDocument()
+    expect(onEditText).toHaveBeenLastCalledWith('title', 'Hello Report')
+  })
+
+  it('does not open an inline editor for a non-text element', async () => {
+    const user = userEvent.setup()
+    render(<ReportCanvas template={fixture()} zoom={100} onSelectElement={vi.fn()} onEditText={vi.fn()} />)
+
+    await user.dblClick(screen.getByRole('button', { name: 'Image' }))
+
+    expect(screen.queryByRole('textbox', { name: 'Edit text' })).not.toBeInTheDocument()
+  })
+
+  it('does not open an inline editor when no onEditText handler is provided', async () => {
+    const user = userEvent.setup()
+    render(<ReportCanvas template={fixture()} zoom={100} onSelectElement={vi.fn()} />)
+
+    await user.dblClick(screen.getByText('Hello Report'))
+
+    expect(screen.queryByRole('textbox', { name: 'Edit text' })).not.toBeInTheDocument()
+  })
+
+  it('does not start a canvas marquee when pressing inside the inline editor', async () => {
+    const user = userEvent.setup()
+    const { container } = render(
+      <ReportCanvas template={fixture()} zoom={100} onSelectElement={vi.fn()} onMarqueeSelect={vi.fn()} onEditText={vi.fn()} />,
+    )
+    const page = container.querySelector('.rb-page')!
+
+    await user.dblClick(screen.getByText('Hello Report'))
+    // A press inside the editor must not reach the page (which would rubber-band).
+    firePointer(screen.getByRole('textbox', { name: 'Edit text' }), 'pointerDown', { clientX: 5, clientY: 5 })
+    firePointer(page, 'pointerMove', { clientX: 200, clientY: 200 })
+
+    expect(container.querySelector('.rb-marquee')).not.toBeInTheDocument()
+  })
+})
