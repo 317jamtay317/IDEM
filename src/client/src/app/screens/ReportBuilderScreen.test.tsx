@@ -461,3 +461,35 @@ describe('ReportBuilderScreen — multi-select & align (Phase 8)', () => {
     }
   })
 })
+
+describe('ReportBuilderScreen — marquee select (Phase 8b)', () => {
+  it('selects the elements a rubber-band drag covers, summarised by count', () => {
+    const { container } = render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+    const page = container.querySelector('.rb-page')!
+
+    // The report header holds the title (abs ~40..424px, 42..75px) and subtitle
+    // (~40..501px, 91..115px). A band over both — and short of the page header
+    // (top 144px) — selects exactly those two across the band's height.
+    firePointer(page, 'pointerDown', { clientX: 10, clientY: 30 })
+    firePointer(page, 'pointerMove', { clientX: 500, clientY: 130 })
+    firePointer(page, 'pointerUp', { clientX: 500, clientY: 130 })
+
+    expect(screen.getByText('Selected: 2 elements')).toBeInTheDocument()
+  })
+
+  it('clears the selection when a marquee drag covers nothing', () => {
+    const { container } = render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+    const page = container.querySelector('.rb-page')!
+
+    // First select something, then rubber-band an empty region to clear it. The
+    // sub-report band's frame ends at ~684px, so the far right of that band is empty.
+    firePointer(screen.getByText('Annual Emissions Inventory'), 'pointerDown')
+    expect(screen.getByText(/Selected: Label/)).toBeInTheDocument()
+
+    firePointer(page, 'pointerDown', { clientX: 700, clientY: 215 })
+    firePointer(page, 'pointerMove', { clientX: 790, clientY: 260 })
+    firePointer(page, 'pointerUp', { clientX: 790, clientY: 260 })
+
+    expect(screen.getByText('No selection')).toBeInTheDocument()
+  })
+})

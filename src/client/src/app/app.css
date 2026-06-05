@@ -1647,10 +1647,42 @@
    `margin: 0 auto` centres it when it fits and collapses to 0 when it overflows,
    keeping the full width reachable by scrolling. */
 .rb-page {
+  position: relative; /* positioning context for the marquee + guide overlays */
   margin: 0 auto;
   flex-shrink: 0;
   background: #fff;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+}
+
+/* The marquee (rubber-band) rectangle drawn while selecting on the empty canvas;
+   purely decorative, so it never intercepts the pointer driving the drag. */
+.rb-marquee {
+  position: absolute;
+  z-index: 3;
+  border: 1px solid var(--color-primary);
+  background: rgba(51, 65, 85, 0.08); /* --color-primary @ 8% */
+  pointer-events: none;
+}
+
+/* Smart alignment guides shown while dragging an element near another's edge or
+   centre line: a thin, high-contrast rule spanning the page. Non-interactive. */
+.rb-guide {
+  position: absolute;
+  z-index: 3;
+  background: var(--color-danger-text);
+  pointer-events: none;
+}
+
+.rb-guide-vertical {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.rb-guide-horizontal {
+  left: 0;
+  right: 0;
+  height: 1px;
 }
 
 /* The snap-to-grid overlay: a hairline at every grid cell. The cell size is set

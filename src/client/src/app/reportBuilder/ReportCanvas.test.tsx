@@ -542,3 +542,200 @@ describe('ReportCanvas — resize', () => {
     expect(onResize).toHaveBeenLastCalledWith('title', { x: 1, y: 0.5, w: 3.375, h: 0.625 })
   })
 })
+
+describe('ReportCanvas — marquee select', () => {
+  /** The page surface, which carries the marquee pointer handlers. */
+  const pageOf = (container: HTMLElement) => container.querySelector('.rb-page') as HTMLElement
+
+  it('selects the elements a rubber-band drag intersects', () => {
+    const onMarqueeSelect = vi.fn()
+    const { container } = render(
+      <ReportCanvas template={fixture()} zoom={100} onSelectElement={vi.fn()} onMarqueeSelect={onMarqueeSelect} />,
+    )
+    const page = pageOf(container)
+
+    // The title sits at abs (96..384px, 48..72px); this band covers only it.
+    firePointer(page, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(page, 'pointerMove', { clientX: 400, clientY: 90 })
+    firePointer(page, 'pointerUp', { clientX: 400, clientY: 90 })
+
+    expect(onMarqueeSelect).toHaveBeenCalledWith(['title'])
+  })
+
+  it('selects every intersected element across bands, in document order', () => {
+    const onMarqueeSelect = vi.fn()
+    const { container } = render(
+      <ReportCanvas template={fixture()} zoom={100} onSelectElement={vi.fn()} onMarqueeSelect={onMarqueeSelect} />,
+    )
+    const page = pageOf(container)
+
+    // A band spanning the whole page catches the title, the detail field and the footer image.
+    firePointer(page, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(page, 'pointerMove', { clientX: 800, clientY: 400 })
+    firePointer(page, 'pointerUp', { clientX: 800, clientY: 400 })
+
+    expect(onMarqueeSelect).toHaveBeenCalledWith(['title', 'tons', 'logo'])
+  })
+
+  it('reports an empty selection when the rubber-band hits nothing', () => {
+    const onMarqueeSelect = vi.fn()
+    const { container } = render(
+      <ReportCanvas template={fixture()} zoom={100} onSelectElement={vi.fn()} onMarqueeSelect={onMarqueeSelect} />,
+    )
+    const page = pageOf(container)
+
+    // An empty corner of the page (the sub-report band has no elements in the fixture).
+    firePointer(page, 'pointerDown', { clientX: 600, clientY: 215 })
+    firePointer(page, 'pointerMove', { clientX: 790, clientY: 260 })
+    firePointer(page, 'pointerUp', { clientX: 790, clientY: 260 })
+
+    expect(onMarqueeSelect).toHaveBeenCalledWith([])
+  })
+
+  it('renders the rubber-band rectangle while dragging and removes it on release', () => {
+    const { container } = render(
+      <ReportCanvas template={fixture()} zoom={100} onSelectElement={vi.fn()} onMarqueeSelect={vi.fn()} />,
+    )
+    const page = pageOf(container)
+
+    firePointer(page, 'pointerDown', { clientX: 10, clientY: 10 })
+    firePointer(page, 'pointerMove', { clientX: 110, clientY: 60 })
+
+    const band = container.querySelector('.rb-marquee') as HTMLElement
+    expect(band).toBeInTheDocument()
+    expect(band).toHaveStyle({ left: '10px', top: '10px', width: '100px', height: '50px' })
+
+    firePointer(page, 'pointerUp', { clientX: 110, clientY: 60 })
+    expect(container.querySelector('.rb-marquee')).not.toBeInTheDocument()
+  })
+
+  it('treats a press-release without a drag as a deselect, not a marquee', () => {
+    const onSelectElement = vi.fn()
+    const onMarqueeSelect = vi.fn()
+    const { container } = render(
+      <ReportCanvas template={fixture()} zoom={100} onSelectElement={onSelectElement} onMarqueeSelect={onMarqueeSelect} />,
+    )
+    const page = pageOf(container)
+
+    firePointer(page, 'pointerDown', { clientX: 20, clientY: 20 })
+    firePointer(page, 'pointerUp', { clientX: 20, clientY: 20 })
+
+    expect(onSelectElement).toHaveBeenCalledWith(null, false)
+    expect(onMarqueeSelect).not.toHaveBeenCalled()
+  })
+
+  it('does not start a marquee for a jitter below the drag threshold', () => {
+    const onSelectElement = vi.fn()
+    const onMarqueeSelect = vi.fn()
+    const { container } = render(
+      <ReportCanvas template={fixture()} zoom={100} onSelectElement={onSelectElement} onMarqueeSelect={onMarqueeSelect} />,
+    )
+    const page = pageOf(container)
+
+    firePointer(page, 'pointerDown', { clientX: 20, clientY: 20 })
+    firePointer(page, 'pointerMove', { clientX: 22, clientY: 21 }) // 2px / 1px — below threshold
+    expect(container.querySelector('.rb-marquee')).not.toBeInTheDocument()
+
+    firePointer(page, 'pointerUp', { clientX: 22, clientY: 21 })
+    expect(onSelectElement).toHaveBeenCalledWith(null, false)
+    expect(onMarqueeSelect).not.toHaveBeenCalled()
+  })
+
+  it('does not start a marquee on a non-primary button', () => {
+    const onMarqueeSelect = vi.fn()
+    const { container } = render(
+      <ReportCanvas template={fixture()} zoom={100} onSelectElement={vi.fn()} onMarqueeSelect={onMarqueeSelect} />,
+    )
+    const page = pageOf(container)
+
+    firePointer(page, 'pointerDown', { clientX: 0, clientY: 0, button: 2 })
+    firePointer(page, 'pointerMove', { clientX: 400, clientY: 400 })
+    firePointer(page, 'pointerUp', { clientX: 400, clientY: 400 })
+
+    expect(container.querySelector('.rb-marquee')).not.toBeInTheDocument()
+    expect(onMarqueeSelect).not.toHaveBeenCalled()
+  })
+
+  it('does not marquee on a read-only canvas (no selection callbacks)', () => {
+    const { container } = render(<ReportCanvas template={fixture()} zoom={100} />)
+    const page = pageOf(container)
+
+    firePointer(page, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(page, 'pointerMove', { clientX: 400, clientY: 200 })
+
+    expect(container.querySelector('.rb-marquee')).not.toBeInTheDocument()
+  })
+
+  it('ignores canvas pointer moves and releases when no marquee is in progress', () => {
+    const onSelectElement = vi.fn()
+    const onMarqueeSelect = vi.fn()
+    const { container } = render(
+      <ReportCanvas template={fixture()} zoom={100} onSelectElement={onSelectElement} onMarqueeSelect={onMarqueeSelect} />,
+    )
+    const page = pageOf(container)
+
+    expect(() => {
+      firePointer(page, 'pointerMove', { clientX: 50, clientY: 50 })
+      firePointer(page, 'pointerUp', { clientX: 50, clientY: 50 })
+    }).not.toThrow()
+    expect(onSelectElement).not.toHaveBeenCalled()
+    expect(onMarqueeSelect).not.toHaveBeenCalled()
+  })
+})
+
+describe('ReportCanvas — smart guides', () => {
+  /** A title (report header) and a data field (detail) that share an x when aligned. */
+  function guideFixture(): ReportTemplate {
+    const t = createEmptyTemplate('t1', 'T1')
+    t.settings.snapToGrid = false // isolate guide logic from grid snapping
+    t.bands
+      .find((b) => b.kind === 'reportHeader')!
+      .elements.push({ id: 'title', type: 'label', rect: { x: 1, y: 0.5, w: 3, h: 0.25 }, text: 'Title' })
+    t.bands
+      .find((b) => b.kind === 'detail')!
+      .elements.push({ id: 'field', type: 'dataField', rect: { x: 2, y: 0.04, w: 1, h: 0.22 }, text: '{F}', expression: '{F}' })
+    return t
+  }
+
+  it('shows an alignment guide when a dragged edge lines up with another element', () => {
+    const { container } = render(
+      <ReportCanvas template={guideFixture()} zoom={100} onSelectElement={vi.fn()} onMoveElement={vi.fn()} />,
+    )
+
+    // The title's left edge starts at x=1in; dragging +1in brings it to x=2in,
+    // lining up with the data field's left edge (also x=2in).
+    const title = screen.getByText('Title')
+    firePointer(title, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(title, 'pointerMove', { clientX: 96, clientY: 0 })
+
+    const guide = container.querySelector('.rb-guide-vertical') as HTMLElement
+    expect(guide).toBeInTheDocument()
+    expect(guide).toHaveStyle({ left: '192px' }) // x=2in at 96px/in
+  })
+
+  it('clears the guides when the drag ends', () => {
+    const { container } = render(
+      <ReportCanvas template={guideFixture()} zoom={100} onSelectElement={vi.fn()} onMoveElement={vi.fn()} />,
+    )
+
+    const title = screen.getByText('Title')
+    firePointer(title, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(title, 'pointerMove', { clientX: 96, clientY: 0 })
+    expect(container.querySelector('.rb-guide-vertical')).toBeInTheDocument()
+
+    firePointer(title, 'pointerUp', { clientX: 96, clientY: 0 })
+    expect(container.querySelector('.rb-guide-vertical')).not.toBeInTheDocument()
+  })
+
+  it('shows no guide while a dragged element is not near an alignment', () => {
+    const { container } = render(
+      <ReportCanvas template={guideFixture()} zoom={100} onSelectElement={vi.fn()} onMoveElement={vi.fn()} />,
+    )
+
+    const title = screen.getByText('Title') // x=1in; field x=2in — stay misaligned
+    firePointer(title, 'pointerDown', { clientX: 0, clientY: 0 })
+    firePointer(title, 'pointerMove', { clientX: 10, clientY: 0 }) // +~0.1in, far from any line
+
+    expect(container.querySelector('.rb-guide-vertical')).not.toBeInTheDocument()
+  })
+})

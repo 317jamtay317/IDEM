@@ -142,6 +142,25 @@ export function resizedRect(
 }
 
 /**
+ * The cumulative top offset (in inches) of each band in a stacked banded page:
+ * the first band starts at zero and each subsequent band starts below the sum of
+ * the heights above it. Used to lift band-relative element positions into
+ * page-absolute coordinates for cross-band hit-testing (marquee, smart guides).
+ *
+ * @param bands The bands, top to bottom, each carrying its height in inches.
+ * @returns The top offset of each band, in inches, parallel to `bands`.
+ */
+export function bandTops(bands: readonly { height: number }[]): number[] {
+  const tops: number[] = []
+  let cursor = 0
+  for (const band of bands) {
+    tops.push(cursor)
+    cursor += band.height
+  }
+  return tops
+}
+
+/**
  * The next zoom level above the given one.
  *
  * @param zoomPercent The current zoom (percent).

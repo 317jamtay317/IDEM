@@ -119,6 +119,9 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
     )
   }
 
+  // Replace the selection with the elements a marquee (rubber-band) drag covered.
+  const handleMarqueeSelect = (ids: string[]) => setSelectedIds(ids)
+
   // Merge a Properties-panel edit into the sole selected element.
   const handleEdit = (patch: Partial<ReportElement>) => {
     if (soleId !== null) {
@@ -311,6 +314,7 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
               zoom={zoom}
               selectedIds={selectedIds}
               onSelectElement={handleSelect}
+              onMarqueeSelect={handleMarqueeSelect}
               onInsertAt={handleInsertAt}
               onMoveElement={handleMove}
               onResize={handleResize}

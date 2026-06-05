@@ -7,12 +7,14 @@
  * data only at preview time (a later phase). Selection and editing arrive in
  * Phases 3–6.
  */
-import { Fragment, useRef, type DragEvent, type PointerEvent } from 'react'
+import { Fragment, useRef, useState, type DragEvent, type PointerEvent } from 'react'
 import { BAND_LABELS } from './bandLabels'
 import { ELEMENT_DRAG_MIME, isElementType } from './dnd'
 import { ELEMENT_TYPE_LABELS } from './elementDisplay'
 import { elementTextCss } from './elementStyleCss'
-import { draggedPosition, inchesToPx, pxToInches, resizedRect, type ResizeHandle } from './geometry'
+import { bandTops, draggedPosition, inchesToPx, pxToInches, resizedRect, type ResizeHandle } from './geometry'
+import { alignmentGuides, GUIDE_TOLERANCE_PX, type AlignmentGuide } from './guides'
+import { marqueeRect, marqueeSelect } from './marquee'
 import { type BandKind, type ElementType, type Rect, type ReportElement, type ReportTemplate } from './model'
 
 /** The corner resize handles, with the accessible label shown for each. */
@@ -22,6 +24,9 @@ const RESIZE_HANDLES: { handle: ResizeHandle; label: string }[] = [
   { handle: 'sw', label: 'bottom-left' },
   { handle: 'se', label: 'bottom-right' },
 ]
+
+/** Pointer travel (CSS px) before an empty-canvas press becomes a marquee drag rather than a click. */
+const MARQUEE_DRAG_THRESHOLD_PX = 3
 
 /** The text shown for an element on the read-only canvas. */
 function elementContent(el: ReportElement): string {
@@ -60,6 +65,12 @@ export interface ReportCanvasProps {
    */
   onSelectElement?: (id: string | null, additive: boolean) => void
   /**
+   * Called when a marquee (rubber-band) drag on the empty canvas completes: the
+   * ids of every element the marquee rectangle intersected, replacing the current
+   * selection (empty when it covered nothing). Omit to disable marquee selection.
+   */
+  onMarqueeSelect?: (ids: string[]) => void
+  /**
    * Called when a palette item is dropped onto a band: the dropped element type,
    * the band it landed in, and the drop position within that band, in inches.
    * Omit to disable dropping onto the canvas.
@@ -90,6 +101,7 @@ export function ReportCanvas({
   zoom,
   selectedIds = [],
   onSelectElement,
+  onMarqueeSelect,
   onInsertAt,
   onMoveElement,
   onResize,
@@ -101,45 +113,142 @@ export function ReportCanvas({
   // element is selected.
   const soleSelectedId = selectedIds.length === 1 ? selectedIds[0] : null
 
-  // The element being dragged: its id and the anchor (its start position plus the
-  // pointer's start point) from which each move computes an absolute new position.
-  const drag = useRef<{ id: string; startX: number; startY: number; pointerX: number; pointerY: number } | null>(null)
+  // Cumulative band offsets (inches) lift band-relative element rects into
+  // page-absolute coordinates, so marquee and smart guides reach across bands.
+  const tops = bandTops(template.bands)
+  const absoluteRects = (exceptId?: string): { id: string; rect: Rect }[] =>
+    template.bands.flatMap((band, i) =>
+      band.elements
+        .filter((el) => el.id !== exceptId)
+        .map((el) => ({ id: el.id, rect: { x: el.rect.x, y: tops[i] + el.rect.y, w: el.rect.w, h: el.rect.h } })),
+    )
+
+  // Canvas-owned visuals: the live marquee rectangle (page-relative CSS px) while
+  // rubber-banding, and the alignment guides shown while an element is dragged.
+  const [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
+  const [guides, setGuides] = useState<AlignmentGuide[]>([])
+
+  // The element being dragged: its id, start rect (for guide hit-testing), its
+  // band's top offset, the other elements' page-absolute rects (frozen at drag
+  // start), and the pointer's start point, from which each move computes a new
+  // absolute position.
+  const drag = useRef<{
+    id: string
+    startX: number
+    startY: number
+    w: number
+    h: number
+    top: number
+    others: Rect[]
+    pointerX: number
+    pointerY: number
+  } | null>(null)
 
   // Begin a drag (and select) when an element is pressed with the primary button.
   // A modified press (Shift/Ctrl/Cmd) toggles the element in the selection and
   // does not start a drag — the user is building a multi-selection, not moving.
-  const handlePointerDown = (el: ReportElement) => (e: PointerEvent) => {
+  const handlePointerDown = (el: ReportElement, bandTop: number) => (e: PointerEvent) => {
     if (e.button !== 0) return
     e.stopPropagation()
     const additive = e.shiftKey || e.metaKey || e.ctrlKey
     onSelectElement?.(el.id, additive)
     if (additive || !onMoveElement) return
-    drag.current = { id: el.id, startX: el.rect.x, startY: el.rect.y, pointerX: e.clientX, pointerY: e.clientY }
+    drag.current = {
+      id: el.id,
+      startX: el.rect.x,
+      startY: el.rect.y,
+      w: el.rect.w,
+      h: el.rect.h,
+      top: bandTop,
+      others: absoluteRects(el.id).map((r) => r.rect),
+      pointerX: e.clientX,
+      pointerY: e.clientY,
+    }
     e.currentTarget.setPointerCapture?.(e.pointerId)
   }
 
   // While dragging, report the element's new position (live, so it follows the
-  // cursor), snapped to the grid when snap-to-grid is enabled.
+  // cursor), snapped to the grid when snap-to-grid is enabled, and surface the
+  // alignment guides for any edge/centre that now lines up with another element.
   const handlePointerMove = (e: PointerEvent) => {
     const d = drag.current
     if (!d || !onMoveElement) return
-    onMoveElement(
-      d.id,
-      draggedPosition(
-        { x: d.startX, y: d.startY },
-        { x: e.clientX - d.pointerX, y: e.clientY - d.pointerY },
-        zoom,
-        gridSize,
-        snapToGrid,
-      ),
+    const position = draggedPosition(
+      { x: d.startX, y: d.startY },
+      { x: e.clientX - d.pointerX, y: e.clientY - d.pointerY },
+      zoom,
+      gridSize,
+      snapToGrid,
     )
+    onMoveElement(d.id, position)
+    const movingAbs: Rect = { x: position.x, y: d.top + position.y, w: d.w, h: d.h }
+    setGuides(alignmentGuides(movingAbs, d.others, pxToInches(GUIDE_TOLERANCE_PX, zoom)))
   }
 
-  // End the drag.
+  // End the drag and clear any guides.
   const handlePointerUp = (e: PointerEvent) => {
     if (!drag.current) return
     e.currentTarget.releasePointerCapture?.(e.pointerId)
     drag.current = null
+    setGuides([])
+  }
+
+  // Marquee (rubber-band) selection on the empty canvas: a press that travels past
+  // the threshold becomes a selection rectangle; a press-release in place is a
+  // click that clears the selection. The anchor holds the page origin and the
+  // start point (page-relative px) and tracks whether a real drag has begun.
+  const marqueeAnchor = useRef<{ pageLeft: number; pageTop: number; startX: number; startY: number; moved: boolean } | null>(null)
+
+  const handlePagePointerDown = (e: PointerEvent) => {
+    if (e.button !== 0 || (!onSelectElement && !onMarqueeSelect)) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    marqueeAnchor.current = {
+      pageLeft: rect.left,
+      pageTop: rect.top,
+      startX: e.clientX - rect.left,
+      startY: e.clientY - rect.top,
+      moved: false,
+    }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+  }
+
+  const handlePagePointerMove = (e: PointerEvent) => {
+    const m = marqueeAnchor.current
+    if (!m) return
+    const cur = { x: e.clientX - m.pageLeft, y: e.clientY - m.pageTop }
+    if (
+      !m.moved &&
+      Math.abs(cur.x - m.startX) <= MARQUEE_DRAG_THRESHOLD_PX &&
+      Math.abs(cur.y - m.startY) <= MARQUEE_DRAG_THRESHOLD_PX
+    )
+      return
+    m.moved = true
+    setMarquee({
+      left: Math.min(m.startX, cur.x),
+      top: Math.min(m.startY, cur.y),
+      width: Math.abs(cur.x - m.startX),
+      height: Math.abs(cur.y - m.startY),
+    })
+  }
+
+  const handlePagePointerUp = (e: PointerEvent) => {
+    const m = marqueeAnchor.current
+    if (!m) return
+    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    marqueeAnchor.current = null
+    if (!m.moved) {
+      onSelectElement?.(null, false) // a plain click on the empty canvas clears the selection
+      return
+    }
+    const region = marqueeRect({ x: m.startX, y: m.startY }, { x: e.clientX - m.pageLeft, y: e.clientY - m.pageTop })
+    const regionInches: Rect = {
+      x: pxToInches(region.x, zoom),
+      y: pxToInches(region.y, zoom),
+      w: pxToInches(region.w, zoom),
+      h: pxToInches(region.h, zoom),
+    }
+    onMarqueeSelect?.(marqueeSelect(regionInches, absoluteRects()))
+    setMarquee(null)
   }
 
   // The element being resized: its id, the handle grabbed, its start rect, and
@@ -194,16 +303,19 @@ export function ReportCanvas({
   const showGrid = snapToGrid && gridPx > 0
 
   return (
-    // Clicking the page background (anywhere but an element) clears the selection.
+    // The page surface hosts marquee selection: a drag rubber-bands a selection,
+    // a press-release in place clears it (see the page pointer handlers).
     <div
       className={`rb-page${showGrid ? ' rb-page-grid' : ''}`}
       style={{
         width: px(template.page.width),
         ...(showGrid ? { backgroundSize: `${gridPx}px ${gridPx}px` } : {}),
       }}
-      onClick={() => onSelectElement?.(null, false)}
+      onPointerDown={handlePagePointerDown}
+      onPointerMove={handlePagePointerMove}
+      onPointerUp={handlePagePointerUp}
     >
-      {template.bands.map((band) => (
+      {template.bands.map((band, bandIndex) => (
         <div
           key={band.kind}
           className={`rb-band rb-band-${band.kind}`}
@@ -235,13 +347,13 @@ export function ReportCanvas({
                     ...elementTextCss(el.style, zoom),
                   }}
                   onClick={(e) => {
-                    e.stopPropagation() // don't bubble to the page's deselect handler
+                    e.stopPropagation() // keep the click off the page (no marquee/deselect)
                     // Mouse selection happens on pointer down; handle keyboard
                     // activation (Enter/Space) here, which fires click with no
                     // preceding pointer press (detail === 0).
                     if (e.detail === 0) onSelectElement?.(el.id, e.shiftKey || e.metaKey || e.ctrlKey)
                   }}
-                  onPointerDown={handlePointerDown(el)}
+                  onPointerDown={handlePointerDown(el, tops[bandIndex])}
                   onPointerMove={onMoveElement ? handlePointerMove : undefined}
                   onPointerUp={onMoveElement ? handlePointerUp : undefined}
                 >
@@ -272,6 +384,28 @@ export function ReportCanvas({
             )
           })}
         </div>
+      ))}
+
+      {/* The marquee (rubber-band) rectangle, drawn while selecting on the canvas. */}
+      {marquee && (
+        <div
+          className="rb-marquee"
+          style={{
+            left: `${marquee.left}px`,
+            top: `${marquee.top}px`,
+            width: `${marquee.width}px`,
+            height: `${marquee.height}px`,
+          }}
+        />
+      )}
+
+      {/* Smart alignment guides, drawn while an element is dragged into alignment. */}
+      {guides.map((guide) => (
+        <div
+          key={`${guide.orientation}:${guide.position}`}
+          className={`rb-guide rb-guide-${guide.orientation}`}
+          style={guide.orientation === 'vertical' ? { left: px(guide.position) } : { top: px(guide.position) }}
+        />
       ))}
     </div>
   )

@@ -3,6 +3,7 @@ import {
   DEFAULT_ZOOM,
   PX_PER_INCH,
   ZOOM_LEVELS,
+  bandTops,
   draggedPosition,
   inchesToPx,
   pointsToPx,
@@ -174,5 +175,19 @@ describe('zoomOut', () => {
   it('clamps at the minimum level', () => {
     const min = ZOOM_LEVELS[0]
     expect(zoomOut(min)).toBe(min)
+  })
+})
+
+describe('bandTops', () => {
+  it('returns the cumulative top offset of each band, in order', () => {
+    expect(bandTops([{ height: 1.5 }, { height: 0.35 }, { height: 0.3 }])).toEqual([0, 1.5, 1.85])
+  })
+
+  it('starts the first band at zero', () => {
+    expect(bandTops([{ height: 2 }])).toEqual([0])
+  })
+
+  it('returns an empty array when there are no bands', () => {
+    expect(bandTops([])).toEqual([])
   })
 })
