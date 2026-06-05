@@ -3,21 +3,21 @@ import { NAV_ENTRIES, visibleNavEntries } from './nav'
 
 /**
  * Navigation is role-filtered (I-D13): SiteAdmins are platform operators who
- * work only with Organizations and Reports, while Org Users get the day-to-day
- * app. The "More" destination has been removed entirely — account actions now
- * live in the account menu off the sidebar facility / top-bar avatar.
+ * work only with Organizations, Production Fields, and Reports, while Org Users
+ * get the day-to-day app. The "More" destination has been removed entirely —
+ * account actions now live in the account menu off the sidebar facility / top-bar avatar.
  */
 describe('visibleNavEntries', () => {
   it('shows an Org User the day-to-day destinations and never Organizations', () => {
     const tabs = visibleNavEntries(false).map((entry) => entry.tab)
 
-    expect(tabs).toEqual(['home', 'records', 'facilities', 'reports'])
+    expect(tabs).toEqual(['home', 'records', 'facilities', 'fieldLimits', 'reports'])
   })
 
-  it('shows a SiteAdmin only Organizations and Reports', () => {
+  it('shows a SiteAdmin only their platform destinations (Organizations, Production Fields, Reports)', () => {
     const tabs = visibleNavEntries(true).map((entry) => entry.tab)
 
-    expect(tabs).toEqual(['orgs', 'reports'])
+    expect(tabs).toEqual(['orgs', 'productionFields', 'reports'])
   })
 })
 

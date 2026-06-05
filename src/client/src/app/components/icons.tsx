@@ -35,6 +35,17 @@ export function RecordsIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** Field limits (gauge / dial) glyph. */
+export function GaugeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 15a8 8 0 0 1 16 0" />
+      <path d="M12 15l4-3" />
+      <circle cx="12" cy="15" r="1" />
+    </svg>
+  )
+}
+
 /** Reports (bar chart) glyph. */
 export function ReportsIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -86,6 +97,25 @@ export function ChevronRightIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** Left-pointing arrow, used on back / return actions. */
+export function ArrowLeftIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M19 12H5" />
+      <path d="m12 19-7-7 7-7" />
+    </svg>
+  )
+}
+
+/** Left-pointing chevron, used to page backwards (e.g. previous month). */
+export function ChevronLeftIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="m15 6-6 6 6 6" />
+    </svg>
+  )
+}
+
 /** Down-pointing chevron, used on select/dropdown controls. */
 export function ChevronDownIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -109,6 +139,16 @@ export function CloseIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>
       <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  )
+}
+
+/** Calendar glyph, used on date fields. */
+export function CalendarIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3" y="4.5" width="18" height="16" rx="2" />
+      <path d="M3 9h18M8 2.5v4M16 2.5v4" />
     </svg>
   )
 }

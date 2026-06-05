@@ -151,6 +151,11 @@ builder.Services.AddOpenIddict()
 builder.Services.AddScoped<DynamicClientRegistration>();
 builder.Services.AddRecordKeepingMcp();
 
+// Serialize enums by name (e.g. "Decimal") so API payloads expose the Production Field DataType
+// as a stable string rather than an integer.
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
+
 // The MCP authentication scheme publishes Protected Resource Metadata and the discovery
 // challenge; it forwards actual token validation to the OpenIddict validation scheme.
 builder.Services.AddAuthentication()
@@ -192,6 +197,10 @@ using (var scope = app.Services.CreateScope())
     // initializer because EnsureCreated no-ops once the database already exists.
     var domainDb = scope.ServiceProvider.GetRequiredService<RecordKeepingDbContext>();
     await RecordKeepingDbInitializer.InitializeAsync(domainDb);
+
+    // Seed the platform-global Production Field catalog (reference data, every environment) once the
+    // domain schema exists. Idempotent: seeds only when the catalog is empty.
+    await ProductionFieldSeeder.SeedAsync(scope.ServiceProvider);
 
     // Development-only sample data (a sample Org + Org User); a no-op outside Development.
     // Runs after the domain schema exists so the Org insert has a table to target.

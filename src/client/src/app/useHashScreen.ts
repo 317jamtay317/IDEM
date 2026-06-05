@@ -18,6 +18,8 @@ const SCREENS: readonly Screen[] = [
   'records',
   'reports',
   'orgs',
+  'productionFields',
+  'fieldLimits',
   'log',
   'facilities',
   'report-builder',
@@ -57,6 +59,31 @@ export function templateIdFromHash(hash: string): string | null {
 }
 
 /**
+ * Parses the selected Facility id out of a `#/facilities/{id}` detail hash. Any
+ * other hash — including the bare `#/facilities` list and a trailing-slash
+ * `#/facilities/` — has no selected Facility.
+ *
+ * @param hash The `window.location.hash` value, e.g. `#/facilities/abc`.
+ * @returns The Facility id the hash names, or `null` when it names none.
+ */
+export function facilityIdFromHash(hash: string): string | null {
+  const segments = hash.replace(/^#\/?/, '').split('/')
+  if (segments[0] !== 'facilities') return null
+  const id = segments[1]?.trim()
+  return id ? id : null
+}
+
+/**
+ * The detail id carried by the current hash: a Report Template id on the builder
+ * route, a Facility id on a facility-detail route, otherwise `null`. The two are
+ * mutually exclusive — each belongs to a different screen — so reading whichever
+ * is present yields the active screen's detail id.
+ */
+function detailIdFromHash(hash: string): string | null {
+  return templateIdFromHash(hash) ?? facilityIdFromHash(hash)
+}
+
+/**
  * Builds the location hash that represents a {@link Screen}. `home` maps to the
  * root hash (`#/`) so the address bar stays clean on the default screen. A
  * `templateId` given for the `report-builder` screen is percent-encoded into
@@ -75,23 +102,39 @@ export function hashFromScreen(screen: Screen, templateId?: string): string {
 }
 
 /**
- * Tracks the active {@link Screen} and the open Report Template id in the URL
- * hash so both survive a page refresh and can be linked to directly. The
- * initial values are read from the current hash; navigating mirrors them into
- * the hash, and external hash changes (the browser back/forward buttons) flow
- * back into state.
+ * Builds the location hash for a Facility's detail page.
  *
- * @returns A tuple of the active screen, a `navigate(screen, templateId?)`
- * setter, and the active Report Template id (`null` unless the builder is open).
+ * @param facilityId The Facility to encode.
+ * @returns The hash string, e.g. `#/facilities/abc`.
+ */
+export function hashForFacility(facilityId: string): string {
+  return `#/facilities/${facilityId}`
+}
+
+/**
+ * Tracks the active {@link Screen} and the detail id carried by the URL hash, so
+ * both survive a page refresh and can be linked to directly. The initial values
+ * are read from the current hash; navigating mirrors them into the hash, and
+ * external hash changes (the browser back/forward buttons) flow back into state.
+ *
+ * The detail id is whichever screen-specific id the hash carries: a Report
+ * Template id on the `report-builder` route, a Facility id on a facility-detail
+ * route, else `null`.
+ *
+ * @returns A tuple of: the active screen; a `navigate(screen, templateId?)`
+ * setter (which clears any detail id, encoding a Report Template id into the
+ * builder hash); the active detail id (`null` unless a detail-carrying screen is
+ * open); and an `openFacility(id)` setter that opens a Facility's detail page.
  */
 export function useHashScreen(): readonly [
   Screen,
   (screen: Screen, templateId?: string) => void,
   string | null,
+  (facilityId: string) => void,
 ] {
   const [screen, setScreen] = useState<Screen>(() => screenFromHash(window.location.hash))
-  const [templateId, setTemplateId] = useState<string | null>(() =>
-    templateIdFromHash(window.location.hash),
+  const [detailId, setDetailId] = useState<string | null>(() =>
+    detailIdFromHash(window.location.hash),
   )
 
   useEffect(() => {
@@ -100,23 +143,33 @@ export function useHashScreen(): readonly [
     // the lazy state initializers above.
     const sync = () => {
       setScreen(screenFromHash(window.location.hash))
-      setTemplateId(templateIdFromHash(window.location.hash))
+      setDetailId(detailIdFromHash(window.location.hash))
     }
     window.addEventListener('hashchange', sync)
     return () => window.removeEventListener('hashchange', sync)
   }, [])
 
   const navigate = useCallback((next: Screen, nextTemplateId?: string) => {
-    // Switch immediately for a snappy transition, then mirror the screen (and
-    // any template id) into the URL so a refresh or shared link lands on it. The
+    // Switch immediately for a snappy transition, then mirror the screen (and any
+    // template id) into the URL so a refresh or shared link lands on it. Leaving a
+    // detail-carrying screen (a builder template or a Facility) clears its id. The
     // resulting `hashchange` re-runs `sync`, a no-op since state already matches.
     setScreen(next)
-    setTemplateId(nextTemplateId ?? null)
+    setDetailId(nextTemplateId ?? null)
     const targetHash = hashFromScreen(next, nextTemplateId)
     if (window.location.hash !== targetHash) {
       window.location.hash = targetHash
     }
   }, [])
 
-  return [screen, navigate, templateId]
+  const openFacility = useCallback((id: string) => {
+    setScreen('facilities')
+    setDetailId(id)
+    const targetHash = hashForFacility(id)
+    if (window.location.hash !== targetHash) {
+      window.location.hash = targetHash
+    }
+  }, [])
+
+  return [screen, navigate, detailId, openFacility]
 }

@@ -21,6 +21,12 @@ export interface FacilitiesScreenProps {
    * network or auth provider.
    */
   api?: MyFacilitiesApi
+  /**
+   * Opens a Facility's details page (where its Permits and Monthly Limits are
+   * managed). Wired by the {@link AppShell} to the hash router; optional so the
+   * screen can render standalone in tests.
+   */
+  onOpenFacility?: (id: string) => void
 }
 
 /** True for the unsaved row created by the grid's add button. */
@@ -36,7 +42,11 @@ function isNew(facility: MyFacility): boolean {
  * Every call is scoped server-side to the caller's Org via the `org_id` claim
  * (I-D03) — the screen never sends an Org id.
  */
-export function FacilitiesScreen({ accessToken, api = defaultApi }: FacilitiesScreenProps) {
+export function FacilitiesScreen({
+  accessToken,
+  api = defaultApi,
+  onOpenFacility,
+}: FacilitiesScreenProps) {
   const { isDesktop } = useBreakpoint()
   const [facilities, setFacilities] = useState<MyFacility[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -142,13 +152,22 @@ export function FacilitiesScreen({ accessToken, api = defaultApi }: FacilitiesSc
                   addLabel: 'Add facility',
                   rowActions: (f) =>
                     isNew(f) ? null : (
-                      <button
-                        type="button"
-                        className="button button-danger button-sm"
-                        onClick={() => requestDelete(f)}
-                      >
-                        Delete
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className="button button-secondary button-sm"
+                          onClick={() => onOpenFacility?.(f.id)}
+                        >
+                          Manage
+                        </button>
+                        <button
+                          type="button"
+                          className="button button-danger button-sm"
+                          onClick={() => requestDelete(f)}
+                        >
+                          Delete
+                        </button>
+                      </>
                     ),
                   editLabel: (f) => (isNew(f) ? 'Edit' : 'Rename'),
                 }}
@@ -160,6 +179,7 @@ export function FacilitiesScreen({ accessToken, api = defaultApi }: FacilitiesSc
               onAdd={(name) => run(() => api.add(accessToken, name))}
               onRename={(f, name) => run(() => api.rename(accessToken, f.id, name))}
               onDelete={requestDelete}
+              onOpen={(f) => onOpenFacility?.(f.id)}
             />
           )
         )}
@@ -197,11 +217,13 @@ function FacilityCardList({
   onAdd,
   onRename,
   onDelete,
+  onOpen,
 }: {
   facilities: MyFacility[]
   onAdd: (name: string) => void
   onRename: (facility: MyFacility, name: string) => void
   onDelete: (facility: MyFacility) => void
+  onOpen: (facility: MyFacility) => void
 }) {
   const [newName, setNewName] = useState('')
   const trimmed = newName.trim()
@@ -235,7 +257,13 @@ function FacilityCardList({
       {facilities.length === 0 && <p className="muted">No facilities yet.</p>}
 
       {facilities.map((f) => (
-        <FacilityCard key={f.id} facility={f} onRename={onRename} onDelete={onDelete} />
+        <FacilityCard
+          key={f.id}
+          facility={f}
+          onRename={onRename}
+          onDelete={onDelete}
+          onOpen={onOpen}
+        />
       ))}
     </div>
   )
@@ -246,10 +274,12 @@ function FacilityCard({
   facility,
   onRename,
   onDelete,
+  onOpen,
 }: {
   facility: MyFacility
   onRename: (facility: MyFacility, name: string) => void
   onDelete: (facility: MyFacility) => void
+  onOpen: (facility: MyFacility) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(facility.name)
@@ -300,6 +330,13 @@ function FacilityCard({
         </>
       ) : (
         <div className="row-actions">
+          <button
+            type="button"
+            className="button button-secondary button-sm"
+            onClick={() => onOpen(facility)}
+          >
+            Manage
+          </button>
           <button
             type="button"
             className="button button-secondary button-sm"

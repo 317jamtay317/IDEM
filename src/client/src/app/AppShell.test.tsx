@@ -15,13 +15,22 @@ vi.mock('./orgsApi', () => ({
 }))
 
 // The Facilities screen is an Org User destination; stub its API so it settles
-// to an empty list instead of reaching for the network in tests.
+// without reaching for the network. `list` returns one Facility so the details
+// page (reached via "Manage") can resolve it; permits/limits settle empty.
 vi.mock('./myFacilitiesApi', () => ({
+  EMISSION_TYPES: ['VOC', 'HCl', 'SO2', 'NOx', 'CO2'],
   myFacilitiesApi: {
-    list: vi.fn().mockResolvedValue([]),
+    list: vi.fn().mockResolvedValue([{ id: 'f1', name: 'Goshen Plant' }]),
     add: vi.fn(),
     rename: vi.fn(),
     remove: vi.fn(),
+    listPermits: vi.fn().mockResolvedValue([]),
+    addPermit: vi.fn(),
+    removePermit: vi.fn(),
+    listLimits: vi.fn().mockResolvedValue([]),
+    addLimit: vi.fn(),
+    updateLimit: vi.fn(),
+    removeLimit: vi.fn(),
   },
 }))
 
@@ -118,6 +127,21 @@ describe('AppShell — hash-driven navigation', () => {
 
     expect(window.location.hash).toBe('#/log')
     expect(screen.getByText('New production record')).toBeInTheDocument()
+  })
+
+  it('highlights Records (not Dashboard) as the active tab on the log-record screen', async () => {
+    stubBreakpoint(true)
+    window.location.hash = ''
+    const user = userEvent.setup()
+    renderShell()
+
+    await user.click(screen.getByRole('button', { name: /log a record/i }))
+
+    // Logging a Record is a Records activity, so the navigation marks Records active.
+    const records = screen.getAllByRole('button', { name: 'Records' })
+    expect(records.some((button) => button.getAttribute('aria-current') === 'page')).toBe(true)
+    const dashboard = screen.queryAllByRole('button', { name: 'Dashboard' })
+    expect(dashboard.every((button) => button.getAttribute('aria-current') !== 'page')).toBe(true)
   })
 })
 
@@ -217,6 +241,33 @@ describe('AppShell — Org User Facilities (I-D06)', () => {
     await screen.findAllByRole('button', { name: 'Organizations' })
 
     expect(screen.queryByRole('button', { name: 'Facilities' })).not.toBeInTheDocument()
+  })
+
+  it('opens a facility’s details page and navigates back to the list', async () => {
+    stubBreakpoint(true)
+    window.location.hash = ''
+    const user = userEvent.setup()
+    renderShell() // Org User by default
+
+    await user.click(screen.getAllByRole('button', { name: 'Facilities' })[0])
+    await user.click(await screen.findByRole('button', { name: /manage/i }))
+
+    expect(window.location.hash).toBe('#/facilities/f1')
+    expect(await screen.findByRole('heading', { name: 'Goshen Plant' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /back to facilities/i }))
+
+    expect(window.location.hash).toBe('#/facilities')
+    expect(await screen.findByRole('heading', { name: 'Facilities' })).toBeInTheDocument()
+  })
+
+  it('deep-links to a facility’s details page from the URL hash', async () => {
+    stubBreakpoint(true)
+    window.location.hash = '#/facilities/f1'
+
+    renderShell()
+
+    expect(await screen.findByRole('heading', { name: 'Goshen Plant' })).toBeInTheDocument()
   })
 })
 

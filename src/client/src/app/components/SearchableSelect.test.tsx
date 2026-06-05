@@ -108,4 +108,30 @@ describe('SearchableSelect', () => {
     expect(screen.queryAllByRole('option')).toHaveLength(0)
     expect(screen.getByText(/no matches/i)).toBeInTheDocument()
   })
+
+  it('supports {value,label} options: shows the selected label and reports the value', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(
+      <SearchableSelect
+        options={[
+          { value: 'fac-1', label: 'Goshen Plant' },
+          { value: 'fac-2', label: 'Fort Wayne Plant' },
+        ]}
+        value="fac-1"
+        onChange={onChange}
+        label="Facility"
+      />,
+    )
+    const trigger = screen.getByRole('button', { name: 'Facility' })
+    // The trigger shows the selected option's label, not its underlying value.
+    expect(trigger).toHaveTextContent('Goshen Plant')
+
+    await user.click(trigger)
+    await user.type(screen.getByPlaceholderText('Search…'), 'fort')
+    await user.click(screen.getByRole('option', { name: 'Fort Wayne Plant' }))
+
+    // onChange reports the chosen option's value (id), not its label.
+    expect(onChange).toHaveBeenCalledWith('fac-2')
+  })
 })

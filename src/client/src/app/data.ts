@@ -98,18 +98,6 @@ export interface ReportItem {
   action: string
 }
 
-/** A configurable production field on the Log a Record screen. */
-export interface ProductionEntry {
-  /** Stable identifier. */
-  id: string
-  /** Selected field name, e.g. "Hot Mix". */
-  field: string
-  /** Recorded tonnage for the day. */
-  tons: number
-  /** Permitted daily limit for this field at the Facility. */
-  limit: number
-}
-
 /** A condensed Record shown in the dashboard "Recent records" panel. */
 export interface RecentRecord {
   /** Stable identifier. */
@@ -189,24 +177,6 @@ export const recentRecords: RecentRecord[] = [
   { id: 'rr1', title: 'Daily Production Log', meta: 'Goshen · 1,240 tons', status: 'submitted' },
   { id: 'rr2', title: 'Opacity Reading', meta: 'Goshen · 5% avg', status: 'submitted' },
   { id: 'rr3', title: 'Daily Production Log', meta: 'Fort Wayne · 980 tons', status: 'submitted' },
-]
-
-/** Default production entries shown on the Log a Record screen. */
-export const productionEntries: ProductionEntry[] = [
-  { id: 'p1', field: 'Hot Mix', tons: 1240, limit: 1500 },
-  { id: 'p2', field: 'Cold Mix', tons: 320, limit: 500 },
-  { id: 'p3', field: 'Warm Mix', tons: 0, limit: 800 },
-]
-
-/** Field options offered in the production entry dropdowns. */
-export const fieldOptions = [
-  'Hot Mix',
-  'Cold Mix',
-  'Warm Mix',
-  'Recycled (RAP)',
-  'Aggregate',
-  'Liquid AC',
-  'Fuel burned',
 ]
 
 /**

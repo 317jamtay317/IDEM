@@ -64,5 +64,32 @@ public partial class MyOrgFacilityEndpoints : IEndpoint
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("Removes a permit from a Facility in the signed-in user's Org.");
+
+        facilities.MapGet("/{facilityId:guid}/limits", GetMyFacilityLimits)
+            .Produces<IReadOnlyList<MonthlyLimitResponse>>()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("Lists the monthly limits of a Facility in the signed-in user's Org.");
+
+        facilities.MapPost("/{facilityId:guid}/limits", AddMyFacilityLimit)
+            .Produces<MonthlyLimitResponse>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("Adds a monthly limit to a Facility in the signed-in user's Org.");
+
+        facilities.MapPut("/{facilityId:guid}/limits/{emissionType}", UpdateMyFacilityLimit)
+            .Produces<MonthlyLimitResponse>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("Updates the value of a Facility's monthly limit in the signed-in user's Org.");
+
+        facilities.MapDelete("/{facilityId:guid}/limits/{emissionType}", RemoveMyFacilityLimit)
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithSummary("Removes a monthly limit from a Facility in the signed-in user's Org.");
     }
 }

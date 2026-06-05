@@ -10,7 +10,10 @@ import { ReportsScreen } from './screens/ReportsScreen'
 import { ReportBuilderScreen } from './screens/ReportBuilderScreen'
 import { OrgsScreen } from './screens/OrgsScreen'
 import { FacilitiesScreen } from './screens/FacilitiesScreen'
+import { FacilityDetailScreen } from './screens/FacilityDetailScreen'
 import { LogRecordScreen } from './screens/LogRecordScreen'
+import { ProductionFieldsScreen } from './screens/ProductionFieldsScreen'
+import { FieldLimitsScreen } from './screens/FieldLimitsScreen'
 import './app.css'
 
 /** Props for {@link AppShell}. */
@@ -26,11 +29,12 @@ export interface AppShellProps {
 }
 
 /**
- * The navigation tab that governs a screen. `log` belongs to the dashboard
- * (home); `report-builder` is reached from Reports, so it highlights that tab.
+ * The navigation tab that governs a screen. Logging a Record is a Records
+ * activity, so `log` highlights Records; the SiteAdmin Report Builder is reached
+ * from Reports, so `report-builder` highlights Reports.
  */
 function tabForScreen(screen: Screen): NavTab {
-  if (screen === 'log') return 'home'
+  if (screen === 'log') return 'records'
   if (screen === 'report-builder') return 'reports'
   return screen
 }
@@ -44,7 +48,7 @@ function tabForScreen(screen: Screen): NavTab {
  * sees the day-to-day app and never the Organizations screen or Report Builder.
  */
 export function AppShell({ email, isSiteAdmin, accessToken = null, onSignOut }: AppShellProps) {
-  const [screen, navigate, templateId] = useHashScreen()
+  const [screen, navigate, detailId, openFacility] = useHashScreen()
 
   // The destinations this user may reach, and their landing screen (the first).
   const permitted = useMemo(() => visibleNavEntries(isSiteAdmin), [isSiteAdmin])
@@ -75,8 +79,13 @@ export function AppShell({ email, isSiteAdmin, accessToken = null, onSignOut }: 
         <div className="app-content">
           <main className="app-main">
             {effectiveScreen === 'home' && <DashboardScreen onLogRecord={() => navigate('log')} />}
-            {effectiveScreen === 'log' && <LogRecordScreen />}
-            {effectiveScreen === 'records' && <RecordsScreen />}
+            {effectiveScreen === 'log' && (
+              <LogRecordScreen
+                accessToken={accessToken}
+                onManageFacilities={() => navigate('facilities')}
+              />
+            )}
+            {effectiveScreen === 'records' && <RecordsScreen accessToken={accessToken} />}
             {effectiveScreen === 'reports' && (
               <ReportsScreen
                 isSiteAdmin={isSiteAdmin}
@@ -84,10 +93,23 @@ export function AppShell({ email, isSiteAdmin, accessToken = null, onSignOut }: 
               />
             )}
             {effectiveScreen === 'report-builder' && (
-              <ReportBuilderScreen templateId={templateId} onClose={() => navigate('reports')} />
+              <ReportBuilderScreen templateId={detailId} onClose={() => navigate('reports')} />
             )}
             {effectiveScreen === 'orgs' && <OrgsScreen accessToken={accessToken} />}
-            {effectiveScreen === 'facilities' && <FacilitiesScreen accessToken={accessToken} />}
+            {effectiveScreen === 'productionFields' && (
+              <ProductionFieldsScreen accessToken={accessToken} />
+            )}
+            {effectiveScreen === 'facilities' &&
+              (detailId ? (
+                <FacilityDetailScreen
+                  facilityId={detailId}
+                  accessToken={accessToken}
+                  onBack={() => navigate('facilities')}
+                />
+              ) : (
+                <FacilitiesScreen accessToken={accessToken} onOpenFacility={openFacility} />
+              ))}
+            {effectiveScreen === 'fieldLimits' && <FieldLimitsScreen accessToken={accessToken} />}
           </main>
 
           <BottomNav active={activeTab} isSiteAdmin={isSiteAdmin} onNavigate={navigate} />
