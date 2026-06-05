@@ -147,8 +147,9 @@ describe('ReportBuilderScreen — selection (Phase 3)', () => {
     await user.click(screen.getByRole('group', { name: 'Report Header' }))
 
     expect(screen.getByText('No selection')).toBeInTheDocument()
+    // With nothing selected, the Properties panel shows page setup (Phase 10).
     const props = screen.getByRole('complementary', { name: 'Properties' })
-    expect(within(props).getByText(/select an element/i)).toBeInTheDocument()
+    expect(within(props).getByText('Page Setup')).toBeInTheDocument()
   })
 })
 
@@ -597,5 +598,83 @@ describe('ReportBuilderScreen — inline text editing', () => {
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit text' }), { key: 'Enter' })
 
     expect(screen.getByLabelText('Text')).toHaveValue('Quarterly Report')
+  })
+})
+
+describe('ReportBuilderScreen — multiple pages & page setup (Phase 10)', () => {
+  /** Scopes a query to the Insert palette region. */
+  const palette = () => within(screen.getByRole('region', { name: 'Insert' }))
+
+  /** Inserts a Page Break from the desktop palette (nothing selected → first band). */
+  const insertPageBreak = (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(palette().getByRole('button', { name: 'Page Break' }))
+
+  it('has a page navigator in the toolbar, disabled for a single-page document', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    expect(screen.getByRole('group', { name: 'Pages' })).toBeInTheDocument()
+    expect(screen.getByText('Page 1 of 1')).toBeInTheDocument() // status bar
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()
+  })
+
+  it('counts a page break as an extra page in the status bar', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await insertPageBreak(user)
+
+    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeEnabled()
+  })
+
+  it('switches the current page with the navigator', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await insertPageBreak(user) // now two pages
+
+    await user.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(screen.getByText('Page 2 of 2')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Previous page' }))
+    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument()
+  })
+
+  it('clamps the current page back into range when a page break is removed', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await insertPageBreak(user) // two pages; the new break is selected
+    await user.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(screen.getByText('Page 2 of 2')).toBeInTheDocument()
+
+    // Deleting the page break drops the document to one page; page 2 no longer exists.
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    expect(screen.getByText('Page 1 of 1')).toBeInTheDocument()
+  })
+
+  it('shows page setup in the Properties panel when nothing is selected', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    const props = within(screen.getByRole('complementary', { name: 'Properties' }))
+    expect(props.getByText('Page Setup')).toBeInTheDocument()
+    expect(props.getByRole('combobox', { name: 'Page size' })).toHaveValue('letter')
+  })
+
+  it('rotates the page to landscape, widening the canvas', async () => {
+    const user = userEvent.setup()
+    const { container } = render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    // Portrait US Letter: page is 8.5in → 816px wide at 100% zoom.
+    expect(container.querySelector('.rb-page')).toHaveStyle({ width: '816px' })
+
+    await user.click(screen.getByRole('button', { name: 'Landscape' }))
+
+    // Landscape: 11in → 1056px wide.
+    expect(container.querySelector('.rb-page')).toHaveStyle({ width: '1056px' })
   })
 })

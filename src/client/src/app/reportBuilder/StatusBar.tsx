@@ -18,6 +18,8 @@ export interface StatusBarProps {
    * zero otherwise; pass it explicitly to summarise a multi-selection.
    */
   selectedCount?: number
+  /** The page currently in view in the navigator (1-based). Defaults to one. */
+  currentPage?: number
   /** The number of pages in the document. Defaults to one. */
   pageCount?: number
   /** Whether snap-to-grid is enabled. Defaults to `false`. */
@@ -31,6 +33,7 @@ export function StatusBar({
   selected,
   zoom,
   selectedCount,
+  currentPage = 1,
   pageCount = 1,
   snapToGrid = false,
   gridSize = 0,
@@ -55,7 +58,7 @@ export function StatusBar({
       <span className="rb-status-zoom">Zoom {zoom}%</span>
       <span className="rb-status-snap">{snapStatus}</span>
       <span className="rb-status-selection">{selection}</span>
-      <span className="rb-status-page">Page 1 of {pageCount}</span>
+      <span className="rb-status-page">Page {currentPage} of {pageCount}</span>
     </footer>
   )
 }

@@ -1580,6 +1580,30 @@
 }
 
 /* Snap-to-grid toolbar group: the Snap toggle and the grid-size picker. */
+/* Page navigator toolbar group (Phase 10). */
+.rb-pages {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.rb-pages .button-sm {
+  min-width: 2rem;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.rb-page-indicator {
+  min-width: 5rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--color-text);
+}
+
 .rb-snap {
   display: flex;
   align-items: center;
@@ -1882,6 +1906,13 @@
 }
 
 .rb-prop-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+/* Page Setup editor, shown in the Properties panel when nothing is selected (Phase 10). */
+.rb-page-setup {
   display: flex;
   flex-direction: column;
   gap: 0.625rem;

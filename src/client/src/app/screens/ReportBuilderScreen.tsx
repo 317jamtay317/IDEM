@@ -1,10 +1,12 @@
 import { useMemo, useState, type KeyboardEvent } from 'react'
 import { ReportCanvas } from '../reportBuilder/ReportCanvas'
 import { PropertiesPanel } from '../reportBuilder/PropertiesPanel'
+import { PageSetupEditor } from '../reportBuilder/PageSetupEditor'
 import { StatusBar } from '../reportBuilder/StatusBar'
 import { InsertPalette } from '../reportBuilder/InsertPalette'
 import { InsertSheet } from '../reportBuilder/InsertSheet'
 import { DEFAULT_ZOOM, zoomIn, zoomOut } from '../reportBuilder/geometry'
+import { pageCount } from '../reportBuilder/pageSetup'
 import { fromDisplayPx, toDisplayPx } from '../reportBuilder/elementDisplay'
 import {
   alignRects,
@@ -22,9 +24,11 @@ import {
   removeElements,
   updateElement,
   updateElementRects,
+  updatePage,
   updateSettings,
   type BandKind,
   type ElementType,
+  type PageSetup,
   type Rect,
   type ReportElement,
   type ReportTemplate,
@@ -92,15 +96,22 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
   const [zoom, setZoom] = useState(DEFAULT_ZOOM)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [insertSheetOpen, setInsertSheetOpen] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
 
-  // Re-seed (and clear the selection) if the route's template id changes while
-  // the builder stays mounted — the recommended "adjust state during render" form.
+  // Re-seed (and reset the selection and current page) if the route's template id
+  // changes while the builder stays mounted — the "adjust state during render" form.
   const [loadedFor, setLoadedFor] = useState(templateId)
   if (templateId !== loadedFor) {
     setLoadedFor(templateId)
     setTemplate(createSampleTemplate(templateArg))
     setSelectedIds([])
+    setCurrentPage(1)
   }
+
+  // Page breaks drive the page count; if a break is removed while a later page is
+  // in view, clamp the current page back into range (also "adjust during render").
+  const pages = pageCount(template)
+  if (currentPage > pages) setCurrentPage(pages)
 
   // The Properties/Status panels edit a single element; they show it only when
   // exactly one is selected (a multi-selection summarises by count instead).
@@ -190,6 +201,15 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
     setTemplate((current) => updateSettings(current, { gridSize: fromDisplayPx(px) }))
   }
 
+  // Edit the page setup (size, orientation, margins) from the Page Setup panel.
+  const handlePageChange = (patch: Partial<PageSetup>) => {
+    setTemplate((current) => updatePage(current, patch))
+  }
+
+  // Step the page navigator within the available pages.
+  const handlePrevPage = () => setCurrentPage((p) => Math.max(1, p - 1))
+  const handleNextPage = () => setCurrentPage((p) => Math.min(pages, p + 1))
+
   // Delete the selected element(s) from the template and clear the selection.
   const handleDelete = () => {
     if (selectedIds.length === 0) return
@@ -257,6 +277,31 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
             onClick={() => setZoom(zoomIn)}
           >
             +
+          </button>
+        </div>
+
+        {/* Page navigator: step through the pages the page breaks define (Phase 10). */}
+        <div className="rb-pages" role="group" aria-label="Pages">
+          <button
+            type="button"
+            className="button button-secondary button-sm"
+            aria-label="Previous page"
+            disabled={currentPage <= 1}
+            onClick={handlePrevPage}
+          >
+            ‹
+          </button>
+          <span className="rb-page-indicator" aria-live="polite">
+            Page {currentPage} / {pages}
+          </span>
+          <button
+            type="button"
+            className="button button-secondary button-sm"
+            aria-label="Next page"
+            disabled={currentPage >= pages}
+            onClick={handleNextPage}
+          >
+            ›
           </button>
         </div>
 
@@ -361,7 +406,11 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
         </div>
 
         <aside className="rb-panel rb-properties" aria-label="Properties">
-          <PropertiesPanel element={selected} selectedCount={selectedIds.length} onChange={handleEdit} />
+          {selectedIds.length === 0 ? (
+            <PageSetupEditor page={template.page} onChange={handlePageChange} />
+          ) : (
+            <PropertiesPanel element={selected} selectedCount={selectedIds.length} onChange={handleEdit} />
+          )}
         </aside>
       </div>
 
@@ -369,6 +418,8 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
         selected={selected}
         selectedCount={selectedIds.length}
         zoom={zoom}
+        currentPage={currentPage}
+        pageCount={pages}
         snapToGrid={template.settings.snapToGrid}
         gridSize={template.settings.gridSize}
       />

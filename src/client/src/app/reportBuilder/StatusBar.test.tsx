@@ -38,6 +38,12 @@ describe('StatusBar', () => {
     expect(screen.getByText('Page 1 of 3')).toBeInTheDocument()
   })
 
+  it('shows the current page within a multi-page document', () => {
+    render(<StatusBar selected={null} zoom={100} currentPage={2} pageCount={3} />)
+
+    expect(screen.getByText('Page 2 of 3')).toBeInTheDocument()
+  })
+
   it('names a textless element by its id', () => {
     const box: ReportElement = { id: 'frame', type: 'rectangle', rect: { x: 0, y: 0, w: 2, h: 1 } }
     render(<StatusBar selected={box} zoom={100} />)

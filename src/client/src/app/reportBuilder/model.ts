@@ -271,6 +271,19 @@ export function updateSettings(
   return { ...template, settings: { ...template.settings, ...patch } }
 }
 
+/**
+ * Returns a new template with `patch` merged into its page setup (size, margins).
+ * The original template is not mutated; its bands and settings are shared by
+ * reference, as only the page changes.
+ *
+ * @param template The template whose page setup to update.
+ * @param patch The page fields to change (e.g. `{ width: 11, height: 8.5 }`).
+ * @returns A new {@link ReportTemplate} with the updated page setup.
+ */
+export function updatePage(template: ReportTemplate, patch: Partial<PageSetup>): ReportTemplate {
+  return { ...template, page: { ...template.page, ...patch } }
+}
+
 /** Default size and offset (inches) for a freshly inserted element of each type. */
 const DEFAULT_RECTS: Record<ElementType, Rect> = {
   label: { x: 0.5, y: 0.1, w: 2, h: 0.25 },

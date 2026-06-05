@@ -72,6 +72,23 @@ describe('toRdl / parseRdl', () => {
     expect(back.settings).toEqual({ snapToGrid: false, gridSize: 0.25 })
   })
 
+  it('round-trips a non-default page setup (landscape Legal with custom margins)', () => {
+    const t = createEmptyTemplate('t1', 'Blank')
+    // Legal, rotated to landscape (width > height), with tighter margins.
+    t.page = { width: 14, height: 8.5, margins: { top: 0.5, right: 0.75, bottom: 0.5, left: 0.75 } }
+
+    const back = parseRdl(toRdl(t))
+    expect(back.page).toEqual(t.page)
+  })
+
+  it('round-trips a Page Break element', () => {
+    const t = createEmptyTemplate('t1', 'Blank')
+    t.bands[2].elements.push(createElement('pageBreak', 'pageBreak-1'))
+
+    const back = parseRdl(toRdl(t))
+    expect(back.bands[2].elements).toEqual([createElement('pageBreak', 'pageBreak-1')])
+  })
+
   it('emits an RDL document carrying the namespace and schema version (I-D08)', () => {
     const xml = toRdl(createEmptyTemplate('t1', 'Blank'))
 

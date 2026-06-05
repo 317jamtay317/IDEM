@@ -11,6 +11,7 @@ import {
   removeElements,
   updateElement,
   updateElementRects,
+  updatePage,
   updateSettings,
 } from './model'
 
@@ -327,6 +328,41 @@ describe('updateSettings', () => {
 
     expect(next.bands).toBe(original.bands)
     expect(next.page).toBe(original.page)
+  })
+})
+
+describe('updatePage', () => {
+  it('merges the patch into the page setup', () => {
+    const next = updatePage(createEmptyTemplate('t1', 'T1'), { width: 11, height: 8.5 })
+
+    expect(next.page.width).toBe(11)
+    expect(next.page.height).toBe(8.5)
+  })
+
+  it('can change the margins', () => {
+    const next = updatePage(createEmptyTemplate('t1', 'T1'), {
+      margins: { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 },
+    })
+
+    expect(next.page.margins).toEqual({ top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 })
+  })
+
+  it('does not mutate the original template', () => {
+    const original = createEmptyTemplate('t1', 'T1')
+
+    const next = updatePage(original, { width: 11 })
+
+    expect(original.page.width).toBe(8.5)
+    expect(next).not.toBe(original)
+  })
+
+  it('leaves the bands and settings untouched', () => {
+    const original = createEmptyTemplate('t1', 'T1')
+
+    const next = updatePage(original, { width: 11 })
+
+    expect(next.bands).toBe(original.bands)
+    expect(next.settings).toBe(original.settings)
   })
 })
 
