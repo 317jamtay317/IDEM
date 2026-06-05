@@ -15,6 +15,7 @@ using RecordKeeping.Api.Endpoints;
 using RecordKeeping.Infrastructure.Identity;
 using RecordKeeping.Infrastructure.Persistence;
 using RecordKeeping.Mcp;
+using RecordKeeping.Reporting;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -151,6 +152,9 @@ builder.Services.AddOpenIddict()
 builder.Services.AddScoped<DynamicClientRegistration>();
 builder.Services.AddRecordKeepingMcp();
 
+// Report Engine: renders Report Templates (RDL) to PDF for the SiteAdmin-only builder preview.
+builder.Services.AddRecordKeepingReporting();
+
 // Serialize enums by name (e.g. "Decimal") so API payloads expose the Production Field DataType
 // as a stable string rather than an integer.
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -168,6 +172,14 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("ApiUser", new AuthorizationPolicyBuilder(
             OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
         .RequireAuthenticatedUser()
+        .Build());
+
+    // SiteAdmin-only endpoints (platform operators, I-D13): authenticated and carrying the
+    // is_site_admin claim. Used by the Report Builder and the Production Field catalog mutations.
+    options.AddPolicy("SiteAdmin", new AuthorizationPolicyBuilder(
+            OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
+        .RequireAuthenticatedUser()
+        .RequireAssertion(context => context.User.IsSiteAdmin())
         .Build());
 
     // MCP tool calls require an authenticated caller whose token carries the `mcp` scope.
