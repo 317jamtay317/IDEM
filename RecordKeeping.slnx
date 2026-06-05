@@ -5,6 +5,7 @@
     <Project Path="src/RecordKeeping.Domain/RecordKeeping.Domain.csproj" />
     <Project Path="src/RecordKeeping.Infrastructure/RecordKeeping.Infrastructure.csproj" />
     <Project Path="src/RecordKeeping.Mcp/RecordKeeping.Mcp.csproj" />
+    <Project Path="src/RecordKeeping.Reporting/RecordKeeping.Reporting.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/RecordKeeping.Api.IntegrationTests/RecordKeeping.Api.IntegrationTests.csproj" />
@@ -12,5 +13,6 @@
     <Project Path="tests/RecordKeeping.Domain.Tests/RecordKeeping.Domain.Tests.csproj" />
     <Project Path="tests/RecordKeeping.Infrastructure.Tests/RecordKeeping.Infrastructure.Tests.csproj" />
     <Project Path="tests/RecordKeeping.Mcp.Tests/RecordKeeping.Mcp.Tests.csproj" />
+    <Project Path="tests/RecordKeeping.Reporting.Tests/RecordKeeping.Reporting.Tests.csproj" />
   </Folder>
 </Solution>

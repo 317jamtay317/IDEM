@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- §7 CLAUDE.md: public/protected members must be documented. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!--
+    RecordKeeping.Reporting is the Report Engine: it parses a Report Template's RDL/RDLC
+    XML, binds it to a data context, lays it out across pages and renders the result to a
+    PDF (QuestPDF). Like RecordKeeping.Infrastructure it is an adapter that implements an
+    Application interface (IReportRenderer); it depends on Application (never the reverse,
+    per Clean Architecture) and never on Infrastructure.
+  -->
+  <ItemGroup>
+    <PackageReference Include="QuestPDF" Version="2026.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RecordKeeping.Application\RecordKeeping.Application.csproj" />
+  </ItemGroup>
+
+  <!-- The engine's parser/evaluator/layout internals are exercised directly by the test project. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="RecordKeeping.Reporting.Tests" />
+  </ItemGroup>
+
+</Project>

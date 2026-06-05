@@ -15,6 +15,22 @@ public static class ClaimsPrincipalExtensions
     public const string OrgIdClaimType = "org_id";
 
     /// <summary>
+    /// The access-token claim flagging whether the caller is a SiteAdmin (platform operator). Emitted
+    /// at <c>/connect/authorize</c> as the string <c>"true"</c> or <c>"false"</c>.
+    /// </summary>
+    public const string SiteAdminClaimType = "is_site_admin";
+
+    /// <summary>
+    /// Whether the caller is a SiteAdmin (platform operator, I-D13). SiteAdmins author platform
+    /// resources such as Report Templates and the Production Field catalog; Org Users are not
+    /// SiteAdmins. Used by the <c>SiteAdmin</c> authorization policy.
+    /// </summary>
+    /// <param name="principal">The authenticated caller.</param>
+    /// <returns><c>true</c> when the caller's <c>is_site_admin</c> claim is <c>"true"</c>.</returns>
+    public static bool IsSiteAdmin(this ClaimsPrincipal principal) =>
+        principal.FindFirst(SiteAdminClaimType)?.Value == "true";
+
+    /// <summary>
     /// Reads the caller's Org id from the <c>org_id</c> claim.
     /// </summary>
     /// <param name="principal">The authenticated caller.</param>
