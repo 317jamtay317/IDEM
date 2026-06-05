@@ -1,12 +1,14 @@
 /**
  * The Report Builder's document-level editor, shown in the Properties panel when
  * nothing is selected (Phase 10). It edits the page's size (a named preset),
- * orientation, and margins — the print geometry RDL stores on `<Page>`. Page size
- * and orientation are derived from the page's width and height via the pure
- * helpers in {@link ./pageSetup}; margins are edited directly. Margins are shown
- * in inches (the conventional unit for page setup) rather than the pixels used
- * for element geometry. Edits are reported via `onChange` as a partial
- * {@link PageSetup} the screen merges into the model.
+ * orientation, and margins — the print geometry RDL stores on `<Page>` — and the
+ * footer page-number options (Phase 11). Page size and orientation are derived
+ * from the page's width and height via the pure helpers in {@link ./pageSetup};
+ * margins are edited directly. Margins are shown in inches (the conventional unit
+ * for page setup) rather than the pixels used for element geometry. Page edits are
+ * reported via `onChange` as a partial {@link PageSetup}, and page-number edits via
+ * `onPageNumbersChange` as a partial {@link PageNumberOptions}, the screen merges
+ * into the model.
  */
 import {
   PAGE_SIZES,
@@ -17,7 +19,8 @@ import {
   type Orientation,
   type PageSizeName,
 } from './pageSetup'
-import { type PageSetup } from './model'
+import { PAGE_NUMBER_POSITIONS } from './pageNumbers'
+import { DEFAULT_PAGE_NUMBER_OPTIONS, type PageNumberOptions, type PageSetup, type TextAlign } from './model'
 
 /** The margin sides, with the visible label shown for each. */
 const MARGIN_SIDES: { side: keyof PageSetup['margins']; label: string }[] = [
@@ -53,14 +56,24 @@ export interface PageSetupEditorProps {
   page: PageSetup
   /** Reports an edit as a partial {@link PageSetup} to merge into the model. */
   onChange: (patch: Partial<PageSetup>) => void
+  /** The footer page-number options to edit; defaults to the standard options. */
+  pageNumbers?: PageNumberOptions
+  /** Reports a page-number edit as a partial {@link PageNumberOptions} to merge in. */
+  onPageNumbersChange?: (patch: Partial<PageNumberOptions>) => void
 }
 
 /**
- * Renders the page-setup controls — page size, orientation and margins — for the
- * template's {@link PageSetup}. With nothing selected on the canvas this fills the
- * Properties panel, so the document's print geometry is always one click away.
+ * Renders the document-level controls — page size, orientation, margins, and the
+ * footer page-number options — for the template. With nothing selected on the
+ * canvas this fills the Properties panel, so the document's print geometry and
+ * page numbering are always one click away.
  */
-export function PageSetupEditor({ page, onChange }: PageSetupEditorProps) {
+export function PageSetupEditor({
+  page,
+  onChange,
+  pageNumbers = DEFAULT_PAGE_NUMBER_OPTIONS,
+  onPageNumbersChange,
+}: PageSetupEditorProps) {
   const sizeName = pageSizeNameOf(page)
   const orientation = orientationOf(page)
 
@@ -135,6 +148,67 @@ export function PageSetupEditor({ page, onChange }: PageSetupEditorProps) {
               onChange={(v) => changeMargin(side, v)}
             />
           ))}
+        </div>
+      </div>
+
+      <span className="section-title">Page Numbers</span>
+
+      <div className="rb-field">
+        <button
+          type="button"
+          className={`rb-toggle${pageNumbers.show ? ' rb-toggle-active' : ''}`}
+          aria-label="Show page numbers"
+          aria-pressed={pageNumbers.show}
+          onClick={() => onPageNumbersChange?.({ show: !pageNumbers.show })}
+        >
+          {pageNumbers.show ? 'Shown' : 'Hidden'}
+        </button>
+      </div>
+
+      <div className="rb-field">
+        <label className="rb-field-label overline" htmlFor="rb-pagenum-format">
+          Format
+        </label>
+        <input
+          id="rb-pagenum-format"
+          className="rb-field-input"
+          type="text"
+          value={pageNumbers.format}
+          onChange={(e) => onPageNumbersChange?.({ format: e.target.value })}
+        />
+      </div>
+
+      <div className="rb-prop-grid">
+        <div className="rb-field">
+          <label className="rb-field-label overline" htmlFor="rb-pagenum-start">
+            Start at
+          </label>
+          <input
+            id="rb-pagenum-start"
+            className="rb-field-input"
+            type="number"
+            min={0}
+            value={pageNumbers.startAt}
+            onChange={(e) => onPageNumbersChange?.({ startAt: Number(e.target.value) })}
+          />
+        </div>
+        <div className="rb-field">
+          <label className="rb-field-label overline" htmlFor="rb-pagenum-position">
+            Position
+          </label>
+          <select
+            id="rb-pagenum-position"
+            className="rb-field-input"
+            aria-label="Page number position"
+            value={pageNumbers.position}
+            onChange={(e) => onPageNumbersChange?.({ position: e.target.value as TextAlign })}
+          >
+            {PAGE_NUMBER_POSITIONS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
     </div>

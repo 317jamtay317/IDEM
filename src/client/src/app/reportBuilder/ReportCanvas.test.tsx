@@ -78,6 +78,39 @@ function fixture(): ReportTemplate {
   return t
 }
 
+describe('ReportCanvas — footer page numbers (Phase 11)', () => {
+  it('renders the page-number format in the page footer when shown', () => {
+    render(<ReportCanvas template={fixture()} zoom={100} />)
+
+    const footer = screen.getByRole('group', { name: BAND_LABELS.pageFooter })
+    expect(within(footer).getByText('Page {n} of {N}')).toBeInTheDocument()
+  })
+
+  it('shows the page-number tokens verbatim (resolved only at preview time)', () => {
+    const t = fixture()
+    t.pageNumbers = { ...t.pageNumbers, format: '{n} / {N}' }
+    render(<ReportCanvas template={t} zoom={100} />)
+
+    expect(screen.getByText('{n} / {N}')).toBeInTheDocument()
+  })
+
+  it('hides the footer page number when the option is turned off', () => {
+    const t = fixture()
+    t.pageNumbers = { ...t.pageNumbers, show: false }
+    render(<ReportCanvas template={t} zoom={100} />)
+
+    expect(screen.queryByText('Page {n} of {N}')).not.toBeInTheDocument()
+  })
+
+  it('aligns the page number to its configured footer position', () => {
+    const t = fixture()
+    t.pageNumbers = { ...t.pageNumbers, position: 'left' }
+    render(<ReportCanvas template={t} zoom={100} />)
+
+    expect(screen.getByText('Page {n} of {N}')).toHaveStyle({ textAlign: 'left' })
+  })
+})
+
 describe('ReportCanvas', () => {
   it('renders all five bands as labelled regions', () => {
     render(<ReportCanvas template={fixture()} zoom={100} />)

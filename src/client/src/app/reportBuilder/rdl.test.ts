@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { createElement, createEmptyTemplate, type ReportTemplate } from './model'
+import {
+  DEFAULT_PAGE_NUMBER_OPTIONS,
+  createElement,
+  createEmptyTemplate,
+  type ReportTemplate,
+} from './model'
 import { RDL_NAMESPACE, RK_NAMESPACE, parseRdl, toRdl } from './rdl'
 
 /** A template exercising every modelled element type across several bands. */
@@ -79,6 +84,21 @@ describe('toRdl / parseRdl', () => {
 
     const back = parseRdl(toRdl(t))
     expect(back.page).toEqual(t.page)
+  })
+
+  it('round-trips non-default page-number options', () => {
+    const t = createEmptyTemplate('t1', 'Blank')
+    t.pageNumbers = { show: false, format: '{n}/{N}', startAt: 3, position: 'center' }
+
+    const back = parseRdl(toRdl(t))
+    expect(back.pageNumbers).toEqual({ show: false, format: '{n}/{N}', startAt: 3, position: 'center' })
+  })
+
+  it('defaults the page-number options when the RDL omits them', () => {
+    // RDL written before page numbers existed has no rk:PageNumbers element.
+    const xml = toRdl(createEmptyTemplate('t1', 'Blank')).replace(/\s*<rk:PageNumbers[^>]*\/>/, '')
+
+    expect(parseRdl(xml).pageNumbers).toEqual(DEFAULT_PAGE_NUMBER_OPTIONS)
   })
 
   it('round-trips a Page Break element', () => {

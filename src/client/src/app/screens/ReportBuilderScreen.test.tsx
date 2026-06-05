@@ -693,3 +693,33 @@ describe('ReportBuilderScreen — multiple pages & page setup (Phase 10)', () =>
     expect(screen.getByRole('combobox', { name: 'Page size' })).toHaveValue('custom')
   })
 })
+
+describe('ReportBuilderScreen — page-number options (Phase 11)', () => {
+  /** Scopes a query to the canvas region (the Properties panel echoes some text). */
+  const canvas = () => within(screen.getByRole('region', { name: 'Report canvas' }))
+
+  it('renders the footer page number on the canvas by default', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    expect(canvas().getByText('Page {n} of {N}')).toBeInTheDocument()
+  })
+
+  it('hides the footer page number when it is toggled off in Page Setup', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    // Nothing is selected, so the Page Setup panel (with its Page Numbers controls) shows.
+    await user.click(screen.getByRole('button', { name: 'Show page numbers' }))
+
+    expect(canvas().queryByText('Page {n} of {N}')).not.toBeInTheDocument()
+  })
+
+  it('updates the footer page number when the format is edited', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText('Format'), { target: { value: 'Sheet {n}' } })
+
+    expect(canvas().getByText('Sheet {n}')).toBeInTheDocument()
+    expect(canvas().queryByText('Page {n} of {N}')).not.toBeInTheDocument()
+  })
+})

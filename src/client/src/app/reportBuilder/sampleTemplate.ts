@@ -108,6 +108,14 @@ export function createSampleTemplate(
       expression: '{SubReport.opacity_detail}',
       style: { fontSize: 10, italic: true, color: '#64748b' },
     },
+    {
+      id: 'total-tons',
+      type: 'formula',
+      rect: { x: 4.6, y: 0.12, w: 2.5, h: 0.24 },
+      text: 'SUM({Record.Tons})',
+      expression: 'SUM({Record.Tons})',
+      style: { fontSize: 11, fontWeight: 'semibold', align: 'right', color: '#0f172a' },
+    },
     { id: 'sub-frame', type: 'rectangle', rect: { x: 0.32, y: 0.04, w: 6.8, h: 0.9 } },
   )
 
@@ -128,14 +136,8 @@ export function createSampleTemplate(
       text: 'Rieth-Riley',
       style: { fontSize: 9, fontWeight: 'semibold', align: 'center', color: '#475569' },
     },
-    {
-      id: 'page-number',
-      type: 'formula',
-      rect: { x: 5.6, y: 0.08, w: 1.4, h: 0.22 },
-      text: 'Page {n} of {N}',
-      expression: 'Page {n} of {N}',
-      style: { fontSize: 9, align: 'right', color: '#64748b' },
-    },
+    // The page number itself is document chrome driven by template.pageNumbers
+    // (Phase 11), rendered by the canvas in this footer — not a placed element.
   )
 
   return t

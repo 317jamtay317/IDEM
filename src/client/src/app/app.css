@@ -1738,6 +1738,20 @@
   pointer-events: none;
 }
 
+/* The footer page number (Phase 11): document chrome, not a selectable element.
+   Sits along the bottom of the page-footer band, aligned per its position option. */
+.rb-page-number {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 2px 8px;
+  box-sizing: border-box;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
 /* A placed element: an absolutely positioned, selectable control (button). */
 .rb-el {
   position: absolute;

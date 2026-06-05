@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   BAND_ORDER,
+  DEFAULT_PAGE_NUMBER_OPTIONS,
   TEMPLATE_VERSION,
   addElement,
   bandKindOf,
@@ -12,6 +13,7 @@ import {
   updateElement,
   updateElementRects,
   updatePage,
+  updatePageNumbers,
   updateSettings,
 } from './model'
 
@@ -50,6 +52,17 @@ describe('createEmptyTemplate', () => {
     const t = createEmptyTemplate('t1', 'T1')
 
     expect(t.settings).toEqual({ snapToGrid: true, gridSize: 0.125 })
+  })
+
+  it('shows footer page numbers by default (Page {n} of {N}, right-aligned)', () => {
+    const t = createEmptyTemplate('t1', 'T1')
+
+    expect(t.pageNumbers).toEqual({
+      show: true,
+      format: 'Page {n} of {N}',
+      startAt: 1,
+      position: 'right',
+    })
   })
 
   it('exposes the canonical top-to-bottom band order', () => {
@@ -363,6 +376,57 @@ describe('updatePage', () => {
 
     expect(next.bands).toBe(original.bands)
     expect(next.settings).toBe(original.settings)
+  })
+})
+
+describe('updatePageNumbers', () => {
+  it('merges the patch into the page-number options', () => {
+    const next = updatePageNumbers(createEmptyTemplate('t1', 'T1'), { show: false })
+
+    expect(next.pageNumbers).toEqual({
+      show: false,
+      format: 'Page {n} of {N}',
+      startAt: 1,
+      position: 'right',
+    })
+  })
+
+  it('can change the format, start number and position', () => {
+    const next = updatePageNumbers(createEmptyTemplate('t1', 'T1'), {
+      format: '{n}/{N}',
+      startAt: 5,
+      position: 'center',
+    })
+
+    expect(next.pageNumbers).toEqual({ show: true, format: '{n}/{N}', startAt: 5, position: 'center' })
+  })
+
+  it('does not mutate the original template', () => {
+    const original = createEmptyTemplate('t1', 'T1')
+
+    const next = updatePageNumbers(original, { show: false })
+
+    expect(original.pageNumbers.show).toBe(true)
+    expect(next).not.toBe(original)
+  })
+
+  it('leaves the bands, page and settings untouched', () => {
+    const original = createEmptyTemplate('t1', 'T1')
+
+    const next = updatePageNumbers(original, { show: false })
+
+    expect(next.bands).toBe(original.bands)
+    expect(next.page).toBe(original.page)
+    expect(next.settings).toBe(original.settings)
+  })
+
+  it('exposes sensible default page-number options', () => {
+    expect(DEFAULT_PAGE_NUMBER_OPTIONS).toEqual({
+      show: true,
+      format: 'Page {n} of {N}',
+      startAt: 1,
+      position: 'right',
+    })
   })
 })
 

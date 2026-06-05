@@ -486,6 +486,14 @@ export function ReportCanvas({
               </Fragment>
             )
           })}
+
+          {/* The footer page number (Phase 11): the format is shown verbatim, like
+              every other token; Preview resolves the {n} / {N} tokens to numbers. */}
+          {band.kind === 'pageFooter' && template.pageNumbers.show && (
+            <div className="rb-page-number" style={{ textAlign: template.pageNumbers.position }}>
+              {template.pageNumbers.format}
+            </div>
+          )}
         </div>
       ))}
 

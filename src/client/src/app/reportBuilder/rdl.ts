@@ -10,10 +10,12 @@
  * `toRdl` / `parseRdl` are exact inverses for any template the model can hold.
  */
 import {
+  DEFAULT_PAGE_NUMBER_OPTIONS,
   type Band,
   type BandKind,
   type ElementStyle,
   type FontWeight,
+  type PageNumberOptions,
   type PageSetup,
   type Rect,
   type ReportElement,
@@ -153,7 +155,7 @@ function appendElement(lines: string[], el: ReportElement, indent: number): void
  * @returns The RDL XML document as a string.
  */
 export function toRdl(template: ReportTemplate): string {
-  const { page, settings } = template
+  const { page, settings, pageNumbers } = template
   const lines: string[] = []
 
   lines.push('<?xml version="1.0" encoding="utf-8"?>')
@@ -162,6 +164,10 @@ export function toRdl(template: ReportTemplate): string {
     `  <rk:Template id="${escapeXml(template.id)}" name="${escapeXml(template.name)}"` +
       ` version="${template.version}" snapToGrid="${settings.snapToGrid}"` +
       ` gridSize="${settings.gridSize}"/>`,
+  )
+  lines.push(
+    `  <rk:PageNumbers show="${pageNumbers.show}" format="${escapeXml(pageNumbers.format)}"` +
+      ` startAt="${pageNumbers.startAt}" position="${pageNumbers.position}"/>`,
   )
   lines.push('  <Page>')
   lines.push(`    <PageHeight>${size(page.height)}</PageHeight>`)
@@ -237,6 +243,22 @@ function parseElement(el: Element): ReportElement | undefined {
   return parsed
 }
 
+/**
+ * Reads the `rk:PageNumbers` metadata into {@link PageNumberOptions}, falling back
+ * to {@link DEFAULT_PAGE_NUMBER_OPTIONS} when the element (or an attribute) is
+ * absent, so RDL written before page numbers existed still parses.
+ */
+function parsePageNumbers(report: Element): PageNumberOptions {
+  const el = childOf(report, 'PageNumbers', RK_NAMESPACE)
+  if (!el) return { ...DEFAULT_PAGE_NUMBER_OPTIONS }
+  return {
+    show: el.getAttribute('show') === 'true',
+    format: el.getAttribute('format') ?? DEFAULT_PAGE_NUMBER_OPTIONS.format,
+    startAt: Number(el.getAttribute('startAt') ?? DEFAULT_PAGE_NUMBER_OPTIONS.startAt),
+    position: (el.getAttribute('position') as TextAlign | null) ?? DEFAULT_PAGE_NUMBER_OPTIONS.position,
+  }
+}
+
 /** Parses one band (an RDL `Rectangle` tagged with `rk:Band`). */
 function parseBand(rect: Element): Band {
   const meta = childOf(rect, 'Band', RK_NAMESPACE)
@@ -300,5 +322,6 @@ export function parseRdl(xml: string): ReportTemplate {
       snapToGrid: tpl.getAttribute('snapToGrid') === 'true',
       gridSize: Number(tpl.getAttribute('gridSize') ?? '0'),
     },
+    pageNumbers: parsePageNumbers(report),
   }
 }

@@ -140,9 +140,28 @@ Foundational phases (0, 2–6) make the designer usable enough to exercise the s
 
 > **Drag-to-resize the page (added alongside Phase 10, user-requested).** Besides the Page Setup panel, the page can now be resized directly by dragging grips at its right edge (width), bottom edge (height) and bottom-right corner (both) — the natural "resize the canvas" gesture. Pure `reportBuilder/geometry.ts` `resizedPageSize(start, delta, handle, min)` does the math (only the dragged edge(s) move; each dimension clamps to a minimum so the page never collapses below its band content); `ReportCanvas` renders the grips and an `onResizePage` callback the screen maps to `updatePage`, and the page is now drawn at least as tall as its page setup (so the bottom grip is meaningful and the sheet reads as a real page). A custom drag shows the size as **Custom** in the Page Setup dropdown. Native pointer events, consistent with Phases 6–8. 539 client tests green; `reportBuilder` dir 100% stmts/funcs/lines.
 
-- [ ] **Phase 11 — Page-number options (#2).** ⬜
-  Page-number tokens + options UI (show/hide, format, start-at, footer position).
-  *Tests:* footer renders tokens; toggle off removes them; format/start-at change output; options round-trip in RDL.
+- [x] **Phase 11 — Page-number options (#2).** ✅
+  Footer page numbers are now a document-level option set on the template
+  (`model.ts` `PageNumberOptions` + `DEFAULT_PAGE_NUMBER_OPTIONS`: shown, `Page {n} of {N}`,
+  starting at 1, right-aligned) rather than a hand-placed element — so show/hide, format,
+  start-at and footer position are configured in one place. Pure `reportBuilder/pageNumbers.ts`
+  resolves a format to a concrete string for a given page (`formatPageNumber`, offsetting the
+  `{n}`/`{N}` tokens by the start-at number) and lists the placements the editor offers
+  (`PAGE_NUMBER_POSITIONS`). The options live on `ReportTemplate.pageNumbers`, are merged
+  immutably by `model.ts` `updatePageNumbers`, and round-trip losslessly through a custom
+  `rk:PageNumbers` RDL element (defaulting when absent, so older RDL still parses). The
+  `PageSetupEditor` (shown when nothing is selected) gained a **Page Numbers** section — a
+  show toggle, a format field, a start-at number and a position dropdown — and `ReportCanvas`
+  renders the footer page number in the page-footer band when shown, at its position, with the
+  `{n}`/`{N}` tokens left **verbatim** (consistent with every other binding token; Preview
+  resolves them — Phase 12). The sample template dropped its hand-placed `page-number` formula
+  in favour of the options and gained a `SUM({Record.Tons})` total-tons formula in the
+  sub-report band (so the canvas still exercises an aggregate formula). Native, no new deps;
+  `rdl.ts` round-trip guarded by new tests. 564 client tests green (was 539); `reportBuilder`
+  dir 100% stmts/funcs/lines; `tsc -b`, `eslint` and `vite build` clean on touched files.
+  *Tests:* `formatPageNumber` substitutes/offsets the tokens; canvas footer renders the format
+  and hides when off; format/position edits reflect on the canvas; the editor reports each
+  option edit; options round-trip in RDL (and default when the RDL omits them). ✅
 
 ### Milestone D — Close the loop
 
@@ -169,5 +188,5 @@ Out of the current front-end scope; recorded so it isn't lost.
 
 - **RDL subset boundary** — exactly which RDL elements we support v1 (Tablix vs. simple list for Detail; which chart/barcode types).
 - ~~**Page setup defaults** — default page size (US Letter vs A4) and margins.~~ **Resolved (Phase 10):** US Letter portrait with one-inch margins (`createEmptyTemplate`); the editor offers Letter / Legal / A4 / Tabloid and Portrait/Landscape. Pages are driven by explicit Page Breaks (no automatic content flow at design time).
-- **Page-number defaults** — default format (`Page {n} of {N}`) and whether footer page numbers are on by default.
+- ~~**Page-number defaults** — default format (`Page {n} of {N}`) and whether footer page numbers are on by default.~~ **Resolved (Phase 11):** footer page numbers are **on by default**, `Page {n} of {N}`, starting at 1, right-aligned (`DEFAULT_PAGE_NUMBER_OPTIONS`); all four are editable in the Page Numbers section of the Page Setup panel.
 - **Pre-backend Save target** — does Phase 12 Save download a `.rdlc` file, hold it in memory, or POST to a stub endpoint?

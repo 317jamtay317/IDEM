@@ -25,9 +25,11 @@ import {
   updateElement,
   updateElementRects,
   updatePage,
+  updatePageNumbers,
   updateSettings,
   type BandKind,
   type ElementType,
+  type PageNumberOptions,
   type PageSetup,
   type Rect,
   type ReportElement,
@@ -204,6 +206,11 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
   // Edit the page setup (size, orientation, margins) from the Page Setup panel.
   const handlePageChange = (patch: Partial<PageSetup>) => {
     setTemplate((current) => updatePage(current, patch))
+  }
+
+  // Edit the footer page-number options from the Page Setup panel (Phase 11).
+  const handlePageNumbersChange = (patch: Partial<PageNumberOptions>) => {
+    setTemplate((current) => updatePageNumbers(current, patch))
   }
 
   // Resize the page by dragging its edge/corner grips on the canvas.
@@ -413,7 +420,12 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
 
         <aside className="rb-panel rb-properties" aria-label="Properties">
           {selectedIds.length === 0 ? (
-            <PageSetupEditor page={template.page} onChange={handlePageChange} />
+            <PageSetupEditor
+              page={template.page}
+              onChange={handlePageChange}
+              pageNumbers={template.pageNumbers}
+              onPageNumbersChange={handlePageNumbersChange}
+            />
           ) : (
             <PropertiesPanel element={selected} selectedCount={selectedIds.length} onChange={handleEdit} />
           )}

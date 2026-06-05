@@ -129,6 +129,36 @@ export interface BuilderSettings {
 }
 
 /**
+ * Footer page-number options (Phase 11). When {@link show} is on, the page footer
+ * carries a page number built from {@link format} — a string with `{n}` (current
+ * page) and `{N}` (total pages) tokens — placed at {@link position}. The canvas
+ * shows the format verbatim; Preview resolves the tokens, counting the first page
+ * as {@link startAt}.
+ */
+export interface PageNumberOptions {
+  /** Whether the footer page number is shown. */
+  show: boolean
+  /** The page-number text, with `{n}` (current page) and `{N}` (total pages) tokens. */
+  format: string
+  /** The number the first page counts as, offsetting `{n}` and `{N}`. */
+  startAt: number
+  /** Horizontal placement of the page number within the footer. */
+  position: TextAlign
+}
+
+/**
+ * The default footer page-number options: shown, `Page {n} of {N}`, counting from
+ * one, right-aligned. Used by {@link createEmptyTemplate} and as the fallback when
+ * RDL omits the page-number metadata.
+ */
+export const DEFAULT_PAGE_NUMBER_OPTIONS: PageNumberOptions = {
+  show: true,
+  format: 'Page {n} of {N}',
+  startAt: 1,
+  position: 'right',
+}
+
+/**
  * A Report Template: the definition of a Report's layout and data bindings,
  * authored in the Report Builder and serialized to RDL/RDLC for storage.
  */
@@ -145,6 +175,8 @@ export interface ReportTemplate {
   bands: Band[]
   /** Designer settings. */
   settings: BuilderSettings
+  /** Footer page-number options (Phase 11). */
+  pageNumbers: PageNumberOptions
 }
 
 /** The current Report Template definition schema version. */
@@ -183,6 +215,7 @@ export function createEmptyTemplate(id: string, name: string): ReportTemplate {
       elements: [],
     })),
     settings: { snapToGrid: true, gridSize: 0.125 },
+    pageNumbers: { ...DEFAULT_PAGE_NUMBER_OPTIONS },
   }
 }
 
@@ -282,6 +315,22 @@ export function updateSettings(
  */
 export function updatePage(template: ReportTemplate, patch: Partial<PageSetup>): ReportTemplate {
   return { ...template, page: { ...template.page, ...patch } }
+}
+
+/**
+ * Returns a new template with `patch` merged into its footer page-number options.
+ * The original template is not mutated; its bands, page and settings are shared by
+ * reference, as only the page-number options change.
+ *
+ * @param template The template whose page-number options to update.
+ * @param patch The page-number fields to change (e.g. `{ show: false }`).
+ * @returns A new {@link ReportTemplate} with the updated page-number options.
+ */
+export function updatePageNumbers(
+  template: ReportTemplate,
+  patch: Partial<PageNumberOptions>,
+): ReportTemplate {
+  return { ...template, pageNumbers: { ...template.pageNumbers, ...patch } }
 }
 
 /** Default size and offset (inches) for a freshly inserted element of each type. */
