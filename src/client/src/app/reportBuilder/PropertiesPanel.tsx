@@ -1,12 +1,13 @@
 /**
  * The Report Builder's right-hand panel for the selected element, across two
  * tabs: **Properties** (type, editable text, geometry, and styling) and **Data**
- * (the binding expression, read-only until Phase 9). Geometry is edited in whole
- * pixels (see {@link toDisplayPx}/{@link fromDisplayPx}) and font size in points;
- * edits are reported via `onChange` as a partial element the screen merges into
- * the model.
+ * (the element's data binding — a field dropdown or formula editor, with a live
+ * preview — see {@link DataBindingEditor}). Geometry is edited in whole pixels
+ * (see {@link toDisplayPx}/{@link fromDisplayPx}) and font size in points; edits
+ * are reported via `onChange` as a partial element the screen merges into the model.
  */
 import { type ReactNode, useState } from 'react'
+import { DataBindingEditor } from './DataBindingEditor'
 import { ELEMENT_TYPE_LABELS, fromDisplayPx, toDisplayPx } from './elementDisplay'
 import { type ElementStyle, type FontWeight, type Rect, type ReportElement } from './model'
 
@@ -273,14 +274,7 @@ export function PropertiesPanel({ element, selectedCount, onChange }: Properties
         </div>
       ) : (
         <div role="tabpanel" aria-labelledby="rb-tab-data" className="rb-prop-body">
-          {element.expression !== undefined ? (
-            <div className="rb-field">
-              <span className="rb-field-label overline">Data binding</span>
-              <span className="rb-field-value">{element.expression}</span>
-            </div>
-          ) : (
-            <p className="rb-empty">No data binding — this is a static element.</p>
-          )}
+          <DataBindingEditor element={element} onChange={onChange} />
         </div>
       )}
     </div>

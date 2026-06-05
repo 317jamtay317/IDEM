@@ -1881,9 +1881,36 @@
   gap: 0.125rem;
 }
 
-.rb-field-value {
-  font-size: 0.875rem;
-  color: var(--color-text);
+/* Data tab — binding editor (Phase 9) */
+
+.rb-data {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.rb-expr-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.rb-expr-preview {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  word-break: break-word;
+}
+
+.rb-expr-error {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+  font-size: 0.8125rem;
   word-break: break-word;
 }
 

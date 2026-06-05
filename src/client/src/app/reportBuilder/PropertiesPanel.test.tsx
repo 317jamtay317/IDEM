@@ -88,7 +88,9 @@ describe('PropertiesPanel', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Data' }))
 
-    expect(screen.getByText('{Record.Tons}')).toBeInTheDocument()
+    // The Data tab now hosts the binding editor (Phase 9): a dataField binds
+    // through the Field dropdown, preselected to its current field.
+    expect(screen.getByLabelText('Field')).toHaveValue('Record.Tons')
   })
 
   it('notes when a selected element has no data binding', async () => {
