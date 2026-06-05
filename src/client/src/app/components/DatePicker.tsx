@@ -32,7 +32,7 @@ function parseIso(value: string): DateParts | null {
   return { year, month, day }
 }
 
-/** Format an ISO `yyyy-MM-dd` date string for the trigger using parts. */
+/** Format a `yyyy-MM-dd` date string from parts. */
 function toIso(year: number, month: number, day: number): string {
   const mm = month < 10 ? `0${month}` : String(month)
   const dd = day < 10 ? `0${day}` : String(day)
@@ -61,6 +61,11 @@ export interface DatePickerProps {
   placeholder?: string
   /** Marks the field invalid for styling and assistive tech. */
   invalid?: boolean
+  /**
+   * Extra class(es) for the trigger button, e.g. `"grid-control-editor"` when the picker sits in a
+   * grid editor cell. Omit for the standalone form-field styling (the default).
+   */
+  className?: string
 }
 
 /** The month a freshly-opened calendar should show: the value's month, else today's. */
@@ -72,12 +77,12 @@ function monthOf(value: string): { year: number; month0: number } {
 }
 
 /**
- * A themed single-date field: a trigger styled like an input that opens a compact
- * calendar popover, replacing the unstyleable native date control. The value is a
- * controlled ISO `yyyy-MM-dd` string; choosing a day reports it through
- * {@link DatePickerProps.onChange}. The popover closes on selection, on Escape, and
- * on an outside press. All date math is done on integer parts, so a selected day is
- * never shifted by a time zone.
+ * A themed single-date field: a trigger styled like the other form inputs that opens a compact
+ * calendar popover, replacing the unstyleable native date control so dates match the rest of the app.
+ * Pass {@link DatePickerProps.className} (e.g. `grid-control-editor`) to fit it into a grid editor cell.
+ * The value is a controlled ISO `yyyy-MM-dd` string; choosing a day reports it through
+ * {@link DatePickerProps.onChange}. The popover closes on selection, on Escape, and on an outside
+ * press. All date math is done on integer parts, so a selected day is never shifted by a time zone.
  */
 export function DatePicker({
   value,
@@ -85,6 +90,7 @@ export function DatePicker({
   ariaLabel,
   placeholder = 'Select date',
   invalid,
+  className,
 }: DatePickerProps) {
   const selected = parseIso(value)
   const [open, setOpen] = useState(false)
@@ -133,12 +139,16 @@ export function DatePicker({
   const leadingBlanks = firstWeekday(view.year, view.month0)
   const days = Array.from({ length: daysInMonth(view.year, view.month0) }, (_, i) => i + 1)
 
+  const triggerClass = [className, 'date-picker-trigger', invalid && 'date-picker-trigger-invalid']
+    .filter(Boolean)
+    .join(' ')
+
   return (
     <div className="date-picker" ref={rootRef}>
       <button
         type="button"
         ref={triggerRef}
-        className={`grid-control-editor date-picker-trigger${invalid ? ' date-picker-trigger-invalid' : ''}`}
+        className={triggerClass}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={ariaLabel}

@@ -2,13 +2,16 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDownIcon, CheckIcon, SearchIcon } from './icons'
 
+/** An option: a plain string (its value and label are the same) or a distinct value/label pair. */
+export type SearchableSelectOption = string | { value: string; label: string }
+
 /** Props for {@link SearchableSelect}. */
 export interface SearchableSelectProps {
   /** The options the user can choose from, in display order. */
-  options: string[]
-  /** The currently selected option. */
+  options: readonly SearchableSelectOption[]
+  /** The currently selected option's value. */
   value: string
-  /** Called with the chosen option when the user selects one. */
+  /** Called with the chosen option's value when the user selects one. */
   onChange: (value: string) => void
   /** Accessible label for the control, e.g. "Field". */
   label: string
@@ -49,8 +52,11 @@ export function SearchableSelect({
   const searchRef = useRef<HTMLInputElement>(null)
   const listboxId = useId()
 
+  // Normalize string options to value/label pairs so callers can pass either form.
+  const opts = options.map((opt) => (typeof opt === 'string' ? { value: opt, label: opt } : opt))
+  const selectedLabel = opts.find((opt) => opt.value === value)?.label ?? value
   const needle = query.trim().toLowerCase()
-  const filtered = options.filter((opt) => opt.toLowerCase().includes(needle))
+  const filtered = opts.filter((opt) => opt.label.toLowerCase().includes(needle))
 
   function anchorToTrigger() {
     const trigger = containerRef.current
@@ -111,7 +117,7 @@ export function SearchableSelect({
         aria-label={label}
         onClick={() => (open ? setOpen(false) : openPopover())}
       >
-        {value}
+        {selectedLabel}
       </button>
       <ChevronDownIcon className="select-chevron" aria-hidden="true" />
 
@@ -150,10 +156,10 @@ export function SearchableSelect({
                 aria-label={label}
               >
                 {filtered.map((option) => {
-                  const selected = option === value
+                  const selected = option.value === value
                   return (
                     <li
-                      key={option}
+                      key={option.value}
                       role="option"
                       aria-selected={selected}
                       className={
@@ -161,9 +167,9 @@ export function SearchableSelect({
                           ? 'field-dropdown-option is-selected'
                           : 'field-dropdown-option'
                       }
-                      onClick={() => selectOption(option)}
+                      onClick={() => selectOption(option.value)}
                     >
-                      <span>{option}</span>
+                      <span>{option.label}</span>
                       {selected && (
                         <CheckIcon className="field-dropdown-check" aria-hidden="true" />
                       )}

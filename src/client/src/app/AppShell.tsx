@@ -11,6 +11,8 @@ import { OrgsScreen } from './screens/OrgsScreen'
 import { FacilitiesScreen } from './screens/FacilitiesScreen'
 import { FacilityDetailScreen } from './screens/FacilityDetailScreen'
 import { LogRecordScreen } from './screens/LogRecordScreen'
+import { ProductionFieldsScreen } from './screens/ProductionFieldsScreen'
+import { FieldLimitsScreen } from './screens/FieldLimitsScreen'
 import './app.css'
 
 /** Props for {@link AppShell}. */
@@ -25,9 +27,9 @@ export interface AppShellProps {
   onSignOut: () => void
 }
 
-/** The navigation tab that governs a screen — `log` belongs to the dashboard (home). */
+/** The navigation tab that governs a screen — logging a Record is a Records activity. */
 function tabForScreen(screen: Screen): NavTab {
-  return screen === 'log' ? 'home' : screen
+  return screen === 'log' ? 'records' : screen
 }
 
 /**
@@ -64,10 +66,18 @@ export function AppShell({ email, isSiteAdmin, accessToken = null, onSignOut }: 
         <div className="app-content">
           <main className="app-main">
             {effectiveScreen === 'home' && <DashboardScreen onLogRecord={() => navigate('log')} />}
-            {effectiveScreen === 'log' && <LogRecordScreen />}
-            {effectiveScreen === 'records' && <RecordsScreen />}
+            {effectiveScreen === 'log' && (
+              <LogRecordScreen
+                accessToken={accessToken}
+                onManageFacilities={() => navigate('facilities')}
+              />
+            )}
+            {effectiveScreen === 'records' && <RecordsScreen accessToken={accessToken} />}
             {effectiveScreen === 'reports' && <ReportsScreen />}
             {effectiveScreen === 'orgs' && <OrgsScreen accessToken={accessToken} />}
+            {effectiveScreen === 'productionFields' && (
+              <ProductionFieldsScreen accessToken={accessToken} />
+            )}
             {effectiveScreen === 'facilities' &&
               (facilityId ? (
                 <FacilityDetailScreen
@@ -78,6 +88,7 @@ export function AppShell({ email, isSiteAdmin, accessToken = null, onSignOut }: 
               ) : (
                 <FacilitiesScreen accessToken={accessToken} onOpenFacility={openFacility} />
               ))}
+            {effectiveScreen === 'fieldLimits' && <FieldLimitsScreen accessToken={accessToken} />}
           </main>
 
           <BottomNav active={activeTab} isSiteAdmin={isSiteAdmin} onNavigate={navigate} />

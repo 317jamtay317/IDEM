@@ -36,6 +36,8 @@ No query, report, export, API call, background job, or admin operation may retur
 > **SiteAdmin exemption**: SiteAdmins legitimately access data across Orgs for support and billing. Every cross-Org access by a SiteAdmin must be audit-logged with actor, target Org, and operation (see I-D13).
 >
 > **Enforced (Org User facilities)**: the Org User self-service Facility endpoints (`/me/org/facilities`) scope every read and write to the caller's `org_id` claim, never to client input. Proven by `MyOrgFacilityEndpointsTests` — an Org A user cannot see, rename, or delete an Org B Facility, and a SiteAdmin (who has no Org) is rejected.
+>
+> **Enforced (Org User records)**: the Org User self-service Record endpoints (`/me/org/records`) scope every read and write to the caller's `org_id` claim. The read side (`GET /me/org/records`, with optional Facility and date-range filters, and `GET /me/org/records/{id}`) filters by `OrgId` at the query level and reports another Org's Record id as `404`, never disclosing it. Proven by `MyOrgRecordEndpointsTests` — an Org A user sees only their own Org's Records (list and by-id), and a SiteAdmin (who has no Org) is rejected.
 
 ### I-D04 — Email uniqueness scope 🟡
 Email uniqueness depends on the User type:
@@ -146,6 +148,49 @@ Each time a refresh token is redeemed at the token endpoint, a new refresh token
 Every MCP tool call must carry an access token that includes the **`mcp` scope**; the `/mcp` endpoint rejects tokens without it (`403`). The scope is **necessary but not sufficient**: an Agent acts only for the User whose token it holds, so once Org-scoped MCP tools exist they remain bound by **I-D03** (an Agent sees only that User's Org's data), and any SiteAdmin cross-Org access via MCP is audit-logged per **I-D13**.
 
 > Enforced today by the `McpUser` authorization policy (Api `Program.cs`). The scope gate is covered by `McpUnauthenticatedTests` (negative: no scope → 403) and `McpHelloWorldFlowTests` (positive: with scope → tool call succeeds). 🟡 until the first Org-scoped MCP tool lands and the I-D03 negative test is added for the MCP path.
+
+---
+
+## Production Fields
+
+### I-D21 — A Production Field's PropertyName is a required, immutable, unique key ✅
+Every ProductionField has a non-empty `PropertyName` that is assigned once at creation and never changes, and that is unique across the catalog. Record values are stored keyed by `PropertyName`, so renaming it would orphan stored data and a duplicate would collide it.
+
+> Enforced in two places: the `ProductionField` aggregate rejects an empty `PropertyName` at creation and exposes no setter for it (required + immutable); the application/persistence layer rejects a duplicate `PropertyName`, backed by a unique index (uniqueness).
+
+### I-D22 — A Production Field's FriendlyName is unique among active fields 🟡
+No two active ProductionFields may share a `FriendlyName`, so that when a user searches or picks a field by its label the result is unambiguous. (The legacy model labeled two distinct diesel-generator fields identically — "Generator 1 Diesel" twice; this rule prevents that.)
+
+> Enforced at the application/persistence layer (uniqueness check + unique index over active fields). 🟡 — confirm whether uniqueness must hold only among active fields or across retired ones too.
+
+---
+
+## Records
+
+### I-D23 — At most one Record per Facility per date ✅
+A Facility has **at most one** Record for any given calendar date. Logging a second Record for a Facility + date that already has one is **rejected as a conflict**, never silently merged, overwritten, or duplicated. A Record's Facility and date are assigned at creation and never change, so this identity is stable.
+
+> **Rationale.** A Record captures a Facility's activity *for a day*; two Records for the same Facility+date would make a Report ambiguous about which to use, undermining reproducibility (I-D08). Confirmed **write-once** for v1 — correcting a day's Record is a later, explicit operation, not an in-place overwrite.
+>
+> **Enforcement.** The aggregate owns the immutability of its `OrgId` (I-D01), `FacilityId` (I-D07), and `Date`. Cross-Record uniqueness is enforced at the application/persistence layer: the `LogRecord` handler rejects a duplicate with error code `I-D23` (a conflict), backed by a unique index over (`FacilityId`, `Date`). Reads stay Org-scoped (I-D03).
+
+---
+
+## Production Field Limits
+
+### I-D24 — At most one Production Field Limit per Org per Production Field 🟡
+An Org configures **at most one** limit for any given Production Field. Setting a limit for a field that already has one updates that limit in place rather than creating a second, so a recorded value is never ambiguous about which range applies. A Production Field Limit's owning `OrgId` and `PropertyName` are assigned at creation and never change.
+
+> **Enforcement.** The `SetProductionFieldLimit` handler upserts — it loads the Org's existing limit for the field (by the catalog's canonical `PropertyName`) and updates it, otherwise creates one. Backed by a unique index over (`OrgId`, `PropertyName`). Reads stay Org-scoped (I-D03): a limit set by one Org is never visible to another, proven by `MyOrgProductionFieldLimitEndpointsTests`.
+>
+> 🟡 — The Production Field Limit concept (per-Org low/high bounds with a percentage-or-tons unit) is pending domain-owner confirmation, including the unit set and whether a bound may be open-ended (only a high, or only a low).
+
+### I-D25 — A Production Field Limit's low bound does not exceed its high bound 🟡
+For any Production Field Limit, `LowLimit ≤ HighLimit`, so the acceptable range it defines is never empty. Equal bounds are allowed (a single permitted value).
+
+> **Enforcement.** Owned by the `ProductionFieldLimit` aggregate: both `Create` and `Update` reject a low bound greater than the high bound with error code `I-D25`, leaving an existing limit unchanged on a rejected update.
+>
+> 🟡 — Pending confirmation of whether bounds must also be non-negative (a negative tons or percentage limit is presumably invalid, but is not yet enforced).
 
 ---
 

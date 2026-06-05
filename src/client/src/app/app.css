@@ -752,6 +752,140 @@
   outline-offset: 1px;
 }
 
+/* Themed date field (replaces the native date input so dates match the theme) */
+
+.date-picker {
+  position: relative;
+}
+
+.date-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 48px;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.date-picker-trigger:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.date-picker-placeholder {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.date-picker-trigger-invalid {
+  border-color: var(--color-danger-text);
+}
+
+.date-picker-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.date-picker-popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  width: 17rem;
+  padding: 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+}
+
+.date-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.date-picker-nav {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+}
+
+.date-picker-nav:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.date-picker-day:focus-visible,
+.date-picker-nav:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.date-picker-month {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.date-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.15rem;
+}
+
+.date-picker-weekday {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.date-picker-blank {
+  height: 2rem;
+}
+
+.date-picker-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.date-picker-day:hover {
+  background: var(--color-surface-muted);
+}
+
+.date-picker-day-selected,
+.date-picker-day-selected:hover {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 700;
+}
+
 .field-dropdown {
   position: fixed;
   z-index: 50;
@@ -934,6 +1068,43 @@
 
 .entry-limit {
   font-size: 0.8rem;
+}
+
+/* A Boolean field's Yes/No toggle, sitting where a numeric field shows its input. */
+.entry-boolean {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0 0.25rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.entry-boolean input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+/* A Date field's picker trigger in the entry row. */
+.entry-date {
+  width: 150px;
+}
+
+/* Placeholder shown in the entries card before any field is added. */
+.entries-empty {
+  padding: 1rem 0.875rem;
+  text-align: center;
+}
+
+/* The "add a Facility first" state shown when the Org has no Facility yet. */
+.form-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.875rem;
 }
 
 /* --- Account (More) -------------------------------------------------------- */
@@ -1136,6 +1307,22 @@
   color: var(--color-text-muted);
 }
 
+/*
+ * The Records drill-down has one column per Summary field, so its many long,
+ * multi-word headers wrapped into ragged ALL-CAPS stacks in the narrow numeric
+ * columns. Keep each header on a single, bottom-aligned line in its natural case
+ * (the table-card already scrolls horizontally). Scoped to the drill-down so the
+ * app's other grids keep their compact uppercase headings.
+ */
+.records-drilldown .record-table th {
+  white-space: nowrap;
+  vertical-align: bottom;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-size: 0.78rem;
+  color: var(--color-text);
+}
+
 .record-table td {
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--color-border);
@@ -1153,6 +1340,31 @@
 .cell-strong {
   font-weight: 600;
   color: var(--color-text);
+}
+
+/* Records drill-down: a recorded value outside the Org's configured range (an Exceedance). */
+.cell-exceedance {
+  font-weight: 600;
+  color: var(--color-danger-text);
+}
+
+.exceedance-arrow {
+  margin-inline-start: 0.25rem;
+  font-size: 0.8em;
+  vertical-align: 0.05em;
+}
+
+/* Accessible-only text: present for screen readers, removed from the visual flow. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Urgency text colours (e.g. the Records "Monthly due" date). */
@@ -1532,123 +1744,5 @@
 .tab-active {
   color: var(--color-text);
   border-bottom-color: var(--color-primary);
-}
-
-/* --- DatePicker (custom calendar) ----------------------------------------- */
-.date-picker {
-  position: relative;
-}
-
-/* Trigger styled like a text input: value on the left, calendar glyph on the right. */
-.date-picker-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  text-align: left;
-  cursor: pointer;
-}
-
-.date-picker-placeholder {
-  color: var(--color-text-muted);
-}
-
-.date-picker-trigger-invalid {
-  border-color: var(--color-danger-text);
-}
-
-.date-picker-icon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-}
-
-.date-picker-popover {
-  position: absolute;
-  z-index: 30;
-  top: calc(100% + 0.35rem);
-  left: 0;
-  width: 17rem;
-  padding: 0.75rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
-}
-
-.date-picker-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-}
-
-.date-picker-nav {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-}
-
-.date-picker-nav:hover {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-}
-
-.date-picker-month {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.date-picker-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.15rem;
-}
-
-.date-picker-weekday {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 1.75rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-}
-
-.date-picker-blank {
-  height: 2rem;
-}
-
-.date-picker-day {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 2rem;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--color-text);
-  font: inherit;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.date-picker-day:hover {
-  background: var(--color-surface-muted);
-}
-
-.date-picker-day-selected,
-.date-picker-day-selected:hover {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-weight: 700;
-}
-
-.date-picker-day:focus-visible,
-.date-picker-nav:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 1px;
 }
 

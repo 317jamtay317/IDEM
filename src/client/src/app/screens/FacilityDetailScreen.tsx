@@ -230,6 +230,7 @@ function PermitsPanel({
           onChange={(iso) => onChange(iso)}
           ariaLabel="Permit expiration date"
           invalid={!!error}
+          className="grid-control-editor"
         />
       ),
     },

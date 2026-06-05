@@ -128,6 +128,21 @@ describe('AppShell — hash-driven navigation', () => {
     expect(window.location.hash).toBe('#/log')
     expect(screen.getByText('New production record')).toBeInTheDocument()
   })
+
+  it('highlights Records (not Dashboard) as the active tab on the log-record screen', async () => {
+    stubBreakpoint(true)
+    window.location.hash = ''
+    const user = userEvent.setup()
+    renderShell()
+
+    await user.click(screen.getByRole('button', { name: /log a record/i }))
+
+    // Logging a Record is a Records activity, so the navigation marks Records active.
+    const records = screen.getAllByRole('button', { name: 'Records' })
+    expect(records.some((button) => button.getAttribute('aria-current') === 'page')).toBe(true)
+    const dashboard = screen.queryAllByRole('button', { name: 'Dashboard' })
+    expect(dashboard.every((button) => button.getAttribute('aria-current') !== 'page')).toBe(true)
+  })
 })
 
 describe('AppShell — account menu (replaces the More tab)', () => {

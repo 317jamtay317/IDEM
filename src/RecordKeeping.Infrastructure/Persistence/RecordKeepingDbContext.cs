@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using RecordKeeping.Domain.Facilities;
 using RecordKeeping.Domain.Orgs;
+using RecordKeeping.Domain.ProductionFieldLimits;
+using RecordKeeping.Domain.ProductionFields;
+using RecordKeeping.Domain.Records;
 
 namespace RecordKeeping.Infrastructure.Persistence;
 
@@ -17,11 +20,23 @@ public sealed class RecordKeepingDbContext(DbContextOptions<RecordKeepingDbConte
     /// <summary>The Facility aggregate roots (I-D06).</summary>
     public DbSet<Facility> Facilities => Set<Facility>();
 
+    /// <summary>The platform-global Production Field catalog (not Org-scoped).</summary>
+    public DbSet<ProductionField> ProductionFields => Set<ProductionField>();
+
+    /// <summary>The Record aggregate roots — daily Facility activity entries (I-D01, I-D07, I-D23).</summary>
+    public DbSet<Record> Records => Set<Record>();
+
+    /// <summary>The Org-scoped per-Production-Field limits (I-D03, I-D24).</summary>
+    public DbSet<ProductionFieldLimit> ProductionFieldLimits => Set<ProductionFieldLimit>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfiguration(new OrgConfiguration());
         modelBuilder.ApplyConfiguration(new FacilityConfiguration());
+        modelBuilder.ApplyConfiguration(new ProductionFieldConfiguration());
+        modelBuilder.ApplyConfiguration(new RecordConfiguration());
+        modelBuilder.ApplyConfiguration(new ProductionFieldLimitConfiguration());
     }
 }
