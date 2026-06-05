@@ -11,6 +11,7 @@ import {
 } from '../productionFieldsApi'
 import { recordsApi as defaultRecordsApi, type LoggedRecord, type RecordsApi } from '../recordsApi'
 import { GridControl, type GridColumn } from '../components/GridControl'
+import { DatePicker } from '../components/DatePicker'
 import { TopBar } from '../components/TopBar'
 import { useBreakpoint } from '../useBreakpoint'
 
@@ -179,29 +180,17 @@ export function RecordsScreen({
           {error && <div className="auth-alert">Error: {error}</div>}
 
           <div className="field-row">
-            <label className="field">
+            <div className="field">
               <span className="field-label">From</span>
-              <input
-                type="date"
-                className="date-input"
-                aria-label="From"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-              />
-            </label>
-            <label className="field">
+              <DatePicker value={from} onChange={setFrom} ariaLabel="From" placeholder="Any" />
+            </div>
+            <div className="field">
               <span className="field-label">To</span>
-              <input
-                type="date"
-                className="date-input"
-                aria-label="To"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-              />
-            </label>
+              <DatePicker value={to} onChange={setTo} ariaLabel="To" placeholder="Any" />
+            </div>
           </div>
 
-          <div className="card table-card">
+          <div className="card table-card records-drilldown">
             <GridControl
               columns={columns}
               rows={records ?? []}

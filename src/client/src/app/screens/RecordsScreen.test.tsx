@@ -91,6 +91,18 @@ function renderRecords(apis: ReturnType<typeof makeApis>) {
   )
 }
 
+/** Open a themed DatePicker by its trigger's accessible name and pick today (always present). */
+function pickTodayInPicker(triggerName: string) {
+  fireEvent.click(screen.getByRole('button', { name: triggerName }))
+  const today = new Date()
+  const MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ]
+  const dayLabel = `${MONTHS[today.getMonth()]} ${today.getDate()}, ${today.getFullYear()}`
+  fireEvent.click(screen.getByRole('button', { name: dayLabel }))
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
 })
@@ -199,7 +211,7 @@ describe('RecordsScreen — facility list (desktop)', () => {
     expect(within(grid).getByText('50')).not.toHaveClass('cell-exceedance')
   })
 
-  it('filters the Records by a date range', async () => {
+  it('filters the Records by a date range using the themed date picker', async () => {
     const apis = makeApis()
     const user = userEvent.setup()
     renderRecords(apis)
@@ -207,13 +219,22 @@ describe('RecordsScreen — facility list (desktop)', () => {
     await user.click(await screen.findByRole('button', { name: 'Goshen Asphalt Plant' }))
     await screen.findByRole('table', { name: /records/i })
 
-    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-05-01' } })
-    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-05-31' } })
+    // The range filter is the themed DatePicker (a button + calendar popover), not a native
+    // date input, so it matches the rest of the app's date fields.
+    expect(screen.getByRole('button', { name: 'From' })).toBeInTheDocument()
+    expect(screen.queryByDisplayValue('mm/dd/yyyy')).not.toBeInTheDocument()
+
+    pickTodayInPicker('From')
+    pickTodayInPicker('To')
 
     await waitFor(() =>
       expect(apis.recordsApi.list).toHaveBeenCalledWith(
         'tok',
-        expect.objectContaining({ facilityId: 'goshen', from: '2026-05-01', to: '2026-05-31' }),
+        expect.objectContaining({
+          facilityId: 'goshen',
+          from: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        }),
       ),
     )
   })

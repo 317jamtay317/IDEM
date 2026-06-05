@@ -1307,6 +1307,22 @@
   color: var(--color-text-muted);
 }
 
+/*
+ * The Records drill-down has one column per Summary field, so its many long,
+ * multi-word headers wrapped into ragged ALL-CAPS stacks in the narrow numeric
+ * columns. Keep each header on a single, bottom-aligned line in its natural case
+ * (the table-card already scrolls horizontally). Scoped to the drill-down so the
+ * app's other grids keep their compact uppercase headings.
+ */
+.records-drilldown .record-table th {
+  white-space: nowrap;
+  vertical-align: bottom;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-size: 0.78rem;
+  color: var(--color-text);
+}
+
 .record-table td {
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--color-border);
