@@ -1,0 +1,544 @@
+/**
+ * The read-only render of a {@link ReportTemplate}: a white page surface holding
+ * the report bands stacked top to bottom, each band carrying its elements at
+ * their authored positions. Geometry comes from the model in inches and is
+ * converted to pixels at the current zoom (see {@link inchesToPx}). Binding
+ * tokens (e.g. `{Record.Tons}`) are shown verbatim here; they are resolved to
+ * data only at preview time (a later phase). Selection and editing arrive in
+ * Phases 3–6.
+ */
+import { Fragment, useRef, useState, type DragEvent, type PointerEvent } from 'react'
+import { BAND_LABELS } from './bandLabels'
+import { ELEMENT_DRAG_MIME, isElementType } from './dnd'
+import { ELEMENT_TYPE_LABELS } from './elementDisplay'
+import { elementTextCss } from './elementStyleCss'
+import { bandTops, draggedPosition, inchesToPx, pxToInches, resizedPageSize, resizedRect, type PageResizeHandle, type ResizeHandle } from './geometry'
+import { alignmentGuides, GUIDE_TOLERANCE_PX, type AlignmentGuide } from './guides'
+import { marqueeRect, marqueeSelect } from './marquee'
+import { type BandKind, type ElementType, type Rect, type ReportElement, type ReportTemplate } from './model'
+
+/** The corner resize handles, with the accessible label shown for each. */
+const RESIZE_HANDLES: { handle: ResizeHandle; label: string }[] = [
+  { handle: 'nw', label: 'top-left' },
+  { handle: 'ne', label: 'top-right' },
+  { handle: 'sw', label: 'bottom-left' },
+  { handle: 'se', label: 'bottom-right' },
+]
+
+/** Pointer travel (CSS px) before an empty-canvas press becomes a marquee drag rather than a click. */
+const MARQUEE_DRAG_THRESHOLD_PX = 3
+
+/** Element types whose text can be edited inline on the canvas (double-click). */
+const TEXT_EDITABLE_TYPES = new Set<ElementType>(['label', 'dataField', 'formula'])
+
+/** The text shown for an element on the read-only canvas. */
+function elementContent(el: ReportElement): string {
+  switch (el.type) {
+    case 'line':
+    case 'rectangle':
+    case 'triangle':
+    case 'ellipse':
+      return '' // drawn purely with CSS; no text
+    case 'image':
+    case 'barcode':
+    case 'subReport':
+    case 'table':
+    case 'chart':
+    case 'pageBreak':
+      return ELEMENT_TYPE_LABELS[el.type] // placeholder block labelled with its kind
+    default:
+      return el.text ?? el.expression ?? ''
+  }
+}
+
+/** Props for {@link ReportCanvas}. */
+export interface ReportCanvasProps {
+  /** The template to render. */
+  template: ReportTemplate
+  /** The canvas zoom, as a percentage (100 = actual size). */
+  zoom: number
+  /** The ids of the currently selected elements (empty when nothing is selected). */
+  selectedIds?: string[]
+  /**
+   * Called when the selection changes: the clicked element's id, or `null` when
+   * the empty canvas is clicked (deselect). `additive` is `true` when a modifier
+   * (Shift/Ctrl/Cmd) was held, meaning the element should be toggled in or out of
+   * the current selection rather than replacing it. Omit to render a
+   * non-interactive canvas.
+   */
+  onSelectElement?: (id: string | null, additive: boolean) => void
+  /**
+   * Called when a marquee (rubber-band) drag on the empty canvas completes: the
+   * ids of every element the marquee rectangle intersected, replacing the current
+   * selection (empty when it covered nothing). Omit to disable marquee selection.
+   */
+  onMarqueeSelect?: (ids: string[]) => void
+  /**
+   * Called when a palette item is dropped onto a band: the dropped element type,
+   * the band it landed in, and the drop position within that band, in inches.
+   * Omit to disable dropping onto the canvas.
+   */
+  onInsertAt?: (type: ElementType, bandKind: BandKind, position: { x: number; y: number }) => void
+  /**
+   * Called as a placed element is dragged to a new position within its band: the
+   * element's id and its new top-left, in inches. Omit to make elements
+   * select-only (not movable).
+   */
+  onMoveElement?: (id: string, position: { x: number; y: number }) => void
+  /**
+   * Called as the selected element is resized by dragging a corner handle: the
+   * element's id and its new rect, in inches. Omit to hide the resize handles.
+   */
+  onResize?: (id: string, rect: Rect) => void
+  /**
+   * Called when a text element's content is edited inline (double-click to edit):
+   * the element's id and its new text. Omit to disable inline editing.
+   */
+  onEditText?: (id: string, text: string) => void
+  /**
+   * Called as the page is resized by dragging one of its edge/corner grips: the
+   * page's new size, in inches. Omit to hide the page resize handles.
+   */
+  onResizePage?: (size: { width: number; height: number }) => void
+}
+
+/** The page resize grips, with the accessible label shown for each. */
+const PAGE_RESIZE_HANDLES: { handle: PageResizeHandle; label: string }[] = [
+  { handle: 'e', label: 'Resize page width' },
+  { handle: 's', label: 'Resize page height' },
+  { handle: 'se', label: 'Resize page' },
+]
+
+/**
+ * Renders a Report Template as a banded page at the given zoom. The page width
+ * tracks the template's page setup; each band is a labelled region sized to its
+ * height, and each element is an absolutely positioned, selectable control.
+ * Clicking an element selects it; clicking the empty page deselects. The render
+ * is otherwise a faithful, read-only picture of the template.
+ */
+export function ReportCanvas({
+  template,
+  zoom,
+  selectedIds = [],
+  onSelectElement,
+  onMarqueeSelect,
+  onInsertAt,
+  onMoveElement,
+  onResize,
+  onEditText,
+  onResizePage,
+}: ReportCanvasProps) {
+  const px = (inches: number) => `${inchesToPx(inches, zoom)}px`
+  const { snapToGrid, gridSize } = template.settings
+
+  // The page is drawn at least as tall as its page setup says, but never shorter
+  // than its band content (so a band is never clipped). Page-height drags resize
+  // from — and the bottom grips sit at — this rendered height.
+  const contentHeight = template.bands.reduce((sum, band) => sum + band.height, 0)
+  const renderHeight = Math.max(template.page.height, contentHeight)
+
+  // Resize handles are a single-element affordance: shown only when exactly one
+  // element is selected.
+  const soleSelectedId = selectedIds.length === 1 ? selectedIds[0] : null
+
+  // Cumulative band offsets (inches) lift band-relative element rects into
+  // page-absolute coordinates, so marquee and smart guides reach across bands.
+  const tops = bandTops(template.bands)
+  const absoluteRects = (exceptId?: string): { id: string; rect: Rect }[] =>
+    template.bands.flatMap((band, i) =>
+      band.elements
+        .filter((el) => el.id !== exceptId)
+        .map((el) => ({ id: el.id, rect: { x: el.rect.x, y: tops[i] + el.rect.y, w: el.rect.w, h: el.rect.h } })),
+    )
+
+  // Canvas-owned visuals: the live marquee rectangle (page-relative CSS px) while
+  // rubber-banding, and the alignment guides shown while an element is dragged.
+  const [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
+  const [guides, setGuides] = useState<AlignmentGuide[]>([])
+
+  // The element being edited inline (double-click), and its text when editing
+  // began, so Escape can restore it.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const editOriginal = useRef('')
+
+  // The element being dragged: its id, start rect (for guide hit-testing), its
+  // band's top offset, the other elements' page-absolute rects (frozen at drag
+  // start), and the pointer's start point, from which each move computes a new
+  // absolute position.
+  const drag = useRef<{
+    id: string
+    startX: number
+    startY: number
+    w: number
+    h: number
+    top: number
+    others: Rect[]
+    pointerX: number
+    pointerY: number
+  } | null>(null)
+
+  // Begin a drag (and select) when an element is pressed with the primary button.
+  // A modified press (Shift/Ctrl/Cmd) toggles the element in the selection and
+  // does not start a drag — the user is building a multi-selection, not moving.
+  const handlePointerDown = (el: ReportElement, bandTop: number) => (e: PointerEvent) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    const additive = e.shiftKey || e.metaKey || e.ctrlKey
+    onSelectElement?.(el.id, additive)
+    if (additive || !onMoveElement) return
+    drag.current = {
+      id: el.id,
+      startX: el.rect.x,
+      startY: el.rect.y,
+      w: el.rect.w,
+      h: el.rect.h,
+      top: bandTop,
+      others: absoluteRects(el.id).map((r) => r.rect),
+      pointerX: e.clientX,
+      pointerY: e.clientY,
+    }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+  }
+
+  // While dragging, report the element's new position (live, so it follows the
+  // cursor), snapped to the grid when snap-to-grid is enabled, and surface the
+  // alignment guides for any edge/centre that now lines up with another element.
+  const handlePointerMove = (e: PointerEvent) => {
+    const d = drag.current
+    if (!d || !onMoveElement) return
+    const position = draggedPosition(
+      { x: d.startX, y: d.startY },
+      { x: e.clientX - d.pointerX, y: e.clientY - d.pointerY },
+      zoom,
+      gridSize,
+      snapToGrid,
+    )
+    onMoveElement(d.id, position)
+    const movingAbs: Rect = { x: position.x, y: d.top + position.y, w: d.w, h: d.h }
+    setGuides(alignmentGuides(movingAbs, d.others, pxToInches(GUIDE_TOLERANCE_PX, zoom)))
+  }
+
+  // End the drag and clear any guides.
+  const handlePointerUp = (e: PointerEvent) => {
+    if (!drag.current) return
+    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    drag.current = null
+    setGuides([])
+  }
+
+  // Marquee (rubber-band) selection on the empty canvas: a press that travels past
+  // the threshold becomes a selection rectangle; a press-release in place is a
+  // click that clears the selection. The anchor holds the page origin and the
+  // start point (page-relative px) and tracks whether a real drag has begun.
+  const marqueeAnchor = useRef<{ pageLeft: number; pageTop: number; startX: number; startY: number; moved: boolean } | null>(null)
+
+  const handlePagePointerDown = (e: PointerEvent) => {
+    if (e.button !== 0 || (!onSelectElement && !onMarqueeSelect)) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    marqueeAnchor.current = {
+      pageLeft: rect.left,
+      pageTop: rect.top,
+      startX: e.clientX - rect.left,
+      startY: e.clientY - rect.top,
+      moved: false,
+    }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+  }
+
+  const handlePagePointerMove = (e: PointerEvent) => {
+    const m = marqueeAnchor.current
+    if (!m) return
+    const cur = { x: e.clientX - m.pageLeft, y: e.clientY - m.pageTop }
+    if (
+      !m.moved &&
+      Math.abs(cur.x - m.startX) <= MARQUEE_DRAG_THRESHOLD_PX &&
+      Math.abs(cur.y - m.startY) <= MARQUEE_DRAG_THRESHOLD_PX
+    )
+      return
+    m.moved = true
+    setMarquee({
+      left: Math.min(m.startX, cur.x),
+      top: Math.min(m.startY, cur.y),
+      width: Math.abs(cur.x - m.startX),
+      height: Math.abs(cur.y - m.startY),
+    })
+  }
+
+  const handlePagePointerUp = (e: PointerEvent) => {
+    const m = marqueeAnchor.current
+    if (!m) return
+    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    marqueeAnchor.current = null
+    if (!m.moved) {
+      onSelectElement?.(null, false) // a plain click on the empty canvas clears the selection
+      return
+    }
+    const region = marqueeRect({ x: m.startX, y: m.startY }, { x: e.clientX - m.pageLeft, y: e.clientY - m.pageTop })
+    const regionInches: Rect = {
+      x: pxToInches(region.x, zoom),
+      y: pxToInches(region.y, zoom),
+      w: pxToInches(region.w, zoom),
+      h: pxToInches(region.h, zoom),
+    }
+    onMarqueeSelect?.(marqueeSelect(regionInches, absoluteRects()))
+    setMarquee(null)
+  }
+
+  // The element being resized: its id, the handle grabbed, its start rect, and
+  // the pointer's start point.
+  const resize = useRef<{ id: string; handle: ResizeHandle; startRect: Rect; pointerX: number; pointerY: number } | null>(null)
+
+  // Begin a resize when a corner handle is pressed (without starting a move).
+  const handleResizeDown = (el: ReportElement, handle: ResizeHandle) => (e: PointerEvent) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    resize.current = { id: el.id, handle, startRect: el.rect, pointerX: e.clientX, pointerY: e.clientY }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+  }
+
+  // While resizing, report the element's new rect (live), snapping the dragged
+  // edges to the grid when snap-to-grid is enabled.
+  const handleResizeMove = (e: PointerEvent) => {
+    const r = resize.current
+    if (!r || !onResize) return
+    const delta = { x: pxToInches(e.clientX - r.pointerX, zoom), y: pxToInches(e.clientY - r.pointerY, zoom) }
+    onResize(r.id, resizedRect(r.startRect, r.handle, delta, gridSize, snapToGrid))
+  }
+
+  // End the resize.
+  const handleResizeUp = (e: PointerEvent) => {
+    if (!resize.current) return
+    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    resize.current = null
+  }
+
+  // The page resize in progress: the grip grabbed, the page size at drag start
+  // (its rendered height, so the bottom grips track the visible edge), and the
+  // pointer's start point.
+  const pageResize = useRef<{ handle: PageResizeHandle; startW: number; startH: number; pointerX: number; pointerY: number } | null>(null)
+
+  // Begin a page resize when an edge/corner grip is pressed.
+  const handlePageResizeDown = (handle: PageResizeHandle) => (e: PointerEvent) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    pageResize.current = { handle, startW: template.page.width, startH: renderHeight, pointerX: e.clientX, pointerY: e.clientY }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+  }
+
+  // While resizing the page, report its new size (live), clamped so it never
+  // shrinks below its content.
+  const handlePageResizeMove = (e: PointerEvent) => {
+    const r = pageResize.current
+    if (!r || !onResizePage) return
+    const delta = { x: pxToInches(e.clientX - r.pointerX, zoom), y: pxToInches(e.clientY - r.pointerY, zoom) }
+    onResizePage(
+      resizedPageSize({ width: r.startW, height: r.startH }, delta, r.handle, { width: 1, height: contentHeight }),
+    )
+  }
+
+  // End the page resize.
+  const handlePageResizeUp = (e: PointerEvent) => {
+    if (!pageResize.current) return
+    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    pageResize.current = null
+  }
+
+  // Allow a drop only when the host accepts inserts; copy is the drop effect.
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+
+  // Place the dropped palette item where the cursor released, within the band.
+  const handleDrop = (bandKind: BandKind) => (e: DragEvent) => {
+    e.preventDefault()
+    const type = e.dataTransfer.getData(ELEMENT_DRAG_MIME)
+    if (!isElementType(type)) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    onInsertAt?.(type, bandKind, {
+      x: pxToInches(e.clientX - rect.left, zoom),
+      y: pxToInches(e.clientY - rect.top, zoom),
+    })
+  }
+
+  // A grid overlay (drawn by .rb-page-grid in CSS) is shown when snapping is on;
+  // its cell size tracks the grid spacing in pixels at the current zoom.
+  const gridPx = inchesToPx(gridSize, zoom)
+  const showGrid = snapToGrid && gridPx > 0
+
+  return (
+    // The page surface hosts marquee selection: a drag rubber-bands a selection,
+    // a press-release in place clears it (see the page pointer handlers).
+    <div
+      className={`rb-page${showGrid ? ' rb-page-grid' : ''}`}
+      style={{
+        width: px(template.page.width),
+        minHeight: px(renderHeight),
+        ...(showGrid ? { backgroundSize: `${gridPx}px ${gridPx}px` } : {}),
+      }}
+      onPointerDown={handlePagePointerDown}
+      onPointerMove={handlePagePointerMove}
+      onPointerUp={handlePagePointerUp}
+    >
+      {template.bands.map((band, bandIndex) => (
+        <div
+          key={band.kind}
+          className={`rb-band rb-band-${band.kind}`}
+          role="group"
+          aria-label={BAND_LABELS[band.kind]}
+          style={{ height: px(band.height) }}
+          onDragOver={onInsertAt ? handleDragOver : undefined}
+          onDrop={onInsertAt ? handleDrop(band.kind) : undefined}
+        >
+          <span className="rb-band-label overline" aria-hidden="true">
+            {BAND_LABELS[band.kind]}
+          </span>
+
+          {band.elements.map((el) => {
+            const content = elementContent(el)
+            const editing = editingId === el.id && onEditText != null
+            return (
+              <Fragment key={el.id}>
+                {editing ? (
+                  // Inline text editor: replaces the element while its text is edited.
+                  <input
+                    className="rb-el-edit"
+                    aria-label="Edit text"
+                    autoFocus
+                    value={el.text ?? ''}
+                    style={{
+                      left: px(el.rect.x),
+                      top: px(el.rect.y),
+                      width: px(el.rect.w),
+                      height: px(el.rect.h),
+                      ...elementTextCss(el.style, zoom),
+                    }}
+                    onChange={(e) => onEditText?.(el.id, e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        setEditingId(null) // commit (edits are applied live) and close
+                      } else if (e.key === 'Escape') {
+                        onEditText?.(el.id, editOriginal.current) // revert
+                        setEditingId(null)
+                      }
+                    }}
+                    onBlur={() => setEditingId(null)}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className={`rb-el rb-el-${el.type}${selectedIds.includes(el.id) ? ' rb-el-selected' : ''}`}
+                    data-element-id={el.id}
+                    aria-pressed={selectedIds.includes(el.id)}
+                    aria-label={content === '' ? ELEMENT_TYPE_LABELS[el.type] : undefined}
+                    style={{
+                      left: px(el.rect.x),
+                      top: px(el.rect.y),
+                      width: px(el.rect.w),
+                      height: px(el.rect.h),
+                      ...elementTextCss(el.style, zoom),
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation() // keep the click off the page (no marquee/deselect)
+                      // Mouse selection happens on pointer down; handle keyboard
+                      // activation (Enter/Space) here, which fires click with no
+                      // preceding pointer press (detail === 0).
+                      if (e.detail === 0) onSelectElement?.(el.id, e.shiftKey || e.metaKey || e.ctrlKey)
+                    }}
+                    onDoubleClick={() => {
+                      // Double-click a text element to edit its content in place.
+                      if (onEditText && TEXT_EDITABLE_TYPES.has(el.type)) {
+                        editOriginal.current = el.text ?? ''
+                        setEditingId(el.id)
+                      }
+                    }}
+                    onPointerDown={handlePointerDown(el, tops[bandIndex])}
+                    onPointerMove={onMoveElement ? handlePointerMove : undefined}
+                    onPointerUp={onMoveElement ? handlePointerUp : undefined}
+                  >
+                    {content}
+                  </button>
+                )}
+
+                {/* Corner resize handles, shown only on a lone selected element (not while editing). */}
+                {onResize &&
+                  el.id === soleSelectedId &&
+                  !editing &&
+                  RESIZE_HANDLES.map(({ handle, label }) => {
+                    const cornerX = handle === 'ne' || handle === 'se' ? el.rect.x + el.rect.w : el.rect.x
+                    const cornerY = handle === 'sw' || handle === 'se' ? el.rect.y + el.rect.h : el.rect.y
+                    return (
+                      <button
+                        key={handle}
+                        type="button"
+                        className={`rb-handle rb-handle-${handle}`}
+                        aria-label={`Resize ${label}`}
+                        style={{ left: px(cornerX), top: px(cornerY) }}
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={handleResizeDown(el, handle)}
+                        onPointerMove={handleResizeMove}
+                        onPointerUp={handleResizeUp}
+                      />
+                    )
+                  })}
+              </Fragment>
+            )
+          })}
+
+          {/* The footer page number (Phase 11): the format is shown verbatim, like
+              every other token; Preview resolves the {n} / {N} tokens to numbers. */}
+          {band.kind === 'pageFooter' && template.pageNumbers.show && (
+            <div className="rb-page-number" style={{ textAlign: template.pageNumbers.position }}>
+              {template.pageNumbers.format}
+            </div>
+          )}
+        </div>
+      ))}
+
+      {/* Page resize grips at the right edge, bottom edge and bottom-right corner;
+          dragging them resizes the page (width / height / both). */}
+      {onResizePage &&
+        PAGE_RESIZE_HANDLES.map(({ handle, label }) => {
+          const left = handle === 's' ? template.page.width / 2 : template.page.width
+          const top = handle === 'e' ? renderHeight / 2 : renderHeight
+          return (
+            <button
+              key={handle}
+              type="button"
+              className={`rb-page-handle rb-page-handle-${handle}`}
+              aria-label={label}
+              style={{ left: px(left), top: px(top) }}
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={handlePageResizeDown(handle)}
+              onPointerMove={handlePageResizeMove}
+              onPointerUp={handlePageResizeUp}
+            />
+          )
+        })}
+
+      {/* The marquee (rubber-band) rectangle, drawn while selecting on the canvas. */}
+      {marquee && (
+        <div
+          className="rb-marquee"
+          style={{
+            left: `${marquee.left}px`,
+            top: `${marquee.top}px`,
+            width: `${marquee.width}px`,
+            height: `${marquee.height}px`,
+          }}
+        />
+      )}
+
+      {/* Smart alignment guides, drawn while an element is dragged into alignment. */}
+      {guides.map((guide) => (
+        <div
+          key={`${guide.orientation}:${guide.position}`}
+          className={`rb-guide rb-guide-${guide.orientation}`}
+          style={guide.orientation === 'vertical' ? { left: px(guide.position) } : { top: px(guide.position) }}
+        />
+      ))}
+    </div>
+  )
+}

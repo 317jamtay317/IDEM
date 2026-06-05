@@ -5,11 +5,20 @@ import {
   hashForFacility,
   hashFromScreen,
   screenFromHash,
+  templateIdFromHash,
   useHashScreen,
   type Screen,
 } from './useHashScreen'
 
-const ALL_SCREENS: Screen[] = ['home', 'records', 'reports', 'orgs', 'log', 'facilities']
+const ALL_SCREENS: Screen[] = [
+  'home',
+  'records',
+  'reports',
+  'orgs',
+  'log',
+  'facilities',
+  'report-builder',
+]
 
 afterEach(() => {
   // Each test owns the location hash; reset it so state never leaks between tests.
@@ -130,6 +139,91 @@ describe('useHashScreen', () => {
     })
 
     expect(result.current[0]).toBe('reports')
+  })
+})
+
+describe('Report Builder route — screenFromHash & templateIdFromHash', () => {
+  it('maps a builder hash with a template id to the report-builder screen', () => {
+    expect(screenFromHash('#/report-builder/annual-emissions')).toBe('report-builder')
+  })
+
+  it('maps a builder hash without an id to the report-builder screen', () => {
+    expect(screenFromHash('#/report-builder')).toBe('report-builder')
+  })
+
+  it('extracts the template id from a builder hash', () => {
+    expect(templateIdFromHash('#/report-builder/annual-emissions')).toBe('annual-emissions')
+  })
+
+  it('decodes a percent-encoded template id', () => {
+    expect(templateIdFromHash('#/report-builder/with%20space')).toBe('with space')
+  })
+
+  it('has no template id when the builder hash carries none', () => {
+    expect(templateIdFromHash('#/report-builder')).toBeNull()
+  })
+
+  it('has no template id for a non-builder hash', () => {
+    expect(templateIdFromHash('#/reports')).toBeNull()
+    expect(templateIdFromHash('#/')).toBeNull()
+  })
+})
+
+describe('Report Builder route — hashFromScreen', () => {
+  it('encodes the template id into the builder hash', () => {
+    expect(hashFromScreen('report-builder', 'annual-emissions')).toBe(
+      '#/report-builder/annual-emissions',
+    )
+  })
+
+  it('percent-encodes a template id with spaces', () => {
+    expect(hashFromScreen('report-builder', 'with space')).toBe('#/report-builder/with%20space')
+  })
+
+  it('omits the trailing slash when no template id is given', () => {
+    expect(hashFromScreen('report-builder')).toBe('#/report-builder')
+  })
+
+  it('round-trips a builder hash back to its screen and template id', () => {
+    const hash = hashFromScreen('report-builder', 'annual-emissions')
+    expect(screenFromHash(hash)).toBe('report-builder')
+    expect(templateIdFromHash(hash)).toBe('annual-emissions')
+  })
+})
+
+describe('useHashScreen — Report Builder template id', () => {
+  it('exposes the template id named in the initial hash', () => {
+    window.location.hash = '#/report-builder/annual-emissions'
+
+    const { result } = renderHook(() => useHashScreen())
+
+    expect(result.current[0]).toBe('report-builder')
+    expect(result.current[2]).toBe('annual-emissions')
+  })
+
+  it('navigating to the builder writes the id into the hash and exposes it', () => {
+    const { result } = renderHook(() => useHashScreen())
+
+    act(() => {
+      result.current[1]('report-builder', 'annual-emissions')
+    })
+
+    expect(result.current[0]).toBe('report-builder')
+    expect(result.current[2]).toBe('annual-emissions')
+    expect(window.location.hash).toBe('#/report-builder/annual-emissions')
+  })
+
+  it('clears the template id when navigating away from the builder', () => {
+    window.location.hash = '#/report-builder/annual-emissions'
+    const { result } = renderHook(() => useHashScreen())
+    expect(result.current[2]).toBe('annual-emissions')
+
+    act(() => {
+      result.current[1]('reports')
+    })
+
+    expect(result.current[0]).toBe('reports')
+    expect(result.current[2]).toBeNull()
   })
 })
 
