@@ -163,9 +163,10 @@ Test projects mirror their production counterparts 1:1. Integration tests for th
   | Role | Email | Password |
   |---|---|---|
   | **SiteAdmin** | `admin@recordkeeping.local` | `ChangeMe!OnFirstLogin1` |
+  | **SiteAdmin #2** (Development only) | `admin2@recordkeeping.local` | `ChangeMe!OnFirstLogin1` |
   | **Org User** (Development only) | `user@recordkeeping.local` | `ChangeMe!OnFirstLogin1` |
 
-  Both are local dev bootstrap credentials defined in `AuthSeeder.cs` (the Org User seeds only in the Development environment). If they ever change there, update this table to match.
+  All are local dev bootstrap credentials defined in `AuthSeeder.cs` (the second SiteAdmin and the Org User seed only in the Development environment; the second SiteAdmin exists so two distinct SiteAdmins can sign in at once to exercise live-preview presence + advisory locks). If they ever change there, update this table to match.
 - Stop with **`scripts/down.ps1`** (or `docker compose down`); add `-v` to drop the SQL data volume. Each stack is named after the **feature** — `up.ps1 -Name <feature>`, else the git branch's last segment, else the directory — persisted to `.env` as `COMPOSE_PROJECT_NAME`, so containers read as `<feature>-api-1`, `<feature>-mcp-1`, etc. `container_name` is intentionally unset; read logs with `docker compose logs <service>` (e.g. `docker compose logs api`).
 - A host `dotnet run` against a DB-only container (`docker compose up -d sql-server`) is acceptable only as a quick inner loop **when explicitly asked** — never as the default for "run it".
 
