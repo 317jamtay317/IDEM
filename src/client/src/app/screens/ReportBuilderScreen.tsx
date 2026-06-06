@@ -20,6 +20,8 @@ import { pageCount } from '../reportBuilder/pageSetup'
 import { fromDisplayPx, toDisplayPx } from '../reportBuilder/elementDisplay'
 import { downloadText } from '../reportBuilder/download'
 import { toRdl } from '../reportBuilder/rdl'
+import { usePreviewBroadcast } from '../reportBuilder/usePreviewBroadcast'
+import { hashFromScreen } from '../useHashScreen'
 import {
   alignRects,
   distributeRects,
@@ -77,6 +79,12 @@ export interface ReportBuilderScreenProps {
    * in for the document name shown in the title.
    */
   templateId: string | null
+  /**
+   * Bearer token for the live-preview hub. When present, edits are broadcast over SignalR so a
+   * watcher (the Report Preview screen) sees the report build in real time; absent (e.g. in tests)
+   * the broadcast is inactive.
+   */
+  accessToken?: string | null
   /** Returns to the Reports screen, the builder's parent. */
   onClose: () => void
 }
@@ -100,7 +108,7 @@ export interface ReportBuilderScreenProps {
  * through a `+ Insert` bottom sheet ({@link InsertSheet}) — and become a
  * three-column workspace on desktop.
  */
-export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreenProps) {
+export function ReportBuilderScreen({ templateId, accessToken, onClose }: ReportBuilderScreenProps) {
   const documentTitle = templateId ?? 'Untitled report template'
   const templateArg = templateId && templateId !== 'new' ? templateId : undefined
 
@@ -144,6 +152,11 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
   // exactly one is selected (a multi-selection summarises by count instead).
   const soleId = selectedIds.length === 1 ? selectedIds[0] : null
   const selected = useMemo(() => findElement(template, soleId), [template, soleId])
+
+  // Serialize the working document to RDL and broadcast it to the live preview as the SiteAdmin
+  // builds (debounced). Inactive without an access token (e.g. in tests). See usePreviewBroadcast.
+  const rdl = useMemo(() => toRdl(template), [template])
+  usePreviewBroadcast({ sessionId: template.id, rdl, accessToken })
 
   // Change the selection: a plain click replaces it with one element, a modified
   // (Shift/Ctrl/Cmd) click toggles that element in or out, and an empty-canvas
@@ -255,7 +268,14 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
   // Save the template by serializing it to RDL and downloading it. Until backend
   // persistence exists (Phase 13), Save produces the RDL document end-to-end.
   const handleSave = () => {
-    downloadText(`${template.name}.rdl`, toRdl(template), 'application/xml')
+    downloadText(`${template.name}.rdl`, rdl, 'application/xml')
+  }
+
+  // Open the live preview for this template in a new tab, so the SiteAdmin can watch it build while
+  // editing. The preview joins the same session (the template id) and renders the pushed frames.
+  const handleOpenLivePreview = () => {
+    const href = new URL(hashFromScreen('report-preview', template.id), window.location.href).toString()
+    window.open(href, '_blank', 'noopener')
   }
 
   // Delete the selected element(s) from the template and clear the selection.
@@ -312,6 +332,13 @@ export function ReportBuilderScreen({ templateId, onClose }: ReportBuilderScreen
             onClick={() => setPreviewOpen(true)}
           >
             Preview
+          </button>
+          <button
+            type="button"
+            className="button button-secondary button-sm"
+            onClick={handleOpenLivePreview}
+          >
+            Live preview
           </button>
           <button type="button" className="button button-primary button-sm" onClick={handleSave}>
             Save

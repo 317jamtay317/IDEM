@@ -18,11 +18,21 @@ public class PreviewReportTemplateHandlerTests
 
         public ErrorOr<byte[]> Result { get; set; } = new byte[] { 1, 2, 3 };
 
+        public ErrorOr<IReadOnlyList<byte[]>> ImagesResult { get; set; } =
+            new byte[][] { new byte[] { 1, 2, 3 } };
+
         public ErrorOr<byte[]> RenderPdf(string rdlXml, ReportDataContext data)
         {
             LastRdl = rdlXml;
             LastData = data;
             return Result;
+        }
+
+        public ErrorOr<IReadOnlyList<byte[]>> RenderPreviewImages(string rdlXml, ReportDataContext data)
+        {
+            LastRdl = rdlXml;
+            LastData = data;
+            return ImagesResult;
         }
     }
 

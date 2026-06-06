@@ -787,6 +787,21 @@ describe('ReportBuilderScreen — save (Phase 12)', () => {
   })
 })
 
+describe('ReportBuilderScreen — live preview (Phase 13)', () => {
+  it('opens the live preview for this template in a new tab', async () => {
+    const user = userEvent.setup()
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: 'Live preview' }))
+
+    expect(openSpy).toHaveBeenCalledOnce()
+    expect(openSpy.mock.calls[0][0]).toContain('#/report-preview/')
+    expect(openSpy.mock.calls[0][1]).toBe('_blank')
+    openSpy.mockRestore()
+  })
+})
+
 describe('ReportBuilderScreen — preview (Phase 12)', () => {
   it('opens a preview that resolves bindings and the page number', async () => {
     const user = userEvent.setup()

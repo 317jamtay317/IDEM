@@ -32,10 +32,30 @@ internal static class ReportPdfPainter
         QuestPDF.Settings.CheckIfAllTextGlyphsAreAvailable = false;
     }
 
+    // Raster resolution for preview page images. 144 DPI (2× the 72pt page unit) keeps text crisp in
+    // the browser without bloating the frames pushed over SignalR on every edit.
+    private const int PreviewRasterDpi = 144;
+
     /// <summary>Renders the laid-out pages into a PDF document.</summary>
     /// <param name="pages">The pages to draw.</param>
     /// <returns>The PDF document bytes.</returns>
-    public static byte[] Paint(IReadOnlyList<RenderPage> pages)
+    public static byte[] Paint(IReadOnlyList<RenderPage> pages) => Compose(pages).GeneratePdf();
+
+    /// <summary>Renders the laid-out pages into one PNG image per page, in page order.</summary>
+    /// <param name="pages">The pages to draw.</param>
+    /// <returns>The page images (PNG bytes), one per page.</returns>
+    public static IReadOnlyList<byte[]> PaintImages(IReadOnlyList<RenderPage> pages) =>
+        Compose(pages)
+            .GenerateImages(new ImageGenerationSettings
+            {
+                ImageFormat = ImageFormat.Png,
+                RasterDpi = PreviewRasterDpi,
+            })
+            .ToList();
+
+    // Builds the QuestPDF document for the laid-out pages. Each primitive is placed at its absolute
+    // page position (in points) via an overlay layer. Shared by the PDF and image renderers.
+    private static Document Compose(IReadOnlyList<RenderPage> pages)
     {
         return Document.Create(document =>
         {
@@ -60,7 +80,7 @@ internal static class ReportPdfPainter
                     });
                 });
             }
-        }).GeneratePdf();
+        });
     }
 
     private static void PaintPrimitive(IContainer container, RenderPrimitive item)

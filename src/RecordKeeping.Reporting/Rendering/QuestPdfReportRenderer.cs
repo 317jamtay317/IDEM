@@ -23,4 +23,17 @@ public sealed class QuestPdfReportRenderer : IReportRenderer
         var pages = ReportLayoutEngine.Layout(parsed.Value, data);
         return ReportPdfPainter.Paint(pages);
     }
+
+    /// <inheritdoc />
+    public ErrorOr<IReadOnlyList<byte[]>> RenderPreviewImages(string rdlXml, ReportDataContext data)
+    {
+        var parsed = RdlReader.Parse(rdlXml);
+        if (parsed.IsError)
+        {
+            return parsed.Errors;
+        }
+
+        var pages = ReportLayoutEngine.Layout(parsed.Value, data);
+        return ReportPdfPainter.PaintImages(pages).ToErrorOr();
+    }
 }

@@ -8,6 +8,7 @@ import { DashboardScreen } from './screens/DashboardScreen'
 import { RecordsScreen } from './screens/RecordsScreen'
 import { ReportsScreen } from './screens/ReportsScreen'
 import { ReportBuilderScreen } from './screens/ReportBuilderScreen'
+import { ReportPreviewScreen } from './screens/ReportPreviewScreen'
 import { OrgsScreen } from './screens/OrgsScreen'
 import { FacilitiesScreen } from './screens/FacilitiesScreen'
 import { FacilityDetailScreen } from './screens/FacilityDetailScreen'
@@ -35,7 +36,7 @@ export interface AppShellProps {
  */
 function tabForScreen(screen: Screen): NavTab {
   if (screen === 'log') return 'records'
-  if (screen === 'report-builder') return 'reports'
+  if (screen === 'report-builder' || screen === 'report-preview') return 'reports'
   return screen
 }
 
@@ -55,10 +56,11 @@ export function AppShell({ email, isSiteAdmin, accessToken = null, onSignOut }: 
   const homeTab = permitted[0].tab
 
   // A screen is reachable when its governing tab is in the user's navigation and,
-  // for the SiteAdmin-only Report Builder (I-D13), when the user is a SiteAdmin.
+  // for the SiteAdmin-only Report Builder and live preview (I-D13), when the user
+  // is a SiteAdmin.
   const allowed =
     permitted.some((entry) => entry.tab === tabForScreen(screen)) &&
-    (screen !== 'report-builder' || isSiteAdmin)
+    ((screen !== 'report-builder' && screen !== 'report-preview') || isSiteAdmin)
 
   // I-D13: redirect a hash that points outside the user's navigation to their
   // landing screen, so a forbidden screen can't be reached by editing the URL.
@@ -93,7 +95,19 @@ export function AppShell({ email, isSiteAdmin, accessToken = null, onSignOut }: 
               />
             )}
             {effectiveScreen === 'report-builder' && (
-              <ReportBuilderScreen templateId={detailId} onClose={() => navigate('reports')} />
+              <ReportBuilderScreen
+                templateId={detailId}
+                accessToken={accessToken}
+                onClose={() => navigate('reports')}
+              />
+            )}
+            {effectiveScreen === 'report-preview' && (
+              <ReportPreviewScreen
+                key={detailId ?? 'none'}
+                sessionId={detailId}
+                accessToken={accessToken}
+                onClose={() => navigate('reports')}
+              />
             )}
             {effectiveScreen === 'orgs' && <OrgsScreen accessToken={accessToken} />}
             {effectiveScreen === 'productionFields' && (

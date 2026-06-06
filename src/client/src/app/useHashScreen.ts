@@ -3,10 +3,11 @@ import { type NavTab } from './components/nav'
 
 /**
  * Every screen the {@link AppShell} can render: the {@link NavTab} destinations
- * plus `log` (reached from the dashboard) and `report-builder` (the SiteAdmin
- * Report Builder, reached by opening a Report Template from the Reports screen).
+ * plus `log` (reached from the dashboard), `report-builder` (the SiteAdmin Report
+ * Builder, reached by opening a Report Template from the Reports screen), and
+ * `report-preview` (the SiteAdmin live preview, opened from the builder).
  */
-export type Screen = NavTab | 'log' | 'report-builder'
+export type Screen = NavTab | 'log' | 'report-builder' | 'report-preview'
 
 /**
  * The screens that may appear in the URL hash. Renaming or removing a
@@ -23,10 +24,14 @@ const SCREENS: readonly Screen[] = [
   'log',
   'facilities',
   'report-builder',
+  'report-preview',
 ]
 
 /** The screen segment that opens the Report Builder, e.g. `#/report-builder/{id}`. */
 const REPORT_BUILDER: Screen = 'report-builder'
+
+/** The screen segment that opens the live preview, e.g. `#/report-preview/{id}`. */
+const REPORT_PREVIEW: Screen = 'report-preview'
 
 /**
  * Parses the active {@link Screen} out of a location hash. The bare (`#`), root
@@ -43,17 +48,17 @@ export function screenFromHash(hash: string): Screen {
 }
 
 /**
- * Extracts the Report Template id carried by a Report Builder hash. The builder
- * route is `#/report-builder/{templateId}`; the id is the second path segment
- * and is percent-decoded. Any other hash — including a bare `#/report-builder`
- * with no id — has no template id.
+ * Extracts the Report Template id carried by a Report Builder or live-preview hash. Both routes are
+ * `#/{screen}/{templateId}` (the preview's session id *is* the template's id); the id is the second
+ * path segment and is percent-decoded. Any other hash — including a bare `#/report-builder` with no
+ * id — has no template id.
  *
  * @param hash The `window.location.hash` value, e.g. `#/report-builder/annual-emissions`.
- * @returns The decoded template id, or `null` when the hash names no builder template.
+ * @returns The decoded template id, or `null` when the hash names no builder/preview template.
  */
 export function templateIdFromHash(hash: string): string | null {
   const segments = hash.replace(/^#\/?/, '').split('/')
-  if (segments[0] !== REPORT_BUILDER) return null
+  if (segments[0] !== REPORT_BUILDER && segments[0] !== REPORT_PREVIEW) return null
   const id = segments[1]
   return id ? decodeURIComponent(id) : null
 }
@@ -95,8 +100,8 @@ function detailIdFromHash(hash: string): string | null {
  */
 export function hashFromScreen(screen: Screen, templateId?: string): string {
   if (screen === 'home') return '#/'
-  if (screen === REPORT_BUILDER && templateId) {
-    return `#/${REPORT_BUILDER}/${encodeURIComponent(templateId)}`
+  if ((screen === REPORT_BUILDER || screen === REPORT_PREVIEW) && templateId) {
+    return `#/${screen}/${encodeURIComponent(templateId)}`
   }
   return `#/${screen}`
 }

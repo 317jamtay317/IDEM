@@ -1,5 +1,7 @@
 using System.Text;
 using RecordKeeping.Application.Reporting;
+using RecordKeeping.Reporting.Layout;
+using RecordKeeping.Reporting.Rdl;
 using RecordKeeping.Reporting.Rendering;
 using Shouldly;
 
@@ -86,5 +88,34 @@ public class QuestPdfReportRendererTests
             """;
 
         _renderer.RenderPdf(rdl, Data()).IsError.ShouldBeTrue();
+    }
+
+    // The eight-byte PNG file signature; every page image the live preview pushes must start with it.
+    private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
+    [Fact]
+    public void RenderPreviewImages_MultiPageTemplate_ProducesOnePngPerPage()
+    {
+        var data = Data();
+        var expectedPageCount = ReportLayoutEngine.Layout(RdlReader.Parse(FullRdl).Value, data).Count;
+
+        var result = _renderer.RenderPreviewImages(FullRdl, data);
+
+        result.IsError.ShouldBeFalse(result.IsError ? result.FirstError.Description : null);
+        result.Value.Count.ShouldBe(expectedPageCount);
+        foreach (var png in result.Value)
+        {
+            png.Length.ShouldBeGreaterThan(100);
+            png.Take(PngSignature.Length).ShouldBe(PngSignature);
+        }
+    }
+
+    [Fact]
+    public void RenderPreviewImages_MalformedRdl_ReturnsValidationErrorAndDoesNotThrow()
+    {
+        var result = _renderer.RenderPreviewImages("<Report><not-closed>", Data());
+
+        result.IsError.ShouldBeTrue();
+        result.FirstError.Type.ShouldBe(ErrorOr.ErrorType.Validation);
     }
 }
