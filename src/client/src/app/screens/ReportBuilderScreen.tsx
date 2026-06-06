@@ -18,11 +18,8 @@ import {
 } from '../reportBuilder/history'
 import { pageCount } from '../reportBuilder/pageSetup'
 import { fromDisplayPx, toDisplayPx } from '../reportBuilder/elementDisplay'
-import { downloadText } from '../reportBuilder/download'
-import { toRdl } from '../reportBuilder/rdl'
-import { usePreviewBroadcast } from '../reportBuilder/usePreviewBroadcast'
-import { type PreviewHub, type PreviewHubOptions } from '../reportBuilder/previewHub'
-import { hashFromScreen } from '../useHashScreen'
+import { downloadText, openPdfInNewTab } from '../reportBuilder/download'
+import { parseRdl, toRdl } from '../reportBuilder/rdl'
 import {
   alignRects,
   distributeRects,
@@ -51,6 +48,10 @@ import {
   type ReportTemplate,
 } from '../reportBuilder/model'
 import { createSampleTemplate } from '../reportBuilder/sampleTemplate'
+import { type ReportTemplatesApi } from '../reportTemplatesApi'
+import { usePreviewBroadcast } from '../reportBuilder/usePreviewBroadcast'
+import { type PreviewHub, type PreviewHubOptions } from '../reportBuilder/previewHub'
+import { hashFromScreen } from '../useHashScreen'
 
 /** The grid spacings (in display pixels) the toolbar offers; the model stores inches. */
 const GRID_SIZE_OPTIONS_PX = [6, 12, 24]
@@ -75,21 +76,34 @@ const DISTRIBUTE_ACTIONS: { axis: DistributeAxis; label: string; icon: string }[
 export interface ReportBuilderScreenProps {
   /**
    * Id of the Report Template being edited, taken from the route
-   * (`#/report-builder/{templateId}`); `null` when the builder is opened without
-   * one. Until a later phase can load a Template from the backend, the id stands
-   * in for the document name shown in the title.
+   * (`#/report-builder/{templateId}`); `'new'` (or `null`) opens a fresh template.
+   * In online mode (see {@link ReportBuilderScreenProps.api}) a real id is loaded
+   * from the backend; offline it stands in for the document name in the title.
    */
   templateId: string | null
+  /** Returns to the Reports screen, the builder's parent. */
+  onClose: () => void
   /**
-   * Bearer token for the live-preview hub. When present, edits are broadcast over SignalR so a
-   * watcher (the Report Preview screen) sees the report build in real time, and the editor takes part in
-   * live collaboration (presence + advisory locks); absent (e.g. in tests) both are inactive.
+   * Report Template persistence. When supplied (online mode) the builder loads an
+   * existing template from the backend, Save persists it (create/update), and a
+   * "Download PDF" action renders it through the server-side Report Engine. When
+   * omitted (offline — the design/test default) the builder works against a sample
+   * template and Save downloads the RDL.
+   */
+  api?: ReportTemplatesApi
+  /**
+   * Bearer access token. Authorizes Report Template requests (online mode) and the live-preview SignalR
+   * hub; when present, the editor broadcasts edits over SignalR (so a watcher sees the report build) and
+   * takes part in live collaboration (presence + advisory locks). Absent (e.g. in tests) both are inactive.
    */
   accessToken?: string | null
   /** Builds the live-preview/collaboration hub; injectable for tests. Defaults to the live SignalR hub. */
   createHub?: (options: PreviewHubOptions) => PreviewHub
-  /** Returns to the Reports screen, the builder's parent. */
-  onClose: () => void
+  /**
+   * Called after a brand-new template is saved, with its persisted id, so the parent
+   * can move the route from `'new'` to the real id (turning later saves into updates).
+   */
+  onSaved?: (templateId: string) => void
 }
 
 /**
@@ -111,13 +125,24 @@ export interface ReportBuilderScreenProps {
  * through a `+ Insert` bottom sheet ({@link InsertSheet}) — and become a
  * three-column workspace on desktop.
  */
-export function ReportBuilderScreen({ templateId, accessToken, createHub, onClose }: ReportBuilderScreenProps) {
+export function ReportBuilderScreen({
+  templateId,
+  onClose,
+  api,
+  accessToken = null,
+  createHub,
+  onSaved,
+}: ReportBuilderScreenProps) {
+  // Online mode talks to the backend; offline (no api) works against a sample.
+  const online = api != null
+  const isNew = templateId == null || templateId === 'new'
+  const templateArg = isNew ? undefined : templateId ?? undefined
   const documentTitle = templateId ?? 'Untitled report template'
-  const templateArg = templateId && templateId !== 'new' ? templateId : undefined
 
   // The working document is held in an undo/redo history so edits can be reversed
-  // (Phase 12). It's a stand-in sample until templates can be loaded from the
-  // backend (Phase 13).
+  // (Phase 12). A fresh template (and the offline default) seed synchronously from a
+  // sample; an existing online template is fetched by the effect below, so it starts
+  // from a placeholder until it loads.
   const [history, setHistory] = useState<History<ReportTemplate>>(() =>
     initHistory(createSampleTemplate(templateArg)),
   )
@@ -127,6 +152,12 @@ export function ReportBuilderScreen({ templateId, accessToken, createHub, onClos
   const [insertSheetOpen, setInsertSheetOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+
+  // Online persistence status: loading an existing template, saving, and any error.
+  const [loading, setLoading] = useState(online && !isNew)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [statusError, setStatusError] = useState<string | null>(null)
 
   // Commit an edit to the working document, recording it in history. A `tag`
   // coalesces the many model updates of one live gesture (drag/resize/inline edit)
@@ -138,13 +169,46 @@ export function ReportBuilderScreen({ templateId, accessToken, createHub, onClos
 
   // Re-seed (and reset the selection and current page) if the route's template id
   // changes while the builder stays mounted — the "adjust state during render" form.
+  // Offline (or a new template) re-seeds from the sample here; an existing online
+  // template is re-seeded from the backend by the load effect below.
   const [loadedFor, setLoadedFor] = useState(templateId)
   if (templateId !== loadedFor) {
     setLoadedFor(templateId)
-    setHistory(initHistory(createSampleTemplate(templateArg)))
+    if (!online || isNew) {
+      setHistory(initHistory(createSampleTemplate(templateArg)))
+    } else {
+      setLoading(true)
+    }
+    setLoadError(null)
     setSelectedIds([])
     setCurrentPage(1)
   }
+
+  // Load an existing template from the backend (online mode). New templates and the
+  // offline default skip the fetch and keep their sample seed. The "loading" flag is
+  // primed synchronously — by the initial state on mount and by the re-seed block
+  // above on an id change — so this effect only writes state from its async result.
+  useEffect(() => {
+    if (!online || isNew) return
+    let cancelled = false
+    api
+      .get(accessToken, templateId as string)
+      .then((saved) => {
+        if (cancelled) return
+        setHistory(initHistory(parseRdl(saved.rdl)))
+        setSelectedIds([])
+        setCurrentPage(1)
+        setLoading(false)
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setLoadError(String(e))
+        setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [online, isNew, templateId, accessToken, api])
 
   // Page breaks drive the page count; if a break is removed while a later page is
   // in view, clamp the current page back into range (also "adjust during render").
@@ -156,9 +220,9 @@ export function ReportBuilderScreen({ templateId, accessToken, createHub, onClos
   const soleId = selectedIds.length === 1 ? selectedIds[0] : null
   const selected = useMemo(() => findElement(template, soleId), [template, soleId])
 
-  // Serialize the working document to RDL and broadcast it to the live preview as the SiteAdmin
-  // builds (debounced); also take part in live collaboration (presence + advisory locks). Inactive
-  // without an access token (e.g. in tests). See usePreviewBroadcast.
+  // Serialize the working document to RDL and broadcast it to the live preview as the SiteAdmin builds
+  // (debounced); also take part in live collaboration (presence + advisory locks). Inactive without an
+  // access token (e.g. in tests). See usePreviewBroadcast.
   const rdl = useMemo(() => toRdl(template), [template])
   const { participants, locks, connectionId, claim, release } = usePreviewBroadcast({
     sessionId: template.id,
@@ -318,10 +382,46 @@ export function ReportBuilderScreen({ templateId, accessToken, createHub, onClos
   const handlePrevPage = () => setCurrentPage((p) => Math.max(1, p - 1))
   const handleNextPage = () => setCurrentPage((p) => Math.min(pages, p + 1))
 
-  // Save the template by serializing it to RDL and downloading it. Until backend
-  // persistence exists (Phase 13), Save produces the RDL document end-to-end.
-  const handleSave = () => {
-    downloadText(`${template.name}.rdl`, rdl, 'application/xml')
+  // Rename the working template (online mode shows an editable name). Typing
+  // coalesces into a single undo step.
+  const handleRename = (name: string) => commit((current) => ({ ...current, name }), 'rename')
+
+  // Save the template. Offline, download it as RDL (the design/test default). Online,
+  // persist it: create a brand-new template (reporting its id to the parent so the
+  // route can switch from 'new' to the real id) or update the existing one.
+  const handleSave = async () => {
+    if (!online) {
+      downloadText(`${template.name}.rdl`, toRdl(template), 'application/xml')
+      return
+    }
+    setSaving(true)
+    setStatusError(null)
+    try {
+      const rdl = toRdl(template)
+      if (isNew) {
+        const created = await api.create(accessToken, { name: template.name, rdl })
+        onSaved?.(created.id)
+      } else {
+        await api.update(accessToken, templateId as string, { name: template.name, rdl })
+      }
+    } catch (e) {
+      setStatusError(String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Render the working template to a PDF through the server-side Report Engine and
+  // open it (online only) — the most direct way to exercise the RDL→PDF pipeline.
+  const handleDownloadPdf = async () => {
+    if (!online) return
+    setStatusError(null)
+    try {
+      const blob = await api.renderPdf(accessToken, toRdl(template))
+      openPdfInNewTab(blob)
+    } catch (e) {
+      setStatusError(String(e))
+    }
   }
 
   // Open the live preview for this template in a new tab, so the SiteAdmin can watch it build while
@@ -351,6 +451,28 @@ export function ReportBuilderScreen({ templateId, accessToken, createHub, onClos
     handleDelete()
   }
 
+  // While an existing template is being fetched (or if it failed to load), show a
+  // minimal shell so the sample placeholder never flashes as the real document.
+  if (online && !isNew && (loading || loadError !== null)) {
+    return (
+      <div className="rb">
+        <header className="rb-topbar">
+          <div className="rb-breadcrumb">
+            <button type="button" className="rb-crumb" aria-label="Back to Reports" onClick={onClose}>
+              ‹ Reports
+            </button>
+            <span className="rb-doc-title">{loadError ? 'Failed to load template' : 'Loading…'}</span>
+          </div>
+        </header>
+        {loadError ? (
+          <div className="auth-alert rb-load-error">Error: {loadError}</div>
+        ) : (
+          <p className="muted rb-loading">Loading report template…</p>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="rb" onKeyDown={handleKeyDown}>
       <header className="rb-topbar">
@@ -358,7 +480,17 @@ export function ReportBuilderScreen({ templateId, accessToken, createHub, onClos
           <button type="button" className="rb-crumb" aria-label="Back to Reports" onClick={onClose}>
             ‹ Reports
           </button>
-          <span className="rb-doc-title">{documentTitle}</span>
+          {online ? (
+            <input
+              type="text"
+              className="rb-doc-title-input"
+              aria-label="Report name"
+              value={template.name}
+              onChange={(e) => handleRename(e.target.value)}
+            />
+          ) : (
+            <span className="rb-doc-title">{documentTitle}</span>
+          )}
           <span className="badge">Template</span>
         </div>
 
@@ -386,6 +518,16 @@ export function ReportBuilderScreen({ templateId, accessToken, createHub, onClos
           >
             Preview
           </button>
+          {online && (
+            <button
+              type="button"
+              className="button button-secondary button-sm"
+              aria-label="Download PDF"
+              onClick={handleDownloadPdf}
+            >
+              PDF
+            </button>
+          )}
           <button
             type="button"
             className="button button-secondary button-sm"
@@ -393,11 +535,20 @@ export function ReportBuilderScreen({ templateId, accessToken, createHub, onClos
           >
             Live preview
           </button>
-          <button type="button" className="button button-primary button-sm" onClick={handleSave}>
+          <button
+            type="button"
+            className="button button-primary button-sm"
+            onClick={handleSave}
+            disabled={online && saving}
+          >
             Save
           </button>
         </div>
       </header>
+
+      {online && statusError && (
+        <div className="auth-alert rb-status-error">Error: {statusError}</div>
+      )}
 
       <div className="rb-toolbar" role="toolbar" aria-label="Report builder tools">
         <div className="rb-zoom" role="group" aria-label="Zoom">

@@ -87,6 +87,17 @@ export interface PreviewHub {
 }
 
 /**
+ * Resolves {@link PREVIEW_HUB_URL} to an absolute, same-origin URL. SignalR's relative-URL resolution
+ * needs a real browser document and throws under jsdom; an absolute URL works everywhere and stays
+ * same-origin in production (the leading-slash path resolves against the origin, ignoring the hash route).
+ */
+function resolvePreviewHubUrl(): string {
+  return typeof window !== 'undefined'
+    ? new URL(PREVIEW_HUB_URL, window.location.href).toString()
+    : PREVIEW_HUB_URL
+}
+
+/**
  * Creates a {@link PreviewHub} over the SignalR hub at {@link PREVIEW_HUB_URL}. The editor calls
  * {@link PreviewHub.pushRdl} as the SiteAdmin builds a template; a watcher (the Preview Screen) calls
  * {@link PreviewHub.join} and renders the page frames delivered to {@link PreviewHub.onFrames}.
@@ -95,7 +106,7 @@ export function createPreviewHub(options: PreviewHubOptions = {}): PreviewHub {
   const connection =
     options.connectionFactory?.() ??
     new HubConnectionBuilder()
-      .withUrl(options.url ?? PREVIEW_HUB_URL, {
+      .withUrl(options.url ?? resolvePreviewHubUrl(), {
         accessTokenFactory: () => options.accessTokenFactory?.() ?? '',
       })
       .withAutomaticReconnect()

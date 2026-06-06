@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
-import { act, render, screen, waitFor, within, fireEvent, createEvent } from '@testing-library/react'
+import { act, render, screen, within, fireEvent, createEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ReportBuilderScreen } from './ReportBuilderScreen'
 import type { PreviewHub, PreviewParticipant } from '../reportBuilder/previewHub'
 import * as downloadModule from '../reportBuilder/download'
 import { toRdl } from '../reportBuilder/rdl'
 import { createSampleTemplate } from '../reportBuilder/sampleTemplate'
+import type { ReportTemplatesApi, SavedReportTemplate } from '../reportTemplatesApi'
 
 /** A minimal stand-in for the browser DataTransfer used in drag events. */
 function makeDataTransfer() {
@@ -788,6 +789,191 @@ describe('ReportBuilderScreen — save (Phase 12)', () => {
   })
 })
 
+describe('ReportBuilderScreen — preview (Phase 12)', () => {
+  it('opens a preview that resolves bindings and the page number', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    // The canvas shows binding tokens verbatim before previewing.
+    const canvas = within(screen.getByRole('region', { name: 'Report canvas' }))
+    expect(canvas.getByText('{Record.Field}')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Preview' }))
+
+    const dialog = within(screen.getByRole('dialog', { name: 'Report preview' }))
+    expect(dialog.getByText('Goshen Asphalt Plant')).toBeInTheDocument() // {Facility.Name} resolved
+    expect(dialog.getByText('Page 1 of 1')).toBeInTheDocument() // page-number tokens resolved
+  })
+
+  it('closes the preview', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(screen.getByRole('dialog', { name: 'Report preview' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+
+    expect(screen.queryByRole('dialog', { name: 'Report preview' })).not.toBeInTheDocument()
+  })
+
+  it('previews edits made on the canvas', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    await user.click(screen.getByText('Annual Emissions Inventory'))
+    fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'Quarterly Report' } })
+    await user.click(screen.getByRole('button', { name: 'Preview' }))
+
+    const dialog = within(screen.getByRole('dialog', { name: 'Report preview' }))
+    expect(dialog.getByText('Quarterly Report')).toBeInTheDocument()
+  })
+})
+
+describe('ReportBuilderScreen — backend persistence (online mode)', () => {
+  const loadedRdl = toRdl(createSampleTemplate('loaded-1'))
+
+  const loaded: SavedReportTemplate = {
+    id: 'loaded-1',
+    name: 'Annual Emissions Inventory',
+    rdl: loadedRdl,
+    createdAtUtc: '2026-06-01T10:00:00Z',
+    updatedAtUtc: '2026-06-04T10:00:00Z',
+  }
+
+  /** A fake {@link ReportTemplatesApi} for the builder's online mode. */
+  function fakeApi(overrides: Partial<ReportTemplatesApi> = {}): ReportTemplatesApi {
+    return {
+      list: vi.fn().mockResolvedValue([]),
+      get: vi.fn().mockResolvedValue(loaded),
+      create: vi.fn().mockResolvedValue({ ...loaded, id: 'new-id' }),
+      update: vi.fn().mockResolvedValue(loaded),
+      remove: vi.fn().mockResolvedValue(undefined),
+      renderPdf: vi.fn().mockResolvedValue(new Blob()),
+      ...overrides,
+    }
+  }
+
+  it('loads an existing template from the backend for editing', async () => {
+    const api = fakeApi()
+    render(
+      <ReportBuilderScreen templateId="loaded-1" onClose={vi.fn()} api={api} accessToken="tok" />,
+    )
+
+    // The canvas (and editable name) appear only once the fetch resolves.
+    const nameInput = await screen.findByRole('textbox', { name: 'Report name' })
+    expect(nameInput).toHaveValue('Annual Emissions Inventory')
+    expect(api.get).toHaveBeenCalledWith('tok', 'loaded-1')
+  })
+
+  it('saves a brand-new template through create and reports its new id', async () => {
+    const api = fakeApi()
+    const onSaved = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <ReportBuilderScreen
+        templateId="new"
+        onClose={vi.fn()}
+        api={api}
+        accessToken="tok"
+        onSaved={onSaved}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(api.create).toHaveBeenCalled())
+    expect(api.create).toHaveBeenCalledWith('tok', expect.objectContaining({ rdl: expect.any(String) }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('new-id'))
+    expect(api.update).not.toHaveBeenCalled()
+  })
+
+  it('saves an existing template through update', async () => {
+    const api = fakeApi()
+    const user = userEvent.setup()
+    render(
+      <ReportBuilderScreen templateId="loaded-1" onClose={vi.fn()} api={api} accessToken="tok" />,
+    )
+    await screen.findByRole('textbox', { name: 'Report name' })
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(api.update).toHaveBeenCalled())
+    expect(api.update.mock.calls[0][1]).toBe('loaded-1')
+    expect(api.create).not.toHaveBeenCalled()
+  })
+
+  it('renames the template and saves the new name', async () => {
+    const api = fakeApi()
+    const user = userEvent.setup()
+    render(
+      <ReportBuilderScreen templateId="loaded-1" onClose={vi.fn()} api={api} accessToken="tok" />,
+    )
+    const nameInput = await screen.findByRole('textbox', { name: 'Report name' })
+
+    fireEvent.change(nameInput, { target: { value: 'Quarterly NOx Report' } })
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(api.update).toHaveBeenCalled())
+    expect(api.update.mock.calls[0][2].name).toBe('Quarterly NOx Report')
+  })
+
+  it('renders the working template to PDF via the engine', async () => {
+    const openSpy = vi.spyOn(downloadModule, 'openPdfInNewTab').mockImplementation(() => {})
+    const api = fakeApi()
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="new" onClose={vi.fn()} api={api} accessToken="tok" />)
+
+    await user.click(screen.getByRole('button', { name: 'Download PDF' }))
+
+    await waitFor(() => expect(api.renderPdf).toHaveBeenCalled())
+    expect(openSpy).toHaveBeenCalled()
+    openSpy.mockRestore()
+  })
+
+  it('works offline (no api): Save downloads the RDL and no PDF button shows', async () => {
+    const downloadSpy = vi.spyOn(downloadModule, 'downloadText').mockImplementation(() => {})
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    expect(screen.queryByRole('button', { name: 'Download PDF' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(downloadSpy).toHaveBeenCalled()
+    downloadSpy.mockRestore()
+  })
+})
+
+describe('ReportBuilderScreen — page-number options (Phase 11)', () => {
+  /** Scopes a query to the canvas region (the Properties panel echoes some text). */
+  const canvas = () => within(screen.getByRole('region', { name: 'Report canvas' }))
+
+  it('renders the footer page number on the canvas by default', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    expect(canvas().getByText('Page {n} of {N}')).toBeInTheDocument()
+  })
+
+  it('hides the footer page number when it is toggled off in Page Setup', async () => {
+    const user = userEvent.setup()
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    // Nothing is selected, so the Page Setup panel (with its Page Numbers controls) shows.
+    await user.click(screen.getByRole('button', { name: 'Show page numbers' }))
+
+    expect(canvas().queryByText('Page {n} of {N}')).not.toBeInTheDocument()
+  })
+
+  it('updates the footer page number when the format is edited', () => {
+    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText('Format'), { target: { value: 'Sheet {n}' } })
+
+    expect(canvas().getByText('Sheet {n}')).toBeInTheDocument()
+    expect(canvas().queryByText('Page {n} of {N}')).not.toBeInTheDocument()
+  })
+})
+
 describe('ReportBuilderScreen — live preview (Phase 13)', () => {
   it('opens the live preview for this template in a new tab', async () => {
     const user = userEvent.setup()
@@ -868,76 +1054,5 @@ describe('ReportBuilderScreen — live collaboration (Phase B)', () => {
     ])
 
     expect(screen.getByText('Grace')).toBeInTheDocument()
-  })
-})
-
-describe('ReportBuilderScreen — preview (Phase 12)', () => {
-  it('opens a preview that resolves bindings and the page number', async () => {
-    const user = userEvent.setup()
-    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
-
-    // The canvas shows binding tokens verbatim before previewing.
-    const canvas = within(screen.getByRole('region', { name: 'Report canvas' }))
-    expect(canvas.getByText('{Record.Field}')).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Preview' }))
-
-    const dialog = within(screen.getByRole('dialog', { name: 'Report preview' }))
-    expect(dialog.getByText('Goshen Asphalt Plant')).toBeInTheDocument() // {Facility.Name} resolved
-    expect(dialog.getByText('Page 1 of 1')).toBeInTheDocument() // page-number tokens resolved
-  })
-
-  it('closes the preview', async () => {
-    const user = userEvent.setup()
-    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
-
-    await user.click(screen.getByRole('button', { name: 'Preview' }))
-    expect(screen.getByRole('dialog', { name: 'Report preview' })).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Close' }))
-
-    expect(screen.queryByRole('dialog', { name: 'Report preview' })).not.toBeInTheDocument()
-  })
-
-  it('previews edits made on the canvas', async () => {
-    const user = userEvent.setup()
-    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
-
-    await user.click(screen.getByText('Annual Emissions Inventory'))
-    fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'Quarterly Report' } })
-    await user.click(screen.getByRole('button', { name: 'Preview' }))
-
-    const dialog = within(screen.getByRole('dialog', { name: 'Report preview' }))
-    expect(dialog.getByText('Quarterly Report')).toBeInTheDocument()
-  })
-})
-
-describe('ReportBuilderScreen — page-number options (Phase 11)', () => {
-  /** Scopes a query to the canvas region (the Properties panel echoes some text). */
-  const canvas = () => within(screen.getByRole('region', { name: 'Report canvas' }))
-
-  it('renders the footer page number on the canvas by default', () => {
-    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
-
-    expect(canvas().getByText('Page {n} of {N}')).toBeInTheDocument()
-  })
-
-  it('hides the footer page number when it is toggled off in Page Setup', async () => {
-    const user = userEvent.setup()
-    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
-
-    // Nothing is selected, so the Page Setup panel (with its Page Numbers controls) shows.
-    await user.click(screen.getByRole('button', { name: 'Show page numbers' }))
-
-    expect(canvas().queryByText('Page {n} of {N}')).not.toBeInTheDocument()
-  })
-
-  it('updates the footer page number when the format is edited', () => {
-    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
-
-    fireEvent.change(screen.getByLabelText('Format'), { target: { value: 'Sheet {n}' } })
-
-    expect(canvas().getByText('Sheet {n}')).toBeInTheDocument()
-    expect(canvas().queryByText('Page {n} of {N}')).not.toBeInTheDocument()
   })
 })

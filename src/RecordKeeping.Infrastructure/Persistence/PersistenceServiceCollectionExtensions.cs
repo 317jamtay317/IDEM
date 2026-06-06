@@ -6,6 +6,7 @@ using RecordKeeping.Application.Orgs;
 using RecordKeeping.Application.ProductionFieldLimits;
 using RecordKeeping.Application.ProductionFields;
 using RecordKeeping.Application.Records;
+using RecordKeeping.Application.ReportTemplates;
 
 namespace RecordKeeping.Infrastructure.Persistence;
 
@@ -32,6 +33,7 @@ public static class PersistenceServiceCollectionExtensions
         services.AddScoped<IProductionFieldRepository, ProductionFieldRepository>();
         services.AddScoped<IRecordRepository, RecordRepository>();
         services.AddScoped<IProductionFieldLimitRepository, ProductionFieldLimitRepository>();
+        services.AddScoped<IReportTemplateRepository, ReportTemplateRepository>();
 
         return services;
     }
