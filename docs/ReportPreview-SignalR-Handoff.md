@@ -5,13 +5,19 @@
 > PNG per page via the Report Engine and fans the images out to every watcher of that template's
 > session, so a separate **Preview Screen** updates live as the report is built.
 
-**Status:** ✅ **Phase A BUILT, green, COMMITTED** — `5ed268a` on branch `claude/hungry-sinoussi-200116`
-(worktree `D:\Idem\.claude\worktrees\hungry-sinoussi-200116`). **Not pushed, no PR.** Built TDD
-(tests first). Branch was fast-forwarded to `origin/main` `5d0bf66` (PR #21, the Report Engine) before
-the feature commit, so this sits directly on top of the merged engine.
+**Status:** ✅ **Phase A + Phase B BUILT, green, COMMITTED** on branch `claude/hungry-sinoussi-200116`
+(worktree `D:\Idem\.claude\worktrees\hungry-sinoussi-200116`). **Not pushed, no PR.** Built TDD (tests first).
+Key commits: Phase A `5ed268a` (live preview over SignalR), Phase B `1deb458` (presence + advisory soft-locks),
+a dev-only second SiteAdmin `1f0df17`, and the merge **`82e6ff6` = `origin/main` (PR #22, Report Template
+persistence) merged into this branch** — so the branch now carries Phase A + Phase B **and** PR #22's online
+list/edit/save/PDF/delete. After the merge: **522 backend + 729 client tests green, 85.6% line coverage**.
 
-**Phase B (multi-user collaboration — presence + advisory soft-locks) is now BUILT, green, on this
-branch (not yet committed at the time of writing — see *Phase B, built* below).**
+The merge unioned two parallel features (see the merge commit): PR #22's online builder mode (api/onSaved,
+load via `parseRdl`, Save create/update, Download PDF, editable name) coexists with Phase A/B's live preview +
+presence in `ReportBuilderScreen`/`AppShell`; the single `accessToken` serves both the report-templates API and
+the SignalR hub. One follow-on fix landed in the merge: `createPreviewHub` now resolves the hub URL to an
+absolute same-origin URL (SignalR's relative-URL resolution throws under jsdom, which the online tests hit once
+the hook activates on their `accessToken`).
 
 ---
 
@@ -140,7 +146,12 @@ docker compose ps                   # confirm api/mcp/sql are (healthy)
 | Role | Email | Password |
 |---|---|---|
 | **SiteAdmin** (use this) | `admin@recordkeeping.local` | `ChangeMe!OnFirstLogin1` |
+| **SiteAdmin #2** (Phase B — Dev only) | `admin2@recordkeeping.local` | `ChangeMe!OnFirstLogin1` |
 | Org User (Dev only) | `user@recordkeeping.local` | `ChangeMe!OnFirstLogin1` |
+
+To test **two distinct participants** (Phase B presence/locks with different names + colours), sign in as
+each SiteAdmin in **separate browser sessions** — a normal window and an incognito/private window (two tabs of
+one window share the OIDC cookie = same user).
 
 The preview is **SiteAdmin-only**.
 
@@ -153,7 +164,9 @@ The preview is **SiteAdmin-only**.
    within ~300ms.
 5. **Late-join:** edit a few times, then refresh the preview tab — it shows the current state at once.
 6. **Multiple watchers:** open the same `#/report-preview/{id}` URL in a third tab — all update together.
-   (Multiple *editors* with presence is Phase B.)
+7. **Phase B presence/locks:** open the *same* Report Template in the builder as both SiteAdmins (separate
+   browser sessions). Selecting an element as one shows a coloured outline + name and a "being edited by …"
+   lock badge to the other; each Live preview tab shows both participants' avatars.
 
 **Stop:** `scripts/down.ps1` (add `-v` to drop the SQL volume) or `docker compose down`.
 
