@@ -12,8 +12,11 @@ using OpenIddict.Server.AspNetCore;
 using OpenIddict.Validation.AspNetCore;
 using RecordKeeping.Api;
 using RecordKeeping.Api.Endpoints;
+using RecordKeeping.Api.Realtime;
+using RecordKeeping.Application.Reporting;
 using RecordKeeping.Infrastructure.Identity;
 using RecordKeeping.Infrastructure.Persistence;
+using RecordKeeping.Infrastructure.Reporting;
 using RecordKeeping.Mcp;
 using RecordKeeping.Reporting;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -155,6 +158,16 @@ builder.Services.AddRecordKeepingMcp();
 // Report Engine: renders Report Templates (RDL) to PDF for the SiteAdmin-only builder preview.
 builder.Services.AddRecordKeepingReporting();
 
+// SignalR + the in-memory stores backing the live Report Template preview (ReportPreviewHub). Both are
+// singletons so every hub connection shares the latest rendered frame and the live presence/locks per session.
+builder.Services
+    .AddSignalR()
+    // camelCase hub payloads, matching the SPA's TypeScript models and the rest of the API's JSON.
+    .AddJsonProtocol(options =>
+        options.PayloadSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase);
+builder.Services.AddSingleton<IReportPreviewSessions, InMemoryReportPreviewSessions>();
+builder.Services.AddSingleton<IReportPreviewPresence, InMemoryReportPreviewPresence>();
+
 // Serialize enums by name (e.g. "Decimal") so API payloads expose the Production Field DataType
 // as a stable string rather than an integer.
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -245,6 +258,15 @@ app.UseHttpsRedirection();
 // SPA static assets, then auth, then endpoints.
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+// Browser WebSocket clients can't set the Authorization header on the SignalR handshake, so the
+// client sends the access token in the access_token query string. Copy it into the Authorization
+// header for hub requests before authentication runs (see HubQueryStringAuthentication).
+app.Use(async (context, next) =>
+{
+    HubQueryStringAuthentication.ApplyAccessTokenFromQueryString(context, ReportPreviewHub.Path);
+    await next();
+});
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -355,6 +377,10 @@ app.MapDynamicClientRegistration();
 
 // MCP Streamable HTTP endpoint, protected by the McpUser policy.
 app.MapRecordKeepingMcp();
+
+// Live Report Template preview hub (SiteAdmin only). Editors push RDL; watchers receive rendered
+// page images in near-real time. See docs/Architecture.md §In-house Reporting and ReportPreviewHub.
+app.MapHub<ReportPreviewHub>(ReportPreviewHub.Path).RequireAuthorization(ReportPreviewHub.Policy);
 
 // SPA fallback: any non-API, non-static-file request serves index.html so the
 // React client-side router can handle it.

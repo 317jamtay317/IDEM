@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
-import { ReportCanvas } from '../reportBuilder/ReportCanvas'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { ReportCanvas, type RemoteCursor } from '../reportBuilder/ReportCanvas'
+import { LivePreviewPane } from '../reportBuilder/LivePreviewPane'
 import { ReportPreview } from '../reportBuilder/ReportPreview'
 import { PropertiesPanel } from '../reportBuilder/PropertiesPanel'
 import { PageSetupEditor } from '../reportBuilder/PageSetupEditor'
@@ -49,6 +50,8 @@ import {
 } from '../reportBuilder/model'
 import { createSampleTemplate } from '../reportBuilder/sampleTemplate'
 import { type ReportTemplatesApi } from '../reportTemplatesApi'
+import { usePreviewBroadcast } from '../reportBuilder/usePreviewBroadcast'
+import { type PreviewHub, type PreviewHubOptions } from '../reportBuilder/previewHub'
 
 /** The grid spacings (in display pixels) the toolbar offers; the model stores inches. */
 const GRID_SIZE_OPTIONS_PX = [6, 12, 24]
@@ -88,8 +91,14 @@ export interface ReportBuilderScreenProps {
    * template and Save downloads the RDL.
    */
   api?: ReportTemplatesApi
-  /** Bearer access token used to authorize Report Template requests (online mode). */
+  /**
+   * Bearer access token. Authorizes Report Template requests (online mode) and the live-preview SignalR
+   * hub; when present, the editor broadcasts edits over SignalR (so a watcher sees the report build) and
+   * takes part in live collaboration (presence + advisory locks). Absent (e.g. in tests) both are inactive.
+   */
   accessToken?: string | null
+  /** Builds the live-preview/collaboration hub; injectable for tests. Defaults to the live SignalR hub. */
+  createHub?: (options: PreviewHubOptions) => PreviewHub
   /**
    * Called after a brand-new template is saved, with its persisted id, so the parent
    * can move the route from `'new'` to the real id (turning later saves into updates).
@@ -121,6 +130,7 @@ export function ReportBuilderScreen({
   onClose,
   api,
   accessToken = null,
+  createHub,
   onSaved,
 }: ReportBuilderScreenProps) {
   // Online mode talks to the backend; offline (no api) works against a sample.
@@ -141,6 +151,7 @@ export function ReportBuilderScreen({
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [insertSheetOpen, setInsertSheetOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [livePreviewOpen, setLivePreviewOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
 
   // Online persistence status: loading an existing template, saving, and any error.
@@ -209,6 +220,90 @@ export function ReportBuilderScreen({
   // exactly one is selected (a multi-selection summarises by count instead).
   const soleId = selectedIds.length === 1 ? selectedIds[0] : null
   const selected = useMemo(() => findElement(template, soleId), [template, soleId])
+
+  // Serialize the working document to RDL and broadcast it to the live preview as the SiteAdmin builds
+  // (debounced); also take part in live collaboration (presence + advisory locks). Inactive without an
+  // access token (e.g. in tests). See usePreviewBroadcast.
+  const rdl = useMemo(() => toRdl(template), [template])
+  const {
+    participants,
+    locks,
+    connectionId,
+    cursors,
+    frames,
+    previewStatus,
+    previewError,
+    claim,
+    release,
+    publishCursor,
+  } = usePreviewBroadcast({
+    sessionId: template.id,
+    rdl,
+    accessToken,
+    selectedIds,
+    createHub,
+  })
+
+  // Other participants' live selections and the advisory locks they hold, projected for the canvas to
+  // overlay (the local editor is filtered out by its own connection id). A lock is shown in its holder's
+  // colour, looked up from the roster.
+  const participantByConnection = useMemo(
+    () => new Map(participants.map((participant) => [participant.connectionId, participant])),
+    [participants],
+  )
+  const colorByConnection = useMemo(
+    () => new Map(participants.map((participant) => [participant.connectionId, participant.color])),
+    [participants],
+  )
+  const remoteSelections = useMemo(
+    () =>
+      participants
+        .filter((participant) => participant.connectionId !== connectionId)
+        .flatMap((participant) =>
+          participant.selectedElementIds.map((elementId) => ({
+            elementId,
+            color: participant.color,
+            label: participant.displayName,
+          })),
+        ),
+    [participants, connectionId],
+  )
+  const remoteLocks = useMemo(
+    () =>
+      locks
+        .filter((lock) => lock.connectionId !== connectionId)
+        .map((lock) => ({
+          elementId: lock.elementId,
+          color: colorByConnection.get(lock.connectionId) ?? 'var(--color-text-muted)',
+          label: lock.displayName,
+        })),
+    [locks, connectionId, colorByConnection],
+  )
+  // Other participants' live cursors, joined with the roster for each one's colour and name (a cursor
+  // whose participant is not in the roster — e.g. just left — is dropped). The local cursor is filtered out.
+  const remoteCursors = useMemo<RemoteCursor[]>(
+    () =>
+      cursors
+        .filter((cursor) => cursor.connectionId !== connectionId)
+        .flatMap((cursor) => {
+          const participant = participantByConnection.get(cursor.connectionId)
+          return participant
+            ? [{ connectionId: cursor.connectionId, x: cursor.x, y: cursor.y, color: participant.color, label: participant.displayName }]
+            : []
+        }),
+    [cursors, connectionId, participantByConnection],
+  )
+
+  // Hold an advisory soft-lock on the element being worked on — the sole selection — so other
+  // participants see "being edited by …". Releasing the previous one as the selection moves; a
+  // multi- or empty selection holds nothing. No-op without an active (authenticated) connection.
+  const claimedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (claimedRef.current === soleId) return
+    if (claimedRef.current) release(claimedRef.current)
+    if (soleId) claim(soleId)
+    claimedRef.current = soleId
+  }, [soleId, claim, release])
 
   // Change the selection: a plain click replaces it with one element, a modified
   // (Shift/Ctrl/Cmd) click toggles that element in or out, and an empty-canvas
@@ -458,6 +553,14 @@ export function ReportBuilderScreen({
           )}
           <button
             type="button"
+            className={`button button-secondary button-sm${livePreviewOpen ? ' rb-action-active' : ''}`}
+            aria-pressed={livePreviewOpen}
+            onClick={() => setLivePreviewOpen((open) => !open)}
+          >
+            Live preview
+          </button>
+          <button
+            type="button"
             className="button button-primary button-sm"
             onClick={handleSave}
             disabled={online && saving}
@@ -616,8 +719,30 @@ export function ReportBuilderScreen({
               onResize={handleResize}
               onEditText={handleEditText}
               onResizePage={handleResizePage}
+              remoteSelections={remoteSelections}
+              locks={remoteLocks}
+              remoteCursors={remoteCursors}
+              onCursorMove={publishCursor}
             />
           </section>
+
+          {/* Side-by-side live preview: the engine-rendered report, updating as anyone edits (the editor is
+              in the session group, so its own pushes — and other participants' — return as frames here). */}
+          {livePreviewOpen && (
+            <aside className="rb-panel rb-live-preview" aria-label="Live preview">
+              <LivePreviewPane
+                pages={frames}
+                status={previewStatus}
+                renderError={previewError}
+                participants={participants}
+                selfConnectionId={connectionId}
+                title="Live preview"
+                onClose={() => setLivePreviewOpen(false)}
+                closeAriaLabel="Hide live preview"
+                closeText="✕"
+              />
+            </aside>
+          )}
         </div>
 
         <aside className="rb-panel rb-properties" aria-label="Properties">

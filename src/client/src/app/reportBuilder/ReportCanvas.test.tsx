@@ -953,3 +953,84 @@ describe('ReportCanvas — page resize (drag the page edge)', () => {
     expect(onSelectElement).not.toHaveBeenCalled()
   })
 })
+
+describe('ReportCanvas — collaboration overlays', () => {
+  /** A template with one known label element (id "label-1") in the detail band. */
+  function withElement(): ReportTemplate {
+    const t = createEmptyTemplate('t1', 'T1')
+    t.bands.find((b) => b.kind === 'detail')!.elements.push(createElement('label', 'label-1'))
+    return t
+  }
+
+  it("overlays a remote participant's selection with their name label", () => {
+    render(
+      <ReportCanvas
+        template={withElement()}
+        zoom={100}
+        remoteSelections={[{ elementId: 'label-1', color: '#ff0000', label: 'Grace' }]}
+      />,
+    )
+
+    expect(screen.getByText('Grace')).toBeInTheDocument()
+  })
+
+  it('overlays a "being edited by" lock badge for a locked element', () => {
+    render(
+      <ReportCanvas
+        template={withElement()}
+        zoom={100}
+        locks={[{ elementId: 'label-1', color: '#2563eb', label: 'Ada' }]}
+      />,
+    )
+
+    expect(screen.getByTitle('Being edited by Ada')).toHaveClass('rb-lock-badge')
+  })
+
+  it('renders no overlays when the collaboration props are omitted', () => {
+    const { container } = render(<ReportCanvas template={withElement()} zoom={100} />)
+
+    expect(container.querySelector('.rb-remote-selection')).toBeNull()
+    expect(container.querySelector('.rb-lock-badge')).toBeNull()
+    expect(container.querySelector('.rb-remote-cursor')).toBeNull()
+  })
+
+  it("renders a remote participant's cursor at its page-absolute position, in their colour, with their name", () => {
+    const { container } = render(
+      <ReportCanvas
+        template={withElement()}
+        zoom={100}
+        remoteCursors={[{ connectionId: 'c2', x: 2, y: 1.5, color: '#16a34a', label: 'Grace' }]}
+      />,
+    )
+
+    const cursor = container.querySelector('.rb-remote-cursor') as HTMLElement
+    expect(cursor).toBeInTheDocument()
+    expect(cursor).toHaveStyle({ left: '192px', top: '144px' }) // 2in, 1.5in at 96px/in
+    const label = within(cursor).getByText('Grace')
+    expect(label).toHaveStyle({ backgroundColor: '#16a34a' })
+  })
+
+  it('scales remote cursor positions with the zoom level', () => {
+    const { container } = render(
+      <ReportCanvas
+        template={withElement()}
+        zoom={200}
+        remoteCursors={[{ connectionId: 'c2', x: 2, y: 1.5, color: '#16a34a', label: 'Grace' }]}
+      />,
+    )
+
+    expect(container.querySelector('.rb-remote-cursor')).toHaveStyle({ left: '384px', top: '288px' })
+  })
+
+  it('reports the pointer position (page-absolute inches) as the cursor moves over the canvas', () => {
+    const onCursorMove = vi.fn()
+    const { container } = render(
+      <ReportCanvas template={withElement()} zoom={100} onCursorMove={onCursorMove} />,
+    )
+
+    // jsdom reports a zero page rect, so the client point maps straight to inches at 96px/in.
+    firePointer(container.querySelector('.rb-page')!, 'pointerMove', { clientX: 96, clientY: 48 })
+
+    expect(onCursorMove).toHaveBeenCalledWith({ x: 1, y: 0.5 })
+  })
+})

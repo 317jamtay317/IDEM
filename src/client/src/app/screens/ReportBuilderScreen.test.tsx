@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within, fireEvent, createEvent, waitFor } from '@testing-library/react'
+import { act, render, screen, within, fireEvent, createEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ReportBuilderScreen } from './ReportBuilderScreen'
+import type { PreviewHub, PreviewParticipant } from '../reportBuilder/previewHub'
 import * as downloadModule from '../reportBuilder/download'
 import { toRdl } from '../reportBuilder/rdl'
 import { createSampleTemplate } from '../reportBuilder/sampleTemplate'
@@ -37,6 +38,51 @@ function firePointer(
   Object.defineProperty(event, 'button', { get: () => button })
   Object.defineProperty(event, 'shiftKey', { get: () => shiftKey })
   fireEvent(node, event)
+}
+
+/** A fake collaboration hub that captures the presence/frames/cursor handlers so a test can drive them. */
+function fakeBuilderHub() {
+  let participants: ((sid: string, ps: PreviewParticipant[]) => void) | null = null
+  let frames: ((sid: string, pages: string[]) => void) | null = null
+  let cursor: ((sid: string, conn: string, x: number, y: number) => void) | null = null
+  const hub: PreviewHub = {
+    start: vi.fn(async () => {}),
+    stop: vi.fn(async () => {}),
+    join: vi.fn(async () => {}),
+    pushRdl: vi.fn(async () => {}),
+    updateSelection: vi.fn(async () => {}),
+    updateCursor: vi.fn(async () => {}),
+    claimElement: vi.fn(async () => null),
+    releaseElement: vi.fn(async () => {}),
+    onFrames: (handler) => {
+      frames = handler
+      return () => {
+        frames = null
+      }
+    },
+    onError: vi.fn(() => () => {}),
+    onParticipants: (handler) => {
+      participants = handler
+      return () => {
+        participants = null
+      }
+    },
+    onLocks: vi.fn(() => () => {}),
+    onCursorMoved: (handler) => {
+      cursor = handler
+      return () => {
+        cursor = null
+      }
+    },
+    onReconnected: vi.fn(() => () => {}),
+    connectionId: vi.fn(() => 'conn-self'),
+  }
+  return {
+    hub,
+    emitParticipants: (sid: string, ps: PreviewParticipant[]) => act(() => participants?.(sid, ps)),
+    emitFrames: (sid: string, pages: string[]) => act(() => frames?.(sid, pages)),
+    emitCursor: (sid: string, conn: string, x: number, y: number) => act(() => cursor?.(sid, conn, x, y)),
+  }
 }
 
 describe('ReportBuilderScreen — static shell', () => {
@@ -970,5 +1016,113 @@ describe('ReportBuilderScreen — page-number options (Phase 11)', () => {
 
     expect(canvas().getByText('Sheet {n}')).toBeInTheDocument()
     expect(canvas().queryByText('Page {n} of {N}')).not.toBeInTheDocument()
+  })
+})
+
+describe('ReportBuilderScreen — live preview (Phase 13)', () => {
+  it('toggles a side-by-side live preview pane on the same screen (not a new tab)', async () => {
+    const user = userEvent.setup()
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+    const { hub } = fakeBuilderHub()
+    render(
+      <ReportBuilderScreen
+        templateId="annual-emissions"
+        accessToken="tok"
+        createHub={() => hub}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByRole('complementary', { name: 'Live preview' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Live preview' }))
+    expect(screen.getByRole('complementary', { name: 'Live preview' })).toBeInTheDocument()
+    expect(openSpy).not.toHaveBeenCalled() // a side-by-side pane, not a popup
+
+    await user.click(screen.getByRole('button', { name: 'Hide live preview' }))
+    expect(screen.queryByRole('complementary', { name: 'Live preview' })).not.toBeInTheDocument()
+    openSpy.mockRestore()
+  })
+
+  it('renders engine frames pushed over the hub in the side-by-side pane', async () => {
+    const user = userEvent.setup()
+    const { hub, emitFrames } = fakeBuilderHub()
+    render(
+      <ReportBuilderScreen
+        templateId="annual-emissions"
+        accessToken="tok"
+        createHub={() => hub}
+        onClose={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(hub.join).toHaveBeenCalledWith('annual-emissions'))
+
+    await user.click(screen.getByRole('button', { name: 'Live preview' }))
+    emitFrames('annual-emissions', ['QUJD'])
+
+    const pane = screen.getByRole('complementary', { name: 'Live preview' })
+    expect(within(pane).getByRole('img')).toHaveAttribute('src', 'data:image/png;base64,QUJD')
+  })
+})
+
+describe('ReportBuilderScreen — live collaboration (Phase B)', () => {
+  it('claims the selected element and publishes the selection to collaborators', async () => {
+    const user = userEvent.setup()
+    const { hub } = fakeBuilderHub()
+    render(
+      <ReportBuilderScreen
+        templateId="annual-emissions"
+        accessToken="tok"
+        createHub={() => hub}
+        onClose={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByText('Annual Emissions Inventory')) // the title element, id "title"
+
+    await waitFor(() => expect(hub.claimElement).toHaveBeenCalledWith('title'))
+    await waitFor(() => expect(hub.updateSelection).toHaveBeenCalledWith(['title']))
+  })
+
+  it("overlays a collaborator's live selection on the canvas", async () => {
+    const { hub, emitParticipants } = fakeBuilderHub()
+    render(
+      <ReportBuilderScreen
+        templateId="annual-emissions"
+        accessToken="tok"
+        createHub={() => hub}
+        onClose={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(hub.join).toHaveBeenCalledWith('annual-emissions'))
+
+    emitParticipants('annual-emissions', [
+      { connectionId: 'conn-2', userId: 'u2', displayName: 'Grace', color: '#2563eb', selectedElementIds: ['title'] },
+    ])
+
+    expect(screen.getByText('Grace')).toBeInTheDocument()
+  })
+
+  it("overlays a collaborator's live cursor on the canvas", async () => {
+    const { hub, emitParticipants, emitCursor } = fakeBuilderHub()
+    const { container } = render(
+      <ReportBuilderScreen
+        templateId="annual-emissions"
+        accessToken="tok"
+        createHub={() => hub}
+        onClose={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(hub.join).toHaveBeenCalledWith('annual-emissions'))
+
+    // The collaborator must be in the roster (for colour + name) and have moved their cursor.
+    emitParticipants('annual-emissions', [
+      { connectionId: 'conn-2', userId: 'u2', displayName: 'Grace', color: '#16a34a', selectedElementIds: [] },
+    ])
+    emitCursor('annual-emissions', 'conn-2', 2, 1.5)
+
+    const cursor = container.querySelector('.rb-remote-cursor') as HTMLElement
+    expect(cursor).toBeInTheDocument()
+    expect(within(cursor).getByText('Grace')).toBeInTheDocument()
   })
 })

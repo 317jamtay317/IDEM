@@ -33,6 +33,16 @@ public static class AuthSeeder
     /// <summary>The sample Development Org User's initial password. Local convenience only.</summary>
     public const string DevOrgUserPassword = "ChangeMe!OnFirstLogin1";
 
+    /// <summary>
+    /// Email of a second SiteAdmin seeded in Development only, so two <em>distinct</em> SiteAdmins can be
+    /// signed in at once to exercise multi-user collaboration (live-preview presence + advisory locks).
+    /// Never seeded outside Development.
+    /// </summary>
+    public const string SecondSiteAdminEmail = "admin2@recordkeeping.local";
+
+    /// <summary>The second Development SiteAdmin's initial password. Local convenience only.</summary>
+    public const string SecondSiteAdminPassword = "ChangeMe!OnFirstLogin1";
+
     /// <summary>The SPA OIDC client identifier registered with OpenIddict.</summary>
     public const string SpaClientId = "spa";
 
@@ -99,10 +109,12 @@ public static class AuthSeeder
     }
 
     /// <summary>
-    /// Seeds a sample <see cref="DevOrgName"/> Org and an Org User belonging to it, so a developer
-    /// can sign in as a non-SiteAdmin and exercise Org-scoped behavior locally. Seeds only when the
-    /// host runs in the Development environment; otherwise it is a no-op. Idempotent and safe to call
-    /// on every startup. Must run after the domain schema exists (the Org is persisted).
+    /// Seeds Development-only convenience accounts: a sample <see cref="DevOrgName"/> Org and an Org User
+    /// belonging to it (so a developer can sign in as a non-SiteAdmin and exercise Org-scoped behavior), and
+    /// a second SiteAdmin (so two distinct SiteAdmins can be signed in at once to exercise live-preview
+    /// presence + advisory locks). Seeds only when the host runs in the Development environment; otherwise it
+    /// is a no-op. Idempotent and safe to call on every startup. Must run after the domain schema exists
+    /// (the Org is persisted).
     /// </summary>
     /// <param name="services">A scoped service provider.</param>
     public static async Task SeedDevelopmentDataAsync(IServiceProvider services)
@@ -113,6 +125,7 @@ public static class AuthSeeder
             return;
         }
 
+        await SeedSecondSiteAdminAsync(services);
         var orgId = await SeedDevOrgAsync(services);
         await SeedDevOrgUserAsync(services, orgId);
     }
@@ -287,5 +300,39 @@ public static class AuthSeeder
         // Production-grade seeding would write to a secret store and require rotation.
         Console.WriteLine(
             $"[AuthSeeder] Seeded bootstrap SiteAdmin: {BootstrapSiteAdminEmail} / {BootstrapSiteAdminPassword}");
+    }
+
+    // A second SiteAdmin for local testing only (Development environment): lets two distinct SiteAdmins
+    // sign in at once to exercise live-preview presence + advisory soft-locks. Idempotent.
+    private static async Task SeedSecondSiteAdminAsync(IServiceProvider services)
+    {
+        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+
+        if (await userManager.FindByEmailAsync(SecondSiteAdminEmail) is not null)
+        {
+            return;
+        }
+
+        var user = new ApplicationUser
+        {
+            Id = Guid.NewGuid(),
+            UserName = SecondSiteAdminEmail,
+            Email = SecondSiteAdminEmail,
+            EmailConfirmed = true,
+            DisplayName = "Second Admin",
+            IsSiteAdmin = true,
+            OrgId = null, // I-D13: SiteAdmins have no Org.
+        };
+
+        var result = await userManager.CreateAsync(user, SecondSiteAdminPassword);
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException(
+                "Failed to seed second development SiteAdmin: " +
+                string.Join("; ", result.Errors.Select(e => e.Description)));
+        }
+
+        Console.WriteLine(
+            $"[AuthSeeder] Seeded second development SiteAdmin: {SecondSiteAdminEmail} / {SecondSiteAdminPassword}");
     }
 }

@@ -1963,6 +1963,19 @@
 .rb-canvas-wrap {
   display: flex;
   min-height: 0;
+  gap: 1rem;
+}
+
+/* The side-by-side live preview pane shares the canvas row: it scrolls its own body and reuses the
+   watcher's .rp-* visuals (header, status, presence avatars, rendered pages). */
+.rb-live-preview {
+  flex: 1 1 0;
+  min-width: 0;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
 }
 
 /* The canvas viewport: a scrollable grey surface that centres the white page.
@@ -2666,4 +2679,173 @@
 /* Resolved elements are read-only — no move cursor. */
 .rb-preview .rb-el {
   cursor: default;
+}
+
+/* Live preview screen (Phase 13): watches a Report Template render over SignalR. */
+.rp {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.rp-topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.rp-title {
+  min-width: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+}
+
+.rp-status {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.rp-status-live {
+  color: #15803d;
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.rp-status-error {
+  color: #b91c1c;
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.rp-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 1.5rem;
+  background: var(--color-surface-muted);
+  display: flex;
+  justify-content: center;
+}
+
+.rp-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.rp-page {
+  max-width: 100%;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(15, 23, 41, 0.18);
+  border: 1px solid var(--color-border);
+}
+
+.rp-empty {
+  margin: auto;
+  color: var(--color-text-muted);
+}
+
+.rp-error {
+  color: #b91c1c;
+}
+
+/* Live collaboration (Phase B): presence avatars on the preview screen, and the editor canvas overlays
+   for other participants' selections and advisory soft-locks. Overlay colours come inline from the
+   server-derived participant colour; these rules supply only shape and positioning. */
+.rp-presence {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.rp-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #ffffff;
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+
+.rb-remote-selection {
+  position: absolute;
+  pointer-events: none;
+  border-width: 2px;
+  border-style: solid;
+  border-radius: 2px;
+  z-index: 5;
+}
+
+.rb-remote-label {
+  position: absolute;
+  top: -1.1rem;
+  left: -2px;
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.rb-lock-badge {
+  position: absolute;
+  pointer-events: none;
+  transform: translateY(-1.2rem);
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  z-index: 5;
+}
+
+/* A remote participant's live cursor: a pointer sprite tipped at left/top (their page-absolute
+   position) with a name tag. Above every other overlay and never interactive. */
+.rb-remote-cursor {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  will-change: left, top;
+}
+
+.rb-remote-cursor-arrow {
+  display: block;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.35));
+}
+
+.rb-remote-cursor-label {
+  position: absolute;
+  left: 0.75rem;
+  top: 0.85rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #ffffff;
+  white-space: nowrap;
 }

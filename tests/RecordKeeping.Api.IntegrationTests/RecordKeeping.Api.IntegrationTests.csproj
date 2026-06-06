@@ -10,6 +10,8 @@
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.8" />
+    <!-- Drives the SignalR live-preview hub end-to-end with the real client SDK. -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.8" />
     <!-- Drives the MCP endpoint end-to-end with the real client SDK (proves agent interop). -->
     <PackageReference Include="ModelContextProtocol" Version="1.3.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
