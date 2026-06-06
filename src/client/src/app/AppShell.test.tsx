@@ -34,6 +34,34 @@ vi.mock('./myFacilitiesApi', () => ({
   },
 }))
 
+// The Reports screen (SiteAdmin) lists saved templates and the Report Builder loads
+// one by id; stub the client so both settle without the network. `get` returns a
+// minimal valid RDL the builder's `parseRdl` can reconstruct.
+vi.mock('./reportTemplatesApi', () => ({
+  reportTemplatesApi: {
+    list: vi.fn().mockResolvedValue([]),
+    get: vi.fn().mockResolvedValue({
+      id: 'annual-emissions',
+      name: 'Annual Emissions Inventory',
+      rdl:
+        '<?xml version="1.0" encoding="utf-8"?>' +
+        '<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition"' +
+        ' xmlns:rk="urn:recordkeeping:reportbuilder:v1">' +
+        '<rk:Template id="annual-emissions" name="Annual Emissions Inventory" version="1"' +
+        ' snapToGrid="true" gridSize="0.125"/>' +
+        '<Page><PageHeight>11in</PageHeight><PageWidth>8.5in</PageWidth><TopMargin>1in</TopMargin>' +
+        '<RightMargin>1in</RightMargin><BottomMargin>1in</BottomMargin><LeftMargin>1in</LeftMargin></Page>' +
+        '<Body><ReportItems/></Body></Report>',
+      createdAtUtc: '2026-06-01T10:00:00Z',
+      updatedAtUtc: '2026-06-04T10:00:00Z',
+    }),
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+    renderPdf: vi.fn().mockResolvedValue(new Blob()),
+  },
+}))
+
 /**
  * Stub `window.matchMedia` so `useBreakpoint` resolves to a chosen tier. jsdom
  * does not implement matchMedia; `matches` is returned for every query.
@@ -286,16 +314,19 @@ describe('AppShell — Report Builder (SiteAdmin only, I-D13)', () => {
     await waitFor(() => expect(window.location.hash).toBe('#/report-builder/new'))
   })
 
-  it('restores the builder and its template id from the URL hash (survives a refresh)', async () => {
+  it('restores the builder from the URL hash, loading the named template (survives a refresh)', async () => {
     stubBreakpoint(true)
     window.location.hash = '#/report-builder/annual-emissions'
 
     renderShell({ isSiteAdmin: true })
 
+    // The builder loads the template named in the hash (online mode shows its name).
     expect(
       await screen.findByRole('toolbar', { name: 'Report builder tools' }),
     ).toBeInTheDocument()
-    expect(screen.getByText('annual-emissions')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Report name' })).toHaveValue(
+      'Annual Emissions Inventory',
+    )
   })
 
   it('redirects an Org User away from the builder, showing no builder (I-D13)', async () => {

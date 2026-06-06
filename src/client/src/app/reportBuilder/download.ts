@@ -24,3 +24,17 @@ export function downloadText(filename: string, text: string, mimeType = 'text/pl
   anchor.remove()
   URL.revokeObjectURL(url)
 }
+
+/**
+ * Opens a Blob (e.g. the PDF the Report Engine renders) in a new browser tab by
+ * pointing it at an object URL. The URL is revoked on a delay so the opened tab
+ * has time to load it. Isolated from any screen so the "Download/View PDF"
+ * buttons can be tested by spying on this function.
+ *
+ * @param blob The binary content to open (typically `application/pdf`).
+ */
+export function openPdfInNewTab(blob: Blob): void {
+  const url = URL.createObjectURL(blob)
+  window.open(url, '_blank', 'noopener')
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}

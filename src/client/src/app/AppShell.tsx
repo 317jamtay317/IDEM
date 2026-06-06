@@ -14,6 +14,7 @@ import { FacilityDetailScreen } from './screens/FacilityDetailScreen'
 import { LogRecordScreen } from './screens/LogRecordScreen'
 import { ProductionFieldsScreen } from './screens/ProductionFieldsScreen'
 import { FieldLimitsScreen } from './screens/FieldLimitsScreen'
+import { reportTemplatesApi } from './reportTemplatesApi'
 import './app.css'
 
 /** Props for {@link AppShell}. */
@@ -89,11 +90,18 @@ export function AppShell({ email, isSiteAdmin, accessToken = null, onSignOut }: 
             {effectiveScreen === 'reports' && (
               <ReportsScreen
                 isSiteAdmin={isSiteAdmin}
+                accessToken={accessToken}
                 onOpenReportBuilder={(id) => navigate('report-builder', id)}
               />
             )}
             {effectiveScreen === 'report-builder' && (
-              <ReportBuilderScreen templateId={detailId} onClose={() => navigate('reports')} />
+              <ReportBuilderScreen
+                templateId={detailId}
+                api={reportTemplatesApi}
+                accessToken={accessToken}
+                onSaved={(id) => navigate('report-builder', id)}
+                onClose={() => navigate('reports')}
+              />
             )}
             {effectiveScreen === 'orgs' && <OrgsScreen accessToken={accessToken} />}
             {effectiveScreen === 'productionFields' && (

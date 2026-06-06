@@ -4,6 +4,7 @@ using RecordKeeping.Domain.Orgs;
 using RecordKeeping.Domain.ProductionFieldLimits;
 using RecordKeeping.Domain.ProductionFields;
 using RecordKeeping.Domain.Records;
+using RecordKeeping.Domain.ReportTemplates;
 
 namespace RecordKeeping.Infrastructure.Persistence;
 
@@ -29,6 +30,9 @@ public sealed class RecordKeepingDbContext(DbContextOptions<RecordKeepingDbConte
     /// <summary>The Org-scoped per-Production-Field limits (I-D03, I-D24).</summary>
     public DbSet<ProductionFieldLimit> ProductionFieldLimits => Set<ProductionFieldLimit>();
 
+    /// <summary>The platform-global Report Templates authored in the Report Builder (not Org-scoped).</summary>
+    public DbSet<ReportTemplate> ReportTemplates => Set<ReportTemplate>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -38,5 +42,6 @@ public sealed class RecordKeepingDbContext(DbContextOptions<RecordKeepingDbConte
         modelBuilder.ApplyConfiguration(new ProductionFieldConfiguration());
         modelBuilder.ApplyConfiguration(new RecordConfiguration());
         modelBuilder.ApplyConfiguration(new ProductionFieldLimitConfiguration());
+        modelBuilder.ApplyConfiguration(new ReportTemplateConfiguration());
     }
 }
