@@ -10,6 +10,41 @@ exposed it for preview — the exact path the **SignalR live-preview hub (next s
 
 ---
 
+## Update 2026-06-05 (later) — Template persistence + list/edit UI + Download PDF ✅
+
+Remaining item **#2 (Template persistence)** below is now **BUILT & green** (the engine merged to `main`
+via PR #21 first). Mirrors the **ProductionField** vertical exactly, as the plan called for:
+
+- **Domain** `ReportTemplate : AggregateRoot<Guid>` (`Name` + `Rdl` + `CreatedAtUtc`/`UpdatedAtUtc`;
+  platform-owned, **no `OrgId`**) — `src/RecordKeeping.Domain/ReportTemplates/ReportTemplate.cs`.
+- **Application** `IReportTemplateRepository` + `Create`/`Update`/`GetReportTemplates`/`GetReportTemplateById`
+  handlers + `ReportTemplateResponse`/`ReportTemplateErrors` (all `ErrorOr<T>`).
+- **Infrastructure** `ReportTemplateConfiguration` (RDL = `nvarchar(max)`, no `HasMaxLength`) +
+  `ReportTemplateRepository`; `DbSet` + `ApplyConfiguration` + DI registration added. **No migrations** —
+  `RecordKeepingDbInitializer` creates the table on a fresh DB.
+- **Api** added to the existing SiteAdmin-gated `api/report-templates` group: `GET /`, `GET /{id}`,
+  `POST /`, `PUT /{id}` (preview unchanged).
+- **Client** new `reportTemplatesApi` (list/get/create/update/`renderPdf`). The **Reports screen** now
+  lists saved templates for a SiteAdmin with **Edit** (opens the builder) and **PDF** (renders via the
+  engine) per row. The **Report Builder** gained an injected `api`: it **loads** an existing template
+  (`get` → `parseRdl`), **Save** now **persists** (create/update) instead of downloading, the doc title is
+  an editable **name** field, and a top-bar **Download PDF** button exercises the engine. Offline (no
+  `api`) behavior is unchanged, so all prior builder tests still pass.
+
+New tests: Domain 12 · Application 11 · Api integration 8 · client `reportTemplatesApi` 8 · ReportsScreen
++ ReportBuilder + AppShell updates. **Full suite green** — backend 473, client 681. Merged line coverage
+**96.6%**.
+
+**⚠ Dev-DB caveat (same as MonthlyLimits):** the initializer only creates *all* tables when `Orgs` is
+missing, so an **existing** dev DB won't get `ReportTemplates`. Reset it once to pick up the new table:
+`scripts/down.ps1 -v` then `scripts/up.ps1` (Testcontainers integration tests use a fresh DB, so they're
+unaffected). Then sign in as the seeded SiteAdmin and open **Reports**.
+
+Still remaining: **#1 SignalR live preview**, **#3 Org-scoped report run**, **#4 SiteAdmin cross-Org audit**
+(template CRUD touches no Org data, so no audit needed there), **#5 engine fidelity**.
+
+---
+
 ## TL;DR — what works now
 
 A SiteAdmin can `POST /api/report-templates/preview` with a Report Template's RDL and get back a

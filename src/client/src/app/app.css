@@ -1483,6 +1483,21 @@
   margin-top: -0.25rem;
 }
 
+/* Heading above a group of report cards (e.g. "Saved report templates", "Filings"). */
+.section-heading {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+/* The SiteAdmin's saved-report-templates section on the Reports screen. */
+.report-templates {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
 /* The filed/due line is reserved for tablet and desktop. */
 .report-filed {
   display: none;
@@ -1804,6 +1819,36 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Editable document name shown in the builder topbar in online (persisted) mode. */
+.rb-doc-title-input {
+  min-width: 8rem;
+  max-width: 22rem;
+  padding: 0.25rem 0.4rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 6px);
+}
+
+.rb-doc-title-input:hover {
+  border-color: var(--color-border);
+}
+
+.rb-doc-title-input:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  background: var(--color-surface);
+}
+
+/* Loading / error states while a saved template is fetched into the builder. */
+.rb-loading,
+.rb-load-error,
+.rb-status-error {
+  margin: 1rem;
 }
 
 .rb-actions {
