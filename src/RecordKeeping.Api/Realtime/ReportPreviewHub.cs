@@ -47,6 +47,12 @@ public sealed class ReportPreviewHub(
     public const string LocksChangedMethod = "LocksChanged";
 
     /// <summary>
+    /// The client method invoked with a participant's live cursor position: the session id, the moving
+    /// connection's id, and the page-absolute position in inches.
+    /// </summary>
+    public const string CursorMovedMethod = "CursorMoved";
+
+    /// <summary>
     /// Joins the caller to a template's preview session. Replays the latest render and the current presence
     /// and locks to the caller — so a watcher who opens the preview mid-build catches up at once — then
     /// announces the updated participant roster to everyone in the session.
@@ -102,6 +108,24 @@ public sealed class ReportPreviewHub(
         if (sessionId is not null)
         {
             await Clients.Group(sessionId).SendAsync(ParticipantsChangedMethod, sessionId, roster);
+        }
+    }
+
+    /// <summary>
+    /// Relays the caller's live cursor position to the other participants in its session, so they can see
+    /// the caller's pointer move on the canvas. The session is resolved from the connection (a caller cannot
+    /// move a cursor in a session it never joined), and the moving connection's id is stamped server-side so
+    /// watchers attribute it to the right participant. The position is ephemeral — relayed, never stored —
+    /// and is not echoed back to the caller (their own pointer is the native one).
+    /// </summary>
+    /// <param name="x">The cursor's page-absolute X position, in inches.</param>
+    /// <param name="y">The cursor's page-absolute Y position, in inches.</param>
+    public async Task UpdateCursor(double x, double y)
+    {
+        var sessionId = presence.SessionOf(Context.ConnectionId);
+        if (sessionId is not null)
+        {
+            await Clients.OthersInGroup(sessionId).SendAsync(CursorMovedMethod, sessionId, Context.ConnectionId, x, y);
         }
     }
 

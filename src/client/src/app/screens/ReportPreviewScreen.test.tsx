@@ -15,6 +15,7 @@ function fakeHub() {
     join: vi.fn(async () => {}),
     pushRdl: vi.fn(async () => {}),
     updateSelection: vi.fn(async () => {}),
+    updateCursor: vi.fn(async () => {}),
     claimElement: vi.fn(async () => null),
     releaseElement: vi.fn(async () => {}),
     onFrames: (handler) => {
@@ -36,6 +37,7 @@ function fakeHub() {
       }
     },
     onLocks: vi.fn(() => () => {}),
+    onCursorMoved: vi.fn(() => () => {}),
     onReconnected: vi.fn(() => () => {}),
     connectionId: vi.fn(() => 'conn-self'),
   }

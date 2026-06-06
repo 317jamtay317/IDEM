@@ -152,6 +152,28 @@ public class ReportPreviewHubTests(RecordKeepingApiFactory factory)
     }
 
     [Fact]
+    public async Task UpdateCursor_BroadcastsCursorToOtherWatchers_WithConnectionIdFromServer()
+    {
+        var token = await SiteAdminTokenAsync();
+        var sessionId = $"tpl-{Guid.NewGuid():N}";
+
+        await using var editor = await ConnectAsync(token);
+        await editor.InvokeAsync("JoinSession", sessionId);
+        await using var watcher = await ConnectAsync(token);
+        await watcher.InvokeAsync("JoinSession", sessionId);
+
+        var sawCursor = CursorWhen(watcher, (_, _, _) => true);
+        await editor.InvokeAsync("UpdateCursor", 1.5, 2.25);
+
+        var (connectionId, x, y) = await sawCursor.WaitAsync(TimeSpan.FromSeconds(15));
+        // The moving connection's id is stamped server-side (never from client args) so watchers can
+        // attribute the cursor to a participant in the roster; the position is relayed verbatim (inches).
+        connectionId.ShouldBe(editor.ConnectionId);
+        x.ShouldBe(1.5);
+        y.ShouldBe(2.25);
+    }
+
+    [Fact]
     public async Task ClaimElement_BroadcastsLockWithHolderFromToken_AndReturnsTheHolder()
     {
         var token = await SiteAdminTokenAsync();
@@ -235,6 +257,7 @@ public class ReportPreviewHubTests(RecordKeepingApiFactory factory)
         // These must complete without error even though the caller belongs to no session.
         await Should.NotThrowAsync(connection.InvokeAsync("UpdateSelection", new[] { "el-a" }));
         await Should.NotThrowAsync(connection.InvokeAsync("ReleaseElement", "el-a"));
+        await Should.NotThrowAsync(connection.InvokeAsync("UpdateCursor", 1.0, 1.0));
     }
 
     // Registers a one-shot listener for the next ReceiveFrames broadcast and returns its completion source.
@@ -255,6 +278,21 @@ public class ReportPreviewHubTests(RecordKeepingApiFactory factory)
             (_, participants) =>
             {
                 if (ready(participants)) tcs.TrySetResult(participants);
+            });
+        return tcs.Task;
+    }
+
+    // Completes when a CursorMoved broadcast satisfies the predicate, surfacing the moving connection's id
+    // and the cursor's page-absolute position (inches).
+    private static Task<(string ConnectionId, double X, double Y)> CursorWhen(
+        HubConnection connection, Func<string, double, double, bool> ready)
+    {
+        var tcs = new TaskCompletionSource<(string, double, double)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.On<string, string, double, double>(
+            ReportPreviewHub.CursorMovedMethod,
+            (_, connectionId, x, y) =>
+            {
+                if (ready(connectionId, x, y)) tcs.TrySetResult((connectionId, x, y));
             });
         return tcs.Task;
     }

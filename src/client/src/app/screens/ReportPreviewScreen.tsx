@@ -6,7 +6,7 @@ import {
   type PreviewHubOptions,
   type PreviewParticipant,
 } from '../reportBuilder/previewHub'
-import { initialsFor } from '../reportBuilder/presenceColor'
+import { LivePreviewPane } from '../reportBuilder/LivePreviewPane'
 
 /** Props for {@link ReportPreviewScreen}. */
 export interface ReportPreviewScreenProps {
@@ -104,63 +104,20 @@ export function ReportPreviewScreen({
     }
   }, [sessionId])
 
-  const statusLabel =
-    status === 'live' ? '● Live' : status === 'error' ? 'Disconnected' : 'Connecting…'
-
-  // Show everyone else taking part; the local watcher is filtered out by its own connection id.
-  const others = participants.filter((participant) => participant.connectionId !== connectionId)
-
   return (
     <div className="rp">
-      <header className="rp-topbar">
-        <button type="button" className="rb-crumb" aria-label="Back to Reports" onClick={onClose}>
-          ‹ Reports
-        </button>
-        <span className="rp-title">Live preview{sessionId ? ` — ${sessionId}` : ''}</span>
-        <span className={`rp-status rp-status-${status}`} role="status">
-          {statusLabel}
-        </span>
-        {pages.length > 0 && (
-          <span className="badge" aria-label="Page count">
-            {pages.length} {pages.length === 1 ? 'page' : 'pages'}
-          </span>
-        )}
-        {others.length > 0 && (
-          <div className="rp-presence" aria-label="Participants">
-            {others.map((participant) => (
-              <span
-                key={participant.connectionId}
-                className="rp-avatar"
-                title={participant.displayName}
-                style={{ backgroundColor: participant.color }}
-              >
-                {initialsFor(participant.displayName)}
-              </span>
-            ))}
-          </div>
-        )}
-      </header>
-
-      <div className="rp-body">
-        {!sessionId ? (
-          <p className="rp-empty">No report template selected.</p>
-        ) : error ? (
-          <p className="rp-empty rp-error">Could not render the preview: {error}</p>
-        ) : pages.length === 0 ? (
-          <p className="rp-empty">Waiting for the report to render…</p>
-        ) : (
-          <div className="rp-pages">
-            {pages.map((page, i) => (
-              <img
-                key={i}
-                className="rp-page"
-                alt={`Page ${i + 1}`}
-                src={`data:image/png;base64,${page}`}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      <LivePreviewPane
+        pages={pages}
+        status={status}
+        renderError={error}
+        participants={participants}
+        selfConnectionId={connectionId}
+        title={`Live preview${sessionId ? ` — ${sessionId}` : ''}`}
+        waitingLabel={sessionId ? undefined : 'No report template selected.'}
+        onClose={onClose}
+        closeAriaLabel="Back to Reports"
+        closeText="‹ Reports"
+      />
     </div>
   )
 }

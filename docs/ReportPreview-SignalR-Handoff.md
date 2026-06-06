@@ -19,6 +19,14 @@ the SignalR hub. One follow-on fix landed in the merge: `createPreviewHub` now r
 absolute same-origin URL (SignalR's relative-URL resolution throws under jsdom, which the online tests hit once
 the hook activates on their `accessToken`).
 
+> **Update — Phase C (partial): side-by-side live preview + live cursors BUILT, green, committed** on this same
+> branch (TDD). The "Live preview" top-bar button no longer opens a new tab — it toggles an **inline, side-by-side
+> preview pane** inside the Report Builder, rendering the engine's PNG frames live as anyone edits (the editor is
+> already in the session group, so its own RDL pushes return as frames — no second connection). And participants
+> now see each other's **live cursors** move on the design canvas, in each participant's presence colour. After this
+> work: **523 backend + 753 client tests green, 85.6% backend line coverage**. Browser-verified: the side-by-side
+> pane renders the real report and stays "● Live" while editing. See the **"Phase C (partial)"** section below.
+
 ---
 
 ## Why / context
@@ -220,11 +228,54 @@ addressed — 3 real fixes + 5 added tests). Architecture chosen to clone the `I
   TTLs/heartbeats: the SignalR connection lifecycle is the single source of liveness truth. I-D03 still N/A
   (platform-global templates + sample data); SiteAdmin-gated under I-D13; no audit, no new invariant.
 
+### Phase C (partial) — Side-by-side live preview + live cursors — ✅ BUILT
+Built TDD on this branch. **523 backend + 753 client tests green, 85.6% backend line coverage.** Diff
+adversarially reviewed (11 findings → 1 real fix applied: reconnect resets `previewStatus` to `connecting`;
+1 "confirmed" finding empirically refuted in a real browser — captured-pointer `pointermove` *does* bubble to
+ancestors, so cursor tracking during drag/resize works via the page handler).
+
+- **Side-by-side live preview pane.** The "Live preview" top-bar button is now a **toggle** (no more
+  `window.open`); it shows an inline `<aside aria-label="Live preview">` beside the canvas in `.rb-canvas-wrap`.
+  It reuses the existing `PushRdl`→render→`ReceiveFrames` path: the editor is in its own session group, so its
+  debounced RDL pushes come back as frames on the **same** connection — `usePreviewBroadcast` now also exposes
+  `frames` / `previewStatus` / `previewError` (subscribes to `onFrames`/`onError`). No second connection, no new
+  backend. With two simultaneous editors the rendered preview is last-writer-wins (documented tradeoff; advisory
+  locks already nudge against concurrent edits) — true co-editing of the *editable canvas* was deliberately left
+  out of scope.
+- **`LivePreviewPane`** (`src/client/src/app/reportBuilder/LivePreviewPane.tsx`) — extracted the watcher's
+  presentational surface (header: close control, title, status, page count, presence avatars; body: pages /
+  waiting / error). `ReportPreviewScreen` (the standalone tab route) now renders it too, so both the full-screen
+  watcher and the embedded pane share one component (its DOM contract is unchanged — the screen's tests stayed
+  green through the refactor).
+- **Live cursors.** New hub method `ReportPreviewHub.UpdateCursor(double x, double y)` → resolves the session
+  from the connection (no `sessionId` arg, same anti-spoof invariant as the other mutations) and broadcasts
+  `CursorMoved(sessionId, connectionId, x, y)` to `Clients.OthersInGroup` (no self-echo); the moving
+  connection's id is **server-stamped**. Ephemeral — never stored in presence. Client: `previewHub`
+  gained `updateCursor`/`onCursorMoved`; `usePreviewBroadcast` throttles publishes (~50ms leading+trailing),
+  tracks remote `cursors` (one per connection, pruned when a participant leaves the roster), and `publishCursor`
+  is a no-op without a connection. `ReportCanvas` reports the page-absolute pointer position (inches) from
+  `handlePagePointerMove` (covers hover, marquee, and — via captured-pointer bubbling — element drag/resize) and
+  renders other participants' cursors as a coloured `.rb-remote-cursor` SVG sprite + name tag (z-index above
+  every overlay, `pointer-events: none`). `ReportBuilderScreen` joins the throttled cursor positions with the
+  roster (colour + name) and filters self by connection id. I-D03 still N/A (platform-global templates + sample
+  data); SiteAdmin-gated under I-D13; no new invariant.
+- **To exercise:** open the same template in the builder as both seeded SiteAdmins (separate browser sessions —
+  a normal + an incognito window); each sees the other's cursor move, and the side-by-side pane updates live as
+  either edits. Single-user side-by-side rendering was browser-verified; the two-user cursor round trip is
+  covered by the hub integration test (real SignalR over LongPolling) + vitest.
+
 ### Phase C — still NOT built (future)
 - **Persistence / real-data runs:** the preview uses the engine's fixed `SampleReportData`. An Org-scoped
   *run* against real Records would re-introduce I-D03 (build `ReportDataContext` from `IRecordRepository`,
   audit SiteAdmin cross-Org access per I-D13). Separate slice.
-- **Richer collaboration:** lock stealing/expiry policy, follow-mode, chat — none built (kept minimal).
+- **True co-editing of the canvas:** another editor's added element does not become a draggable object on *your*
+  canvas (only the rendered preview reflects it). Real op/CRDT sync with conflict + undo reconciliation is a
+  separate, larger slice.
+- **Richer collaboration:** live cursors are now built (above); lock stealing/expiry policy, follow-mode, chat —
+  still none (kept minimal).
+- **Cursor perf:** remote cursor updates re-render the builder at up to ~20 Hz per other participant; fine for a
+  handful of SiteAdmins, but a dedicated overlay layer would avoid re-rendering the whole canvas if it ever
+  matters.
 
 ### Other follow-ups
 - **Push / PR:** Phase A is committed (`5ed268a`); Phase B is committed on top. Nothing is pushed yet —

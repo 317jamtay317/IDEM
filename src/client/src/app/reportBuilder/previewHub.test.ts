@@ -126,6 +126,25 @@ describe('createPreviewHub', () => {
     expect(onParticipants).toHaveBeenCalledTimes(1)
   })
 
+  it('publishes a cursor by invoking UpdateCursor with the coordinates (no session id)', async () => {
+    const conn = fakeConnection()
+    await hubWith(conn).updateCursor(1.5, 2.25)
+    expect(conn.invoke).toHaveBeenCalledWith('UpdateCursor', 1.5, 2.25)
+  })
+
+  it('forwards CursorMoved payloads to onCursorMoved subscribers and stops after unsubscribe', () => {
+    const conn = fakeConnection()
+    const onCursor = vi.fn()
+    const unsubscribe = hubWith(conn).onCursorMoved(onCursor)
+
+    conn.emit('CursorMoved', 'tpl-1', 'conn-2', 1.5, 2.25)
+    expect(onCursor).toHaveBeenCalledWith('tpl-1', 'conn-2', 1.5, 2.25)
+
+    unsubscribe()
+    conn.emit('CursorMoved', 'tpl-1', 'conn-2', 3, 4)
+    expect(onCursor).toHaveBeenCalledTimes(1)
+  })
+
   it('forwards LocksChanged payloads to onLocks subscribers', () => {
     const conn = fakeConnection()
     const onLocks = vi.fn()

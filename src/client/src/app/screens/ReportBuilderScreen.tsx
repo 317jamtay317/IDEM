@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { ReportCanvas } from '../reportBuilder/ReportCanvas'
+import { ReportCanvas, type RemoteCursor } from '../reportBuilder/ReportCanvas'
+import { LivePreviewPane } from '../reportBuilder/LivePreviewPane'
 import { ReportPreview } from '../reportBuilder/ReportPreview'
 import { PropertiesPanel } from '../reportBuilder/PropertiesPanel'
 import { PageSetupEditor } from '../reportBuilder/PageSetupEditor'
@@ -51,7 +52,6 @@ import { createSampleTemplate } from '../reportBuilder/sampleTemplate'
 import { type ReportTemplatesApi } from '../reportTemplatesApi'
 import { usePreviewBroadcast } from '../reportBuilder/usePreviewBroadcast'
 import { type PreviewHub, type PreviewHubOptions } from '../reportBuilder/previewHub'
-import { hashFromScreen } from '../useHashScreen'
 
 /** The grid spacings (in display pixels) the toolbar offers; the model stores inches. */
 const GRID_SIZE_OPTIONS_PX = [6, 12, 24]
@@ -151,6 +151,7 @@ export function ReportBuilderScreen({
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [insertSheetOpen, setInsertSheetOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [livePreviewOpen, setLivePreviewOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
 
   // Online persistence status: loading an existing template, saving, and any error.
@@ -224,7 +225,18 @@ export function ReportBuilderScreen({
   // (debounced); also take part in live collaboration (presence + advisory locks). Inactive without an
   // access token (e.g. in tests). See usePreviewBroadcast.
   const rdl = useMemo(() => toRdl(template), [template])
-  const { participants, locks, connectionId, claim, release } = usePreviewBroadcast({
+  const {
+    participants,
+    locks,
+    connectionId,
+    cursors,
+    frames,
+    previewStatus,
+    previewError,
+    claim,
+    release,
+    publishCursor,
+  } = usePreviewBroadcast({
     sessionId: template.id,
     rdl,
     accessToken,
@@ -235,6 +247,10 @@ export function ReportBuilderScreen({
   // Other participants' live selections and the advisory locks they hold, projected for the canvas to
   // overlay (the local editor is filtered out by its own connection id). A lock is shown in its holder's
   // colour, looked up from the roster.
+  const participantByConnection = useMemo(
+    () => new Map(participants.map((participant) => [participant.connectionId, participant])),
+    [participants],
+  )
   const colorByConnection = useMemo(
     () => new Map(participants.map((participant) => [participant.connectionId, participant.color])),
     [participants],
@@ -262,6 +278,20 @@ export function ReportBuilderScreen({
           label: lock.displayName,
         })),
     [locks, connectionId, colorByConnection],
+  )
+  // Other participants' live cursors, joined with the roster for each one's colour and name (a cursor
+  // whose participant is not in the roster — e.g. just left — is dropped). The local cursor is filtered out.
+  const remoteCursors = useMemo<RemoteCursor[]>(
+    () =>
+      cursors
+        .filter((cursor) => cursor.connectionId !== connectionId)
+        .flatMap((cursor) => {
+          const participant = participantByConnection.get(cursor.connectionId)
+          return participant
+            ? [{ connectionId: cursor.connectionId, x: cursor.x, y: cursor.y, color: participant.color, label: participant.displayName }]
+            : []
+        }),
+    [cursors, connectionId, participantByConnection],
   )
 
   // Hold an advisory soft-lock on the element being worked on — the sole selection — so other
@@ -424,13 +454,6 @@ export function ReportBuilderScreen({
     }
   }
 
-  // Open the live preview for this template in a new tab, so the SiteAdmin can watch it build while
-  // editing. The preview joins the same session (the template id) and renders the pushed frames.
-  const handleOpenLivePreview = () => {
-    const href = new URL(hashFromScreen('report-preview', template.id), window.location.href).toString()
-    window.open(href, '_blank', 'noopener')
-  }
-
   // Delete the selected element(s) from the template and clear the selection.
   const handleDelete = () => {
     if (selectedIds.length === 0) return
@@ -530,8 +553,9 @@ export function ReportBuilderScreen({
           )}
           <button
             type="button"
-            className="button button-secondary button-sm"
-            onClick={handleOpenLivePreview}
+            className={`button button-secondary button-sm${livePreviewOpen ? ' rb-action-active' : ''}`}
+            aria-pressed={livePreviewOpen}
+            onClick={() => setLivePreviewOpen((open) => !open)}
           >
             Live preview
           </button>
@@ -697,8 +721,28 @@ export function ReportBuilderScreen({
               onResizePage={handleResizePage}
               remoteSelections={remoteSelections}
               locks={remoteLocks}
+              remoteCursors={remoteCursors}
+              onCursorMove={publishCursor}
             />
           </section>
+
+          {/* Side-by-side live preview: the engine-rendered report, updating as anyone edits (the editor is
+              in the session group, so its own pushes — and other participants' — return as frames here). */}
+          {livePreviewOpen && (
+            <aside className="rb-panel rb-live-preview" aria-label="Live preview">
+              <LivePreviewPane
+                pages={frames}
+                status={previewStatus}
+                renderError={previewError}
+                participants={participants}
+                selfConnectionId={connectionId}
+                title="Live preview"
+                onClose={() => setLivePreviewOpen(false)}
+                closeAriaLabel="Hide live preview"
+                closeText="✕"
+              />
+            </aside>
+          )}
         </div>
 
         <aside className="rb-panel rb-properties" aria-label="Properties">

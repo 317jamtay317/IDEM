@@ -991,5 +991,46 @@ describe('ReportCanvas — collaboration overlays', () => {
 
     expect(container.querySelector('.rb-remote-selection')).toBeNull()
     expect(container.querySelector('.rb-lock-badge')).toBeNull()
+    expect(container.querySelector('.rb-remote-cursor')).toBeNull()
+  })
+
+  it("renders a remote participant's cursor at its page-absolute position, in their colour, with their name", () => {
+    const { container } = render(
+      <ReportCanvas
+        template={withElement()}
+        zoom={100}
+        remoteCursors={[{ connectionId: 'c2', x: 2, y: 1.5, color: '#16a34a', label: 'Grace' }]}
+      />,
+    )
+
+    const cursor = container.querySelector('.rb-remote-cursor') as HTMLElement
+    expect(cursor).toBeInTheDocument()
+    expect(cursor).toHaveStyle({ left: '192px', top: '144px' }) // 2in, 1.5in at 96px/in
+    const label = within(cursor).getByText('Grace')
+    expect(label).toHaveStyle({ backgroundColor: '#16a34a' })
+  })
+
+  it('scales remote cursor positions with the zoom level', () => {
+    const { container } = render(
+      <ReportCanvas
+        template={withElement()}
+        zoom={200}
+        remoteCursors={[{ connectionId: 'c2', x: 2, y: 1.5, color: '#16a34a', label: 'Grace' }]}
+      />,
+    )
+
+    expect(container.querySelector('.rb-remote-cursor')).toHaveStyle({ left: '384px', top: '288px' })
+  })
+
+  it('reports the pointer position (page-absolute inches) as the cursor moves over the canvas', () => {
+    const onCursorMove = vi.fn()
+    const { container } = render(
+      <ReportCanvas template={withElement()} zoom={100} onCursorMove={onCursorMove} />,
+    )
+
+    // jsdom reports a zero page rect, so the client point maps straight to inches at 96px/in.
+    firePointer(container.querySelector('.rb-page')!, 'pointerMove', { clientX: 96, clientY: 48 })
+
+    expect(onCursorMove).toHaveBeenCalledWith({ x: 1, y: 0.5 })
   })
 })

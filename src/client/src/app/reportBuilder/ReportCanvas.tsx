@@ -111,6 +111,17 @@ export interface ReportCanvasProps {
    * element, the holder's colour, and their display name. Omit (or empty) to draw none.
    */
   locks?: PreviewOverlay[]
+  /**
+   * Other participants' live cursors to draw on the page (live collaboration): each at a page-absolute
+   * position in inches, in the participant's colour and labelled with their name. Drawn as a decorative
+   * pointer sprite that never captures events. Omit (or empty) to draw none.
+   */
+  remoteCursors?: RemoteCursor[]
+  /**
+   * Called as the local pointer moves over the page, with its page-absolute position in inches, so the host
+   * can publish it to other participants. Omit to not track the cursor.
+   */
+  onCursorMove?: (position: { x: number; y: number }) => void
 }
 
 /** A single collaboration overlay: which element, in whose colour, labelled with their name. */
@@ -120,6 +131,20 @@ export interface PreviewOverlay {
   /** The participant's display colour. */
   color: string
   /** The participant's display name. */
+  label: string
+}
+
+/** Another participant's live cursor: a page-absolute position (inches), in their colour, with their name. */
+export interface RemoteCursor {
+  /** The owning connection's id — the React key, so each participant has one cursor. */
+  connectionId: string
+  /** The cursor's page-absolute X position, in inches. */
+  x: number
+  /** The cursor's page-absolute Y position, in inches. */
+  y: number
+  /** The participant's display colour. */
+  color: string
+  /** The participant's display name, shown beside the pointer. */
   label: string
 }
 
@@ -150,8 +175,20 @@ export function ReportCanvas({
   onResizePage,
   remoteSelections = [],
   locks = [],
+  remoteCursors = [],
+  onCursorMove,
 }: ReportCanvasProps) {
   const px = (inches: number) => `${inchesToPx(inches, zoom)}px`
+
+  // Publish the local pointer's page-absolute position (inches) as it moves over the page, so other
+  // participants can see it. The page div is the event's currentTarget, so its rect is the page origin —
+  // and pointer events bubble to it even while an element/handle has pointer capture, so a drag is tracked
+  // too. A no-op when the host is not tracking the cursor.
+  const reportCursor = (e: PointerEvent) => {
+    if (!onCursorMove) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    onCursorMove({ x: pxToInches(e.clientX - rect.left, zoom), y: pxToInches(e.clientY - rect.top, zoom) })
+  }
   const { snapToGrid, gridSize } = template.settings
 
   // Collaboration overlays, looked up per element id as bands render.
@@ -273,6 +310,7 @@ export function ReportCanvas({
   }
 
   const handlePagePointerMove = (e: PointerEvent) => {
+    reportCursor(e) // track the pointer regardless of whether a marquee is in progress
     const m = marqueeAnchor.current
     if (!m) return
     const cur = { x: e.clientX - m.pageLeft, y: e.clientY - m.pageTop }
@@ -598,6 +636,29 @@ export function ReportCanvas({
           className={`rb-guide rb-guide-${guide.orientation}`}
           style={guide.orientation === 'vertical' ? { left: px(guide.position) } : { top: px(guide.position) }}
         />
+      ))}
+
+      {/* Other participants' live cursors (decorative; they never capture pointer events). A pointer sprite
+          in the participant's colour, tipped at their page-absolute position, labelled with their name. */}
+      {remoteCursors.map((cursor) => (
+        <div
+          key={cursor.connectionId}
+          className="rb-remote-cursor"
+          aria-hidden="true"
+          style={{ left: px(cursor.x), top: px(cursor.y) }}
+        >
+          <svg className="rb-remote-cursor-arrow" width="14" height="18" viewBox="0 0 14 18" aria-hidden="true">
+            <path
+              d="M1 1 L1 14 L4.6 10.8 L7 16.4 L9 15.5 L6.6 10 L11.5 10 Z"
+              fill={cursor.color}
+              stroke="#fff"
+              strokeWidth="1"
+            />
+          </svg>
+          <span className="rb-remote-cursor-label" style={{ backgroundColor: cursor.color }}>
+            {cursor.label}
+          </span>
+        </div>
       ))}
     </div>
   )

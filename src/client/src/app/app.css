@@ -1963,6 +1963,19 @@
 .rb-canvas-wrap {
   display: flex;
   min-height: 0;
+  gap: 1rem;
+}
+
+/* The side-by-side live preview pane shares the canvas row: it scrolls its own body and reuses the
+   watcher's .rp-* visuals (header, status, presence avatars, rendered pages). */
+.rb-live-preview {
+  flex: 1 1 0;
+  min-width: 0;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
 }
 
 /* The canvas viewport: a scrollable grey surface that centres the white page.
@@ -2808,4 +2821,31 @@
   color: #ffffff;
   white-space: nowrap;
   z-index: 5;
+}
+
+/* A remote participant's live cursor: a pointer sprite tipped at left/top (their page-absolute
+   position) with a name tag. Above every other overlay and never interactive. */
+.rb-remote-cursor {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  will-change: left, top;
+}
+
+.rb-remote-cursor-arrow {
+  display: block;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.35));
+}
+
+.rb-remote-cursor-label {
+  position: absolute;
+  left: 0.75rem;
+  top: 0.85rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #ffffff;
+  white-space: nowrap;
 }

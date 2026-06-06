@@ -7,6 +7,7 @@ const RECEIVE_FRAMES = 'ReceiveFrames'
 const RECEIVE_ERROR = 'ReceiveError'
 const PARTICIPANTS_CHANGED = 'ParticipantsChanged'
 const LOCKS_CHANGED = 'LocksChanged'
+const CURSOR_MOVED = 'CursorMoved'
 
 /** A rendered page image as received over the wire: a base64-encoded PNG. */
 export type PreviewFrame = string
@@ -66,6 +67,11 @@ export interface PreviewHub {
   /** Publishes the caller's current element selection so others see it (editor side). */
   updateSelection: (elementIds: string[]) => Promise<void>
   /**
+   * Publishes the caller's live cursor position (page-absolute inches) so other participants can see their
+   * pointer move on the canvas. High-frequency; callers should throttle.
+   */
+  updateCursor: (x: number, y: number) => Promise<void>
+  /**
    * Claims an advisory soft-lock on an element. Resolves the resulting holder — the caller on a grant, or
    * the existing holder on contention — or `null` when the caller has not joined a session.
    */
@@ -80,6 +86,14 @@ export interface PreviewHub {
   onParticipants: (handler: (sessionId: string, participants: PreviewParticipant[]) => void) => () => void
   /** Subscribes to a session's advisory soft-lock changes; returns an unsubscribe function. */
   onLocks: (handler: (sessionId: string, locks: PreviewLock[]) => void) => () => void
+  /**
+   * Subscribes to other participants' live cursor moves (the server does not echo the caller's own); the
+   * handler receives the session id, the moving connection's id, and its page-absolute position in inches.
+   * Returns an unsubscribe function.
+   */
+  onCursorMoved: (
+    handler: (sessionId: string, connectionId: string, x: number, y: number) => void,
+  ) => () => void
   /** Subscribes to automatic-reconnect completion (carrying the new connection id); returns an unsubscribe. */
   onReconnected: (handler: (connectionId?: string) => void) => () => void
   /** The current SignalR connection id, or `null` before the connection starts — used to filter out self. */
@@ -134,6 +148,9 @@ export function createPreviewHub(options: PreviewHubOptions = {}): PreviewHub {
     updateSelection: async (elementIds) => {
       await connection.invoke('UpdateSelection', elementIds)
     },
+    updateCursor: async (x, y) => {
+      await connection.invoke('UpdateCursor', x, y)
+    },
     claimElement: (elementId) =>
       connection.invoke('ClaimElement', elementId) as Promise<PreviewLock | null>,
     releaseElement: async (elementId) => {
@@ -143,6 +160,7 @@ export function createPreviewHub(options: PreviewHubOptions = {}): PreviewHub {
     onError: (handler) => subscribe(RECEIVE_ERROR, handler as (...args: never[]) => void),
     onParticipants: (handler) => subscribe(PARTICIPANTS_CHANGED, handler as (...args: never[]) => void),
     onLocks: (handler) => subscribe(LOCKS_CHANGED, handler as (...args: never[]) => void),
+    onCursorMoved: (handler) => subscribe(CURSOR_MOVED, handler as (...args: never[]) => void),
     onReconnected: (handler) => {
       // SignalR exposes no off() for onreconnected; the handler lives with the connection.
       connection.onreconnected((id?: string) => handler(id))

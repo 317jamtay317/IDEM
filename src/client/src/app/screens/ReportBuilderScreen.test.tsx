@@ -40,6 +40,51 @@ function firePointer(
   fireEvent(node, event)
 }
 
+/** A fake collaboration hub that captures the presence/frames/cursor handlers so a test can drive them. */
+function fakeBuilderHub() {
+  let participants: ((sid: string, ps: PreviewParticipant[]) => void) | null = null
+  let frames: ((sid: string, pages: string[]) => void) | null = null
+  let cursor: ((sid: string, conn: string, x: number, y: number) => void) | null = null
+  const hub: PreviewHub = {
+    start: vi.fn(async () => {}),
+    stop: vi.fn(async () => {}),
+    join: vi.fn(async () => {}),
+    pushRdl: vi.fn(async () => {}),
+    updateSelection: vi.fn(async () => {}),
+    updateCursor: vi.fn(async () => {}),
+    claimElement: vi.fn(async () => null),
+    releaseElement: vi.fn(async () => {}),
+    onFrames: (handler) => {
+      frames = handler
+      return () => {
+        frames = null
+      }
+    },
+    onError: vi.fn(() => () => {}),
+    onParticipants: (handler) => {
+      participants = handler
+      return () => {
+        participants = null
+      }
+    },
+    onLocks: vi.fn(() => () => {}),
+    onCursorMoved: (handler) => {
+      cursor = handler
+      return () => {
+        cursor = null
+      }
+    },
+    onReconnected: vi.fn(() => () => {}),
+    connectionId: vi.fn(() => 'conn-self'),
+  }
+  return {
+    hub,
+    emitParticipants: (sid: string, ps: PreviewParticipant[]) => act(() => participants?.(sid, ps)),
+    emitFrames: (sid: string, pages: string[]) => act(() => frames?.(sid, pages)),
+    emitCursor: (sid: string, conn: string, x: number, y: number) => act(() => cursor?.(sid, conn, x, y)),
+  }
+}
+
 describe('ReportBuilderScreen — static shell', () => {
   it('renders the four workspace regions', () => {
     render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
@@ -975,50 +1020,52 @@ describe('ReportBuilderScreen — page-number options (Phase 11)', () => {
 })
 
 describe('ReportBuilderScreen — live preview (Phase 13)', () => {
-  it('opens the live preview for this template in a new tab', async () => {
+  it('toggles a side-by-side live preview pane on the same screen (not a new tab)', async () => {
     const user = userEvent.setup()
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
-    render(<ReportBuilderScreen templateId="annual-emissions" onClose={vi.fn()} />)
+    const { hub } = fakeBuilderHub()
+    render(
+      <ReportBuilderScreen
+        templateId="annual-emissions"
+        accessToken="tok"
+        createHub={() => hub}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByRole('complementary', { name: 'Live preview' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Live preview' }))
+    expect(screen.getByRole('complementary', { name: 'Live preview' })).toBeInTheDocument()
+    expect(openSpy).not.toHaveBeenCalled() // a side-by-side pane, not a popup
 
-    expect(openSpy).toHaveBeenCalledOnce()
-    expect(openSpy.mock.calls[0][0]).toContain('#/report-preview/')
-    expect(openSpy.mock.calls[0][1]).toBe('_blank')
+    await user.click(screen.getByRole('button', { name: 'Hide live preview' }))
+    expect(screen.queryByRole('complementary', { name: 'Live preview' })).not.toBeInTheDocument()
     openSpy.mockRestore()
+  })
+
+  it('renders engine frames pushed over the hub in the side-by-side pane', async () => {
+    const user = userEvent.setup()
+    const { hub, emitFrames } = fakeBuilderHub()
+    render(
+      <ReportBuilderScreen
+        templateId="annual-emissions"
+        accessToken="tok"
+        createHub={() => hub}
+        onClose={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(hub.join).toHaveBeenCalledWith('annual-emissions'))
+
+    await user.click(screen.getByRole('button', { name: 'Live preview' }))
+    emitFrames('annual-emissions', ['QUJD'])
+
+    const pane = screen.getByRole('complementary', { name: 'Live preview' })
+    expect(within(pane).getByRole('img')).toHaveAttribute('src', 'data:image/png;base64,QUJD')
   })
 })
 
 describe('ReportBuilderScreen — live collaboration (Phase B)', () => {
-  /** A fake collaboration hub that captures the presence handler so a test can drive it. */
-  function fakeBuilderHub() {
-    let participants: ((sid: string, ps: PreviewParticipant[]) => void) | null = null
-    const hub: PreviewHub = {
-      start: vi.fn(async () => {}),
-      stop: vi.fn(async () => {}),
-      join: vi.fn(async () => {}),
-      pushRdl: vi.fn(async () => {}),
-      updateSelection: vi.fn(async () => {}),
-      claimElement: vi.fn(async () => null),
-      releaseElement: vi.fn(async () => {}),
-      onFrames: vi.fn(() => () => {}),
-      onError: vi.fn(() => () => {}),
-      onParticipants: (handler) => {
-        participants = handler
-        return () => {
-          participants = null
-        }
-      },
-      onLocks: vi.fn(() => () => {}),
-      onReconnected: vi.fn(() => () => {}),
-      connectionId: vi.fn(() => 'conn-self'),
-    }
-    return {
-      hub,
-      emitParticipants: (sid: string, ps: PreviewParticipant[]) => act(() => participants?.(sid, ps)),
-    }
-  }
-
   it('claims the selected element and publishes the selection to collaborators', async () => {
     const user = userEvent.setup()
     const { hub } = fakeBuilderHub()
@@ -1054,5 +1101,28 @@ describe('ReportBuilderScreen — live collaboration (Phase B)', () => {
     ])
 
     expect(screen.getByText('Grace')).toBeInTheDocument()
+  })
+
+  it("overlays a collaborator's live cursor on the canvas", async () => {
+    const { hub, emitParticipants, emitCursor } = fakeBuilderHub()
+    const { container } = render(
+      <ReportBuilderScreen
+        templateId="annual-emissions"
+        accessToken="tok"
+        createHub={() => hub}
+        onClose={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(hub.join).toHaveBeenCalledWith('annual-emissions'))
+
+    // The collaborator must be in the roster (for colour + name) and have moved their cursor.
+    emitParticipants('annual-emissions', [
+      { connectionId: 'conn-2', userId: 'u2', displayName: 'Grace', color: '#16a34a', selectedElementIds: [] },
+    ])
+    emitCursor('annual-emissions', 'conn-2', 2, 1.5)
+
+    const cursor = container.querySelector('.rb-remote-cursor') as HTMLElement
+    expect(cursor).toBeInTheDocument()
+    expect(within(cursor).getByText('Grace')).toBeInTheDocument()
   })
 })
