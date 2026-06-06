@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ReportCanvas } from '../reportBuilder/ReportCanvas'
 import { ReportPreview } from '../reportBuilder/ReportPreview'
 import { PropertiesPanel } from '../reportBuilder/PropertiesPanel'
@@ -21,6 +21,7 @@ import { fromDisplayPx, toDisplayPx } from '../reportBuilder/elementDisplay'
 import { downloadText } from '../reportBuilder/download'
 import { toRdl } from '../reportBuilder/rdl'
 import { usePreviewBroadcast } from '../reportBuilder/usePreviewBroadcast'
+import { type PreviewHub, type PreviewHubOptions } from '../reportBuilder/previewHub'
 import { hashFromScreen } from '../useHashScreen'
 import {
   alignRects,
@@ -81,10 +82,12 @@ export interface ReportBuilderScreenProps {
   templateId: string | null
   /**
    * Bearer token for the live-preview hub. When present, edits are broadcast over SignalR so a
-   * watcher (the Report Preview screen) sees the report build in real time; absent (e.g. in tests)
-   * the broadcast is inactive.
+   * watcher (the Report Preview screen) sees the report build in real time, and the editor takes part in
+   * live collaboration (presence + advisory locks); absent (e.g. in tests) both are inactive.
    */
   accessToken?: string | null
+  /** Builds the live-preview/collaboration hub; injectable for tests. Defaults to the live SignalR hub. */
+  createHub?: (options: PreviewHubOptions) => PreviewHub
   /** Returns to the Reports screen, the builder's parent. */
   onClose: () => void
 }
@@ -108,7 +111,7 @@ export interface ReportBuilderScreenProps {
  * through a `+ Insert` bottom sheet ({@link InsertSheet}) — and become a
  * three-column workspace on desktop.
  */
-export function ReportBuilderScreen({ templateId, accessToken, onClose }: ReportBuilderScreenProps) {
+export function ReportBuilderScreen({ templateId, accessToken, createHub, onClose }: ReportBuilderScreenProps) {
   const documentTitle = templateId ?? 'Untitled report template'
   const templateArg = templateId && templateId !== 'new' ? templateId : undefined
 
@@ -154,9 +157,59 @@ export function ReportBuilderScreen({ templateId, accessToken, onClose }: Report
   const selected = useMemo(() => findElement(template, soleId), [template, soleId])
 
   // Serialize the working document to RDL and broadcast it to the live preview as the SiteAdmin
-  // builds (debounced). Inactive without an access token (e.g. in tests). See usePreviewBroadcast.
+  // builds (debounced); also take part in live collaboration (presence + advisory locks). Inactive
+  // without an access token (e.g. in tests). See usePreviewBroadcast.
   const rdl = useMemo(() => toRdl(template), [template])
-  usePreviewBroadcast({ sessionId: template.id, rdl, accessToken })
+  const { participants, locks, connectionId, claim, release } = usePreviewBroadcast({
+    sessionId: template.id,
+    rdl,
+    accessToken,
+    selectedIds,
+    createHub,
+  })
+
+  // Other participants' live selections and the advisory locks they hold, projected for the canvas to
+  // overlay (the local editor is filtered out by its own connection id). A lock is shown in its holder's
+  // colour, looked up from the roster.
+  const colorByConnection = useMemo(
+    () => new Map(participants.map((participant) => [participant.connectionId, participant.color])),
+    [participants],
+  )
+  const remoteSelections = useMemo(
+    () =>
+      participants
+        .filter((participant) => participant.connectionId !== connectionId)
+        .flatMap((participant) =>
+          participant.selectedElementIds.map((elementId) => ({
+            elementId,
+            color: participant.color,
+            label: participant.displayName,
+          })),
+        ),
+    [participants, connectionId],
+  )
+  const remoteLocks = useMemo(
+    () =>
+      locks
+        .filter((lock) => lock.connectionId !== connectionId)
+        .map((lock) => ({
+          elementId: lock.elementId,
+          color: colorByConnection.get(lock.connectionId) ?? 'var(--color-text-muted)',
+          label: lock.displayName,
+        })),
+    [locks, connectionId, colorByConnection],
+  )
+
+  // Hold an advisory soft-lock on the element being worked on — the sole selection — so other
+  // participants see "being edited by …". Releasing the previous one as the selection moves; a
+  // multi- or empty selection holds nothing. No-op without an active (authenticated) connection.
+  const claimedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (claimedRef.current === soleId) return
+    if (claimedRef.current) release(claimedRef.current)
+    if (soleId) claim(soleId)
+    claimedRef.current = soleId
+  }, [soleId, claim, release])
 
   // Change the selection: a plain click replaces it with one element, a modified
   // (Shift/Ctrl/Cmd) click toggles that element in or out, and an empty-canvas
@@ -491,6 +544,8 @@ export function ReportBuilderScreen({ templateId, accessToken, onClose }: Report
               onResize={handleResize}
               onEditText={handleEditText}
               onResizePage={handleResizePage}
+              remoteSelections={remoteSelections}
+              locks={remoteLocks}
             />
           </section>
         </div>

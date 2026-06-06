@@ -10,7 +10,8 @@
 (tests first). Branch was fast-forwarded to `origin/main` `5d0bf66` (PR #21, the Report Engine) before
 the feature commit, so this sits directly on top of the merged engine.
 
-**Phase B (multi-user collaboration) is designed-for but NOT built** — see *Next steps*.
+**Phase B (multi-user collaboration — presence + advisory soft-locks) is now BUILT, green, on this
+branch (not yet committed at the time of writing — see *Phase B, built* below).**
 
 ---
 
@@ -178,23 +179,43 @@ The preview is **SiteAdmin-only**.
 
 ## Next steps
 
-### Phase B — multi-user collaboration ("who is editing what") — NOT built
-Designed to layer onto the same hub + registry:
-- **Presence:** hub `UpdateSelection(sessionId, elementIds[])`; the registry tracks each participant's
-  identity + selection; broadcast `ParticipantsChanged`. The **editor canvas** (`ReportCanvas.tsx`)
-  draws other users' selections as colored outlines + name labels; the Preview Screen shows
-  watcher/editor avatars.
-- **Soft locks:** `ClaimElement` / `ReleaseElement` (advisory) — others see "being edited by …",
-  not hard-blocked.
-- With relay+snapshot, the most recent `PushRdl` wins; presence + soft-locks keep two editors from
-  silently clobbering the same element. **No CRDT/OT** (explicitly out of scope).
-- The registry already has the snapshot half; add a `PreviewParticipant` map + the hub methods above.
+### Phase B — multi-user collaboration ("who is editing what") — ✅ BUILT
+Layered onto the same hub. Built TDD; 486 backend + 706 client tests green, 85% line coverage. Design
+locked via a 3-architect + judge workflow; implementation then adversarially reviewed (10 findings, all
+addressed — 3 real fixes + 5 added tests). Architecture chosen to clone the `IReportPreviewSessions` seam.
+
+- **New Application port** `IReportPreviewPresence` (+ records `PreviewParticipant`/`PreviewLock`/
+  `PreviewLeaveResult`) with an in-memory singleton `InMemoryReportPreviewPresence` — a
+  `ConcurrentDictionary` of sessions, each guarded by a **per-session monitor lock** so "claim-if-free" and
+  "leave-releases-my-locks" are atomic, plus a `connectionId → sessionId` reverse index so disconnect is
+  O(1). Empty sessions are GC'd under the gate; `Join` has a retry loop for the GC race.
+- **Identity is server-derived** by `PreviewParticipantFactory.From(ClaimsPrincipal, connectionId)`: userId
+  from `Claims.Subject` (NOT `Context.UserIdentifier` — no `IUserIdProvider` is registered), displayName
+  from `Claims.Name`, deterministic palette colour from the userId hash. Never from client args (anti-spoof).
+- **Hub** gained `UpdateSelection(elementIds)`, `ClaimElement(elementId) → PreviewLock?`,
+  `ReleaseElement(elementId)`, an extended `JoinSession` (joins presence + replays roster/locks to the late
+  joiner), and an `OnDisconnectedAsync` override → `Leave`. **Mutation methods take NO sessionId** (resolved
+  from the connection, so you can't act on a session you never joined). Events `ParticipantsChanged` /
+  `LocksChanged` carry the **full list** (idempotent, replay-safe). SignalR JSON set to camelCase to match TS.
+- **Client:** `previewHub.ts` extended (methods/types/events + `connectionId()` + `onReconnected`); the
+  editor's `usePreviewBroadcast` now also joins, publishes selection (debounced), claims on sole-selection,
+  exposes participants/locks, and replays join+selection+held-lock on reconnect (one connection per editor
+  tab). `ReportCanvas` draws other users' selections (coloured outline + name) and "being edited by …" lock
+  badges (additive, decorative, pointer-events: none). `ReportPreviewScreen` shows a presence-avatar strip
+  (`presenceColor.ts` `initialsFor`). Self is filtered by **connectionId** (two tabs share a userId).
+- **Locks are advisory** — never hard-block, never steal; the only auto-release is disconnect→`Leave`. No
+  TTLs/heartbeats: the SignalR connection lifecycle is the single source of liveness truth. I-D03 still N/A
+  (platform-global templates + sample data); SiteAdmin-gated under I-D13; no audit, no new invariant.
+
+### Phase C — still NOT built (future)
+- **Persistence / real-data runs:** the preview uses the engine's fixed `SampleReportData`. An Org-scoped
+  *run* against real Records would re-introduce I-D03 (build `ReportDataContext` from `IRecordRepository`,
+  audit SiteAdmin cross-Org access per I-D13). Separate slice.
+- **Richer collaboration:** lock stealing/expiry policy, follow-mode, chat — none built (kept minimal).
 
 ### Other follow-ups
-- **Persistence / real-data runs:** the preview uses the engine's fixed `SampleReportData`. An
-  Org-scoped *run* against real Records would re-introduce I-D03 (build `ReportDataContext` from
-  `IRecordRepository`, audit SiteAdmin cross-Org access per I-D13). Separate slice.
-- **Push / PR:** nothing is pushed. Open a PR off `claude/hungry-sinoussi-200116` when ready.
+- **Push / PR:** Phase A is committed (`5ed268a`); Phase B is committed on top. Nothing is pushed yet —
+  open a PR off `claude/hungry-sinoussi-200116` when ready.
 - **Pre-existing lint debt (NOT introduced here):** `src/client/src/App.tsx:36` and
   `src/client/src/app/screens/RecordsScreen.tsx:137` trip `react-hooks/set-state-in-effect` (the new
   eslint-plugin-react-hooks v7). Untouched by this work; `npm run lint` is red only on those two.

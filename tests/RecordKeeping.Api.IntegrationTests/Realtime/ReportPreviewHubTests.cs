@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR.Client;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using RecordKeeping.Api.IntegrationTests.Auth;
 using RecordKeeping.Api.Realtime;
 using RecordKeeping.Application.Orgs;
+using RecordKeeping.Application.Reporting;
 using RecordKeeping.Infrastructure.Identity;
 using Shouldly;
 using DomainOrg = RecordKeeping.Domain.Orgs.Org;
@@ -107,12 +109,167 @@ public class ReportPreviewHubTests(RecordKeepingApiFactory factory)
         });
     }
 
+    [Fact]
+    public async Task JoinSession_BroadcastsRoster_AndReplaysToLateJoiner_WithIdentityFromToken()
+    {
+        var token = await SiteAdminTokenAsync();
+        var sessionId = $"tpl-{Guid.NewGuid():N}";
+
+        await using var first = await ConnectAsync(token);
+        var firstSeesBoth = ParticipantsWhen(first, ps => ps.Length >= 2);
+        await first.InvokeAsync("JoinSession", sessionId);
+
+        await using var second = await ConnectAsync(token);
+        var secondSeesBoth = ParticipantsWhen(second, ps => ps.Length >= 2);
+        await second.InvokeAsync("JoinSession", sessionId);
+
+        var rosterForFirst = await firstSeesBoth.WaitAsync(TimeSpan.FromSeconds(15));
+        var rosterForSecond = await secondSeesBoth.WaitAsync(TimeSpan.FromSeconds(15));
+
+        rosterForFirst.Length.ShouldBe(2);
+        rosterForSecond.Length.ShouldBe(2);
+        // Identity is server-derived from the token (the client sent no name/id) — anti-spoofing, I-D13.
+        rosterForSecond.ShouldAllBe(p => p.DisplayName == "Site Administrator");
+        rosterForSecond.ShouldAllBe(p => !string.IsNullOrEmpty(p.UserId));
+    }
+
+    [Fact]
+    public async Task UpdateSelection_BroadcastsTheUpdatedSelectionToWatchers()
+    {
+        var token = await SiteAdminTokenAsync();
+        var sessionId = $"tpl-{Guid.NewGuid():N}";
+
+        await using var editor = await ConnectAsync(token);
+        await editor.InvokeAsync("JoinSession", sessionId);
+        await using var watcher = await ConnectAsync(token);
+        await watcher.InvokeAsync("JoinSession", sessionId);
+
+        var sawSelection = ParticipantsWhen(watcher, ps => ps.Any(p => p.SelectedElementIds.Contains("el-a")));
+        await editor.InvokeAsync("UpdateSelection", new[] { "el-a" });
+
+        var roster = await sawSelection.WaitAsync(TimeSpan.FromSeconds(15));
+        roster.ShouldContain(p => p.SelectedElementIds.Contains("el-a"));
+    }
+
+    [Fact]
+    public async Task ClaimElement_BroadcastsLockWithHolderFromToken_AndReturnsTheHolder()
+    {
+        var token = await SiteAdminTokenAsync();
+        var sessionId = $"tpl-{Guid.NewGuid():N}";
+
+        await using var editor = await ConnectAsync(token);
+        await editor.InvokeAsync("JoinSession", sessionId);
+        await using var watcher = await ConnectAsync(token);
+        await watcher.InvokeAsync("JoinSession", sessionId);
+
+        var sawLock = LocksWhen(watcher, ls => ls.Any(l => l.ElementId == "el-a"));
+        var holder = await editor.InvokeAsync<PreviewLock?>("ClaimElement", "el-a");
+
+        holder.ShouldNotBeNull();
+        holder.ElementId.ShouldBe("el-a");
+        holder.ConnectionId.ShouldBe(editor.ConnectionId);
+        holder.DisplayName.ShouldBe("Site Administrator");
+
+        var locks = await sawLock.WaitAsync(TimeSpan.FromSeconds(15));
+        locks.ShouldContain(l => l.ElementId == "el-a" && l.DisplayName == "Site Administrator");
+    }
+
+    [Fact]
+    public async Task ClaimElement_BySecondConnection_DoesNotStealTheHolder()
+    {
+        var token = await SiteAdminTokenAsync();
+        var sessionId = $"tpl-{Guid.NewGuid():N}";
+
+        await using var editor = await ConnectAsync(token);
+        await editor.InvokeAsync("JoinSession", sessionId);
+        await editor.InvokeAsync("ClaimElement", "el-a");
+
+        await using var contender = await ConnectAsync(token);
+        await contender.InvokeAsync("JoinSession", sessionId);
+        var contended = await contender.InvokeAsync<PreviewLock?>("ClaimElement", "el-a");
+
+        contended.ShouldNotBeNull();
+        contended.ConnectionId.ShouldBe(editor.ConnectionId); // still the first claimant — advisory, no steal.
+    }
+
+    [Fact]
+    public async Task Disconnect_RemovesParticipant_AndReleasesItsLocks_ForRemainingWatcher()
+    {
+        var token = await SiteAdminTokenAsync();
+        var sessionId = $"tpl-{Guid.NewGuid():N}";
+
+        await using var watcher = await ConnectAsync(token);
+        await watcher.InvokeAsync("JoinSession", sessionId);
+
+        // Listen before the editor acts, so the pre-state broadcasts can't fire before we subscribe.
+        var watcherSeesBoth = ParticipantsWhen(watcher, ps => ps.Length == 2);
+        var watcherSeesLock = LocksWhen(watcher, ls => ls.Any(l => l.ElementId == "el-a"));
+
+        var editor = await ConnectAsync(token);
+        await editor.InvokeAsync("JoinSession", sessionId);
+        await editor.InvokeAsync("ClaimElement", "el-a");
+
+        // Establish the pre-state on the watcher: both participants present and the lock held.
+        await watcherSeesBoth.WaitAsync(TimeSpan.FromSeconds(15));
+        await watcherSeesLock.WaitAsync(TimeSpan.FromSeconds(15));
+
+        var backToOne = ParticipantsWhen(watcher, ps => ps.Length == 1);
+        var lockReleased = LocksWhen(watcher, ls => ls.Length == 0);
+        await editor.DisposeAsync(); // a disconnect must clean up the gone editor's presence and locks.
+
+        (await backToOne.WaitAsync(TimeSpan.FromSeconds(20))).Length.ShouldBe(1);
+        (await lockReleased.WaitAsync(TimeSpan.FromSeconds(20))).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task CollaborationMethods_BeforeJoiningASession_AreNoOps()
+    {
+        var token = await SiteAdminTokenAsync();
+        await using var connection = await ConnectAsync(token);
+
+        // The connection has not joined any session, so it cannot act on one (it can't publish presence
+        // or locks into a session it never joined — the session is resolved server-side, not from args).
+        var holder = await connection.InvokeAsync<PreviewLock?>("ClaimElement", "el-a");
+        holder.ShouldBeNull();
+
+        // These must complete without error even though the caller belongs to no session.
+        await Should.NotThrowAsync(connection.InvokeAsync("UpdateSelection", new[] { "el-a" }));
+        await Should.NotThrowAsync(connection.InvokeAsync("ReleaseElement", "el-a"));
+    }
+
     // Registers a one-shot listener for the next ReceiveFrames broadcast and returns its completion source.
     private static TaskCompletionSource<byte[][]> FramesListener(HubConnection connection)
     {
         var tcs = new TaskCompletionSource<byte[][]>(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.On<string, byte[][]>(ReportPreviewHub.ReceiveFramesMethod, (_, pages) => tcs.TrySetResult(pages));
         return tcs;
+    }
+
+    // Completes when a ParticipantsChanged broadcast satisfies the predicate (e.g. a target roster size).
+    private static Task<PreviewParticipant[]> ParticipantsWhen(
+        HubConnection connection, Func<PreviewParticipant[], bool> ready)
+    {
+        var tcs = new TaskCompletionSource<PreviewParticipant[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.On<string, PreviewParticipant[]>(
+            ReportPreviewHub.ParticipantsChangedMethod,
+            (_, participants) =>
+            {
+                if (ready(participants)) tcs.TrySetResult(participants);
+            });
+        return tcs.Task;
+    }
+
+    // Completes when a LocksChanged broadcast satisfies the predicate.
+    private static Task<PreviewLock[]> LocksWhen(HubConnection connection, Func<PreviewLock[], bool> ready)
+    {
+        var tcs = new TaskCompletionSource<PreviewLock[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.On<string, PreviewLock[]>(
+            ReportPreviewHub.LocksChangedMethod,
+            (_, locks) =>
+            {
+                if (ready(locks)) tcs.TrySetResult(locks);
+            });
+        return tcs.Task;
     }
 
     private async Task<HubConnection> ConnectAsync(string? accessToken)
@@ -129,6 +286,9 @@ public class ReportPreviewHubTests(RecordKeepingApiFactory factory)
                     options.AccessTokenProvider = () => Task.FromResult<string?>(accessToken);
                 }
             })
+            // Match the hub's camelCase payload naming so PreviewParticipant/PreviewLock round-trip.
+            .AddJsonProtocol(options =>
+                options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase)
             .Build();
 
         await connection.StartAsync();

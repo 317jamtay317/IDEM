@@ -100,6 +100,27 @@ export interface ReportCanvasProps {
    * page's new size, in inches. Omit to hide the page resize handles.
    */
   onResizePage?: (size: { width: number; height: number }) => void
+  /**
+   * Other participants' selections to overlay (live collaboration): each names an
+   * element, the participant's colour, and their display name. Drawn as a coloured
+   * outline with a name label over the element. Omit (or empty) to draw none.
+   */
+  remoteSelections?: PreviewOverlay[]
+  /**
+   * Advisory soft-locks to overlay as "being edited by …" badges: each names an
+   * element, the holder's colour, and their display name. Omit (or empty) to draw none.
+   */
+  locks?: PreviewOverlay[]
+}
+
+/** A single collaboration overlay: which element, in whose colour, labelled with their name. */
+export interface PreviewOverlay {
+  /** The element the overlay decorates. */
+  elementId: string
+  /** The participant's display colour. */
+  color: string
+  /** The participant's display name. */
+  label: string
 }
 
 /** The page resize grips, with the accessible label shown for each. */
@@ -127,9 +148,15 @@ export function ReportCanvas({
   onResize,
   onEditText,
   onResizePage,
+  remoteSelections = [],
+  locks = [],
 }: ReportCanvasProps) {
   const px = (inches: number) => `${inchesToPx(inches, zoom)}px`
   const { snapToGrid, gridSize } = template.settings
+
+  // Collaboration overlays, looked up per element id as bands render.
+  const remoteSelectionByElement = new Map(remoteSelections.map((overlay) => [overlay.elementId, overlay]))
+  const lockByElement = new Map(locks.map((overlay) => [overlay.elementId, overlay]))
 
   // The page is drawn at least as tall as its page setup says, but never shorter
   // than its band content (so a band is never clipped). Page-height drags resize
@@ -397,6 +424,8 @@ export function ReportCanvas({
           {band.elements.map((el) => {
             const content = elementContent(el)
             const editing = editingId === el.id && onEditText != null
+            const remoteSelection = remoteSelectionByElement.get(el.id)
+            const lock = lockByElement.get(el.id)
             return (
               <Fragment key={el.id}>
                 {editing ? (
@@ -483,6 +512,37 @@ export function ReportCanvas({
                       />
                     )
                   })}
+
+                {/* Live collaboration overlays (decorative; they never capture pointer events so the
+                    element beneath stays editable). A coloured outline + name for another participant's
+                    selection, and a "being edited by …" badge for an advisory soft-lock. */}
+                {remoteSelection && (
+                  <div
+                    className="rb-remote-selection"
+                    aria-hidden="true"
+                    style={{
+                      left: px(el.rect.x),
+                      top: px(el.rect.y),
+                      width: px(el.rect.w),
+                      height: px(el.rect.h),
+                      borderColor: remoteSelection.color,
+                    }}
+                  >
+                    <span className="rb-remote-label" style={{ backgroundColor: remoteSelection.color }}>
+                      {remoteSelection.label}
+                    </span>
+                  </div>
+                )}
+                {lock && (
+                  <div
+                    className="rb-lock-badge"
+                    aria-hidden="true"
+                    title={`Being edited by ${lock.label}`}
+                    style={{ left: px(el.rect.x), top: px(el.rect.y), backgroundColor: lock.color }}
+                  >
+                    🔒 {lock.label}
+                  </div>
+                )}
               </Fragment>
             )
           })}

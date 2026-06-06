@@ -158,10 +158,15 @@ builder.Services.AddRecordKeepingMcp();
 // Report Engine: renders Report Templates (RDL) to PDF for the SiteAdmin-only builder preview.
 builder.Services.AddRecordKeepingReporting();
 
-// SignalR + the in-memory snapshot store backing the live Report Template preview (ReportPreviewHub).
-// The store is a singleton so every hub connection shares the latest rendered frame per session.
-builder.Services.AddSignalR();
+// SignalR + the in-memory stores backing the live Report Template preview (ReportPreviewHub). Both are
+// singletons so every hub connection shares the latest rendered frame and the live presence/locks per session.
+builder.Services
+    .AddSignalR()
+    // camelCase hub payloads, matching the SPA's TypeScript models and the rest of the API's JSON.
+    .AddJsonProtocol(options =>
+        options.PayloadSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase);
 builder.Services.AddSingleton<IReportPreviewSessions, InMemoryReportPreviewSessions>();
+builder.Services.AddSingleton<IReportPreviewPresence, InMemoryReportPreviewPresence>();
 
 // Serialize enums by name (e.g. "Decimal") so API payloads expose the Production Field DataType
 // as a stable string rather than an integer.

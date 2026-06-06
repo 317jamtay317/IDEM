@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within, fireEvent, createEvent } from '@testing-library/react'
+import { act, render, screen, waitFor, within, fireEvent, createEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ReportBuilderScreen } from './ReportBuilderScreen'
+import type { PreviewHub, PreviewParticipant } from '../reportBuilder/previewHub'
 import * as downloadModule from '../reportBuilder/download'
 import { toRdl } from '../reportBuilder/rdl'
 import { createSampleTemplate } from '../reportBuilder/sampleTemplate'
@@ -799,6 +800,74 @@ describe('ReportBuilderScreen — live preview (Phase 13)', () => {
     expect(openSpy.mock.calls[0][0]).toContain('#/report-preview/')
     expect(openSpy.mock.calls[0][1]).toBe('_blank')
     openSpy.mockRestore()
+  })
+})
+
+describe('ReportBuilderScreen — live collaboration (Phase B)', () => {
+  /** A fake collaboration hub that captures the presence handler so a test can drive it. */
+  function fakeBuilderHub() {
+    let participants: ((sid: string, ps: PreviewParticipant[]) => void) | null = null
+    const hub: PreviewHub = {
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async () => {}),
+      join: vi.fn(async () => {}),
+      pushRdl: vi.fn(async () => {}),
+      updateSelection: vi.fn(async () => {}),
+      claimElement: vi.fn(async () => null),
+      releaseElement: vi.fn(async () => {}),
+      onFrames: vi.fn(() => () => {}),
+      onError: vi.fn(() => () => {}),
+      onParticipants: (handler) => {
+        participants = handler
+        return () => {
+          participants = null
+        }
+      },
+      onLocks: vi.fn(() => () => {}),
+      onReconnected: vi.fn(() => () => {}),
+      connectionId: vi.fn(() => 'conn-self'),
+    }
+    return {
+      hub,
+      emitParticipants: (sid: string, ps: PreviewParticipant[]) => act(() => participants?.(sid, ps)),
+    }
+  }
+
+  it('claims the selected element and publishes the selection to collaborators', async () => {
+    const user = userEvent.setup()
+    const { hub } = fakeBuilderHub()
+    render(
+      <ReportBuilderScreen
+        templateId="annual-emissions"
+        accessToken="tok"
+        createHub={() => hub}
+        onClose={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByText('Annual Emissions Inventory')) // the title element, id "title"
+
+    await waitFor(() => expect(hub.claimElement).toHaveBeenCalledWith('title'))
+    await waitFor(() => expect(hub.updateSelection).toHaveBeenCalledWith(['title']))
+  })
+
+  it("overlays a collaborator's live selection on the canvas", async () => {
+    const { hub, emitParticipants } = fakeBuilderHub()
+    render(
+      <ReportBuilderScreen
+        templateId="annual-emissions"
+        accessToken="tok"
+        createHub={() => hub}
+        onClose={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(hub.join).toHaveBeenCalledWith('annual-emissions'))
+
+    emitParticipants('annual-emissions', [
+      { connectionId: 'conn-2', userId: 'u2', displayName: 'Grace', color: '#2563eb', selectedElementIds: ['title'] },
+    ])
+
+    expect(screen.getByText('Grace')).toBeInTheDocument()
   })
 })
 

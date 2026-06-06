@@ -5,8 +5,10 @@ import { createPreviewHub } from './previewHub'
 /** A minimal fake of the SignalR HubConnection surface the wrapper uses. */
 function fakeConnection() {
   const handlers = new Map<string, Array<(...args: unknown[]) => void>>()
+  const reconnectHandlers: Array<(id?: string) => void> = []
   const conn = {
     state: HubConnectionState.Disconnected as HubConnectionState,
+    connectionId: 'conn-1' as string | null,
     start: vi.fn(async () => {
       conn.state = HubConnectionState.Connected
     }),
@@ -20,9 +22,16 @@ function fakeConnection() {
     off: vi.fn((method: string, handler: (...args: unknown[]) => void) => {
       handlers.set(method, (handlers.get(method) ?? []).filter((h) => h !== handler))
     }),
+    onreconnected: vi.fn((cb: (id?: string) => void) => {
+      reconnectHandlers.push(cb)
+    }),
     /** Test helper: fire a server→client message. */
     emit(method: string, ...args: unknown[]) {
       for (const h of [...(handlers.get(method) ?? [])]) h(...args)
+    },
+    /** Test helper: simulate an automatic reconnect completing. */
+    reconnect(id?: string) {
+      for (const cb of [...reconnectHandlers]) cb(id)
     },
   }
   return conn
@@ -78,6 +87,68 @@ describe('createPreviewHub', () => {
 
     conn.emit('ReceiveError', 'tpl-1', 'The report template (RDL) must not be empty.')
     expect(onError).toHaveBeenCalledWith('tpl-1', 'The report template (RDL) must not be empty.')
+  })
+
+  it('publishes a selection by invoking UpdateSelection with the element ids (no session id)', async () => {
+    const conn = fakeConnection()
+    await hubWith(conn).updateSelection(['el-a', 'el-b'])
+    expect(conn.invoke).toHaveBeenCalledWith('UpdateSelection', ['el-a', 'el-b'])
+  })
+
+  it('claims an element by invoking ClaimElement and resolves the returned holder', async () => {
+    const conn = fakeConnection()
+    const holder = { elementId: 'el-a', connectionId: 'c9', userId: 'u9', displayName: 'Ada' }
+    conn.invoke.mockResolvedValueOnce(holder as never)
+
+    const result = await hubWith(conn).claimElement('el-a')
+
+    expect(conn.invoke).toHaveBeenCalledWith('ClaimElement', 'el-a')
+    expect(result).toEqual(holder)
+  })
+
+  it('releases an element by invoking ReleaseElement with the element id', async () => {
+    const conn = fakeConnection()
+    await hubWith(conn).releaseElement('el-a')
+    expect(conn.invoke).toHaveBeenCalledWith('ReleaseElement', 'el-a')
+  })
+
+  it('forwards ParticipantsChanged payloads to onParticipants subscribers and stops after unsubscribe', () => {
+    const conn = fakeConnection()
+    const onParticipants = vi.fn()
+    const unsubscribe = hubWith(conn).onParticipants(onParticipants)
+    const roster = [{ connectionId: 'c1', userId: 'u1', displayName: 'Ada', color: '#111', selectedElementIds: [] }]
+
+    conn.emit('ParticipantsChanged', 'tpl-1', roster)
+    expect(onParticipants).toHaveBeenCalledWith('tpl-1', roster)
+
+    unsubscribe()
+    conn.emit('ParticipantsChanged', 'tpl-1', roster)
+    expect(onParticipants).toHaveBeenCalledTimes(1)
+  })
+
+  it('forwards LocksChanged payloads to onLocks subscribers', () => {
+    const conn = fakeConnection()
+    const onLocks = vi.fn()
+    hubWith(conn).onLocks(onLocks)
+    const locks = [{ elementId: 'el-a', connectionId: 'c1', userId: 'u1', displayName: 'Ada' }]
+
+    conn.emit('LocksChanged', 'tpl-1', locks)
+    expect(onLocks).toHaveBeenCalledWith('tpl-1', locks)
+  })
+
+  it('invokes onReconnected handlers when the connection reconnects', () => {
+    const conn = fakeConnection()
+    const onReconnected = vi.fn()
+    hubWith(conn).onReconnected(onReconnected)
+
+    conn.reconnect('conn-2')
+
+    expect(onReconnected).toHaveBeenCalledWith('conn-2')
+  })
+
+  it('exposes the current connection id for self-filtering', () => {
+    const conn = fakeConnection()
+    expect(hubWith(conn).connectionId()).toBe('conn-1')
   })
 
   it('builds a real connection by default and exposes the hub surface', () => {

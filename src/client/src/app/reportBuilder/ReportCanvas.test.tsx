@@ -953,3 +953,43 @@ describe('ReportCanvas — page resize (drag the page edge)', () => {
     expect(onSelectElement).not.toHaveBeenCalled()
   })
 })
+
+describe('ReportCanvas — collaboration overlays', () => {
+  /** A template with one known label element (id "label-1") in the detail band. */
+  function withElement(): ReportTemplate {
+    const t = createEmptyTemplate('t1', 'T1')
+    t.bands.find((b) => b.kind === 'detail')!.elements.push(createElement('label', 'label-1'))
+    return t
+  }
+
+  it("overlays a remote participant's selection with their name label", () => {
+    render(
+      <ReportCanvas
+        template={withElement()}
+        zoom={100}
+        remoteSelections={[{ elementId: 'label-1', color: '#ff0000', label: 'Grace' }]}
+      />,
+    )
+
+    expect(screen.getByText('Grace')).toBeInTheDocument()
+  })
+
+  it('overlays a "being edited by" lock badge for a locked element', () => {
+    render(
+      <ReportCanvas
+        template={withElement()}
+        zoom={100}
+        locks={[{ elementId: 'label-1', color: '#2563eb', label: 'Ada' }]}
+      />,
+    )
+
+    expect(screen.getByTitle('Being edited by Ada')).toHaveClass('rb-lock-badge')
+  })
+
+  it('renders no overlays when the collaboration props are omitted', () => {
+    const { container } = render(<ReportCanvas template={withElement()} zoom={100} />)
+
+    expect(container.querySelector('.rb-remote-selection')).toBeNull()
+    expect(container.querySelector('.rb-lock-badge')).toBeNull()
+  })
+})
